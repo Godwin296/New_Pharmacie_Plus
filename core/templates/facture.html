@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Facture #{{ commande.id }}</title>
+    <style>
+        body { font-family: Georgia, serif; margin: 40px; color: #333; }
+        h1 { text-align: center; }
+        .info { margin-bottom: 20px; line-height: 1.6; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 10px; text-align: center; }
+        th { background: #f2f2f2; }
+        .total { margin-top: 20px; text-align: right; font-size: 18px; font-weight: bold; color: #198754; }
+        
+        /* Header & QR Code */
+        .header-container { width: 100%; margin-bottom: 30px; border-bottom: 2px solid #198754; padding-bottom: 10px; }
+        .header-title { float: left; margin-top: 10px; }
+        .qr-header { float: right; text-align: center; width: 120px; }
+        .qr-header img { border: 1px solid #eee; padding: 5px; background: #fff; }
+        .qr-text { font-size: 0.6rem; color: #555; margin-top: 5px; display: block; text-transform: uppercase; }
+
+        /* Footer & Signature */
+        .legal-footer { margin-top: 50px; width: 100%; }
+        .signature-box { float: right; width: 250px; height: 140px; border: 1px dashed #000; text-align: center; padding: 10px; font-size: 0.8rem; }
+        .mention-hopital { font-size: 0.7rem; color: #666; margin-top: 40px; }
+        .clear { clear: both; }
+
+        /* Masquer le bouton lors de l'impression PDF */
+        @media print { .no-print { display: none; } }
+        .btn-download { background: #198754; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="text-align: right;">
+        <a href="{% url 'core:export_facture_pdf' commande.id %}" class="btn-download">📥 Télécharger en PDF</a>
+    </div>
+
+    <div class="header-container">
+        <div class="header-title">
+            <h1 style="margin:0; color:#198754;">FACTURE</h1>
+            <small>Référence : #{{ commande.id }}</small>
+        </div>
+        <div class="qr-header">
+            {% if qr_code %}
+                <img src="data:image/png;base64,{{ qr_code }}" width="100" height="100" alt="QR Code">
+                <span class="qr-text">Authenticité Numérique</span>
+            {% endif %}
+        </div>
+        <div class="clear"></div>
+    </div>
+
+    <div class="info">
+        <p><strong>Numero De Facture :</strong> {{ commande.id }}</p>
+        <p><strong>Client :</strong> {{ commande.client.nom }} (ID: {{ commande.client.identifiant }})</p>
+        <p><strong>Téléphone :</strong> {{ commande.client.telephone|default:"Non renseigné" }}</p>
+        <p><strong>Date d'émission :</strong> {{ commande.date|date:"d/m/Y H:i" }}</p>
+        <p><strong>Mode de délivrance :</strong> {{ commande.get_type_vente_display }}</p>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Produit</th>
+                <th>Quantité</th>
+                <th>Prix Unitaire</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ item.produit.nom }}</td>
+                <td>{{ item.quantite }}</td>
+                <td>{{ item.produit.prix|floatformat:2 }}</td>
+                <td>{{ item.total|floatformat:2 }} FCFA</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="total">
+        A PAYER : {{ total|floatformat:2 }} FCFA
+    </div>
+
+    <div class="legal-footer">
+        <div class="signature-box">
+            <strong>Cachet et Signature du Pharmacien</strong>
+            <br><br><br><br>
+            <small>Validé numériquement par : {{ commande.agent_validateur|default:"Système Central" }}</small>
+        </div>
+        <div class="clear"></div>
+        <div class="mention-hopital">
+            <p>Document délivré par la Pharmacie de District conforme aux normes 2026.<br>
+            <i>Toute rature manuelle annule la validité numérique de ce document.</i></p>
+        </div>
+    </div>
+</body>
+</html>

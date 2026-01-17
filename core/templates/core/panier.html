@@ -1,0 +1,77 @@
+{% extends "core/base.html" %}
+
+{% block title %}Mon Panier - Pharmacie+{% endblock %}
+
+{% block content %}
+<style>
+    .panier-container { width: 100%; max-width: 900px; margin: 2rem auto; }
+    .panier-item { display: flex; justify-content: space-between; padding: 1.5rem; border-bottom: 1px solid #eee; align-items: center; }
+    .total-box { text-align: right; margin-top: 2rem; padding: 1.5rem; background: #f8f9fa; border-radius: 15px; }
+    .total-amount { font-size: 1.5rem; font-weight: 800; color: #198754; }
+    .btn-step { padding: 0.8rem 2rem; border-radius: 50px; font-weight: 600; transition: 0.3s; border: none; }
+</style>
+
+<div class="panier-container bg-white p-4 shadow-sm rounded-4">
+    <h2 class="fw-bold mb-4"><i class="bi bi-cart3"></i> Mon Panier</h2>
+    
+    {% if commande and commande.items.all %}
+        <div class="table-responsive">
+            {% for item in commande.items.all %}
+                <div class="panier-item">
+                    <div>
+                        <h6 class="mb-0 fw-bold">{{ item.produit.nom }}</h6>
+                        <small class="text-muted">{{ item.produit.prix|floatformat:2 }} FCFA l'unité</small>
+                    </div>
+                    <div class="text-center">
+                        <span class="badge bg-light text-dark border px-3 py-2">Quantité : {{ item.quantite }}</span>
+                    </div>
+                    <div class="text-end">
+                        <span class="fw-bold">{{ item.total|floatformat:2 }} FCFA</span>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        
+        <div class="total-box shadow-sm">
+            <p class="mb-1 text-muted">Total de votre commande</p>
+            <div class="total-amount mb-4">{{ total|floatformat:2 }} FCFA</div>
+
+            <hr>
+
+            <!-- GESTION DU FLUX ORDONNANCE (Tendance 2026) -->
+            <div class="mt-4">
+                {% if not commande.ordonnance %}
+                    <div class="alert alert-warning border-0 rounded-3 small mb-3">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Une ordonnance est requise pour finaliser cet achat.
+                    </div>
+                    <a href="{% url 'core:uploader_ordonnance' commande.id %}" class="btn btn-primary btn-step shadow-sm">
+                        <i class="bi bi-file-earmark-medical"></i> Joindre mon Ordonnance
+                    </a>
+                {% elif not commande.ordonnance_valide %}
+                    <div class="alert alert-info border-0 rounded-3 small mb-3">
+                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                        Analyse en cours : Notre pharmacien vérifie l'écriture de votre ordonnance.
+                    </div>
+                    <button class="btn btn-secondary btn-step" disabled>En attente de validation...</button>
+                {% else %}
+                    <div class="alert alert-success border-0 rounded-3 small mb-3">
+                        <i class="bi bi-check-circle-fill"></i> Ordonnance validée par le personnel médical.
+                    </div>
+                    <form method="post" action="{% url 'core:facture_commande' commande.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success btn-step btn-lg w-100 shadow">
+                            Confirmer et Payer la commande
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    {% else %}
+        <div class="text-center py-5">
+            <div class="display-1 text-light mb-4">🛒</div>
+            <h4 class="text-muted">Votre panier est actuellement vide.</h4>
+            <a href="{% url 'core:catalogue' %}" class="btn btn-success btn-lg rounded-pill px-5 mt-3">Voir le catalogue</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+body {
+    background-color: #f9f8fa;
+}
+
+.product-card {
+    border-radius: 16px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.product-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+}
+
+.price {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #198754;
+}
+
+

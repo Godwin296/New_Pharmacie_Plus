@@ -1,0 +1,48 @@
+{% extends "core/base.html" %}
+
+{% block title %}Joindre une Ordonnance - Pharmacie+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 60vh;">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+            <div class="bg-primary py-3 text-center text-white">
+                <i class="bi bi-file-earmark-medical fs-1"></i>
+            </div>
+            <div class="card-body p-4 p-lg-5 text-center">
+                <h2 class="fw-bold mb-3">Document Médical</h2>
+                <p class="text-muted mb-4">
+                    Pour valider votre commande #{{ commande.id }}, veuillez télécharger une photo nette ou un PDF de votre ordonnance.
+                </p>
+
+                <form method="post" enctype="multipart/form-data" class="text-start">
+                    {% csrf_token %}
+                    <div class="mb-4">
+                        <label class="form-label small fw-bold">Sélectionner le fichier</label>
+                        <input type="file" name="fichier_ordonnance" class="form-control form-control-lg border-2" 
+                               accept=".pdf,image/*" required style="border-style: dashed;">
+                        <div class="form-text small mt-2">
+                            Formats acceptés : JPG, PNG, PDF. Taille max : 5 Mo.
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100 rounded-pill shadow">
+                        Envoyer pour vérification
+                    </button>
+                </form>
+
+                <div class="mt-4">
+                    <a href="{% url 'core:panier' %}" class="text-decoration-none text-muted small">
+                        <i class="bi bi-arrow-left"></i> Retour au panier
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alert alert-info mt-4 rounded-4 border-0 small">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            <strong>Note :</strong> L'écriture des médecins peut être complexe. Notre pharmacien prendra quelques minutes pour la déchiffrer avec précision.
+        </div>
+    </div>
+</div>
+{% endblock %}
