@@ -1,50 +1,147 @@
-{% extends "core/base.html" %}
-{% block title %}Connexion - Pharmacie+{% endblock %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion Stellaire | {{ p_nom|default:"Pharmacie+" }}</title>
+    
+    <!-- 🚀 STACK 2026 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net">
+    
+    <style>
+        /* ✨ Animation du fond galactique */
+        body {
+            background: radial-gradient(circle at center, #1a4d2e 0%, #0a1f13 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
 
-{% block content %}
-<div class="row justify-content-center align-items-center" style="min-height: 70vh;">
-    <div class="col-md-5 col-lg-4">
-        <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
-            <div class="bg-success py-3 text-center">
-                <i class="bi bi-shield-lock text-white fs-1"></i>
-            </div>
-            <div class="card-body p-4 p-lg-5">
-                <h2 class="text-center fw-bold mb-4">Accès Client</h2>
-                
-                <!-- Affichage des erreurs de connexion -->
-                {% if form.errors %}
-                <div class="alert alert-danger border-0 small rounded-3 mb-4">
-                    <i class="bi bi-exclamation-circle me-2"></i>Identifiants incorrects.
-                </div>
-                {% endif %}
+        /* 🌟 Particules d'étoiles */
+        .stars {
+            position: absolute;
+            width: 100%; height: 100%;
+            background-image: radial-gradient(white 1px, transparent 1px);
+            background-size: 50px 50px;
+            opacity: 0.1;
+            animation: move-stars 100s linear infinite;
+        }
+        @keyframes move-stars { from { transform: translateY(0); } to { transform: translateY(-1000px); } }
 
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted">Nom d'utilisateur</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-light border-0"><i class="bi bi-person"></i></span>
-                            <input type="text" name="username" class="form-control bg-light border-0" placeholder="Utilisateur" required>
-                        </div>
+        /* 💎 Effet Verre (Glassmorphism) */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 🔘 Sélecteur de rôle stylisé */
+        .role-option input:checked + label {
+            background: rgba(34, 197, 94, 0.2);
+            border-color: #22c55e;
+            transform: scale(1.05);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="stars"></div>
+
+    <div class="relative z-10 w-full max-w-md px-4">
+        <!-- 🏥 Logo & Identité -->
+        <div class="text-center mb-8">
+            {% if p_logo %}
+                <img src="{{ p_logo.url }}" class="h-20 w-20 mx-auto mb-4 rounded-full border-2 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.5)]">
+            {% endif %}
+            <h1 class="text-4xl font-black text-white tracking-tighter">{{ p_nom|default:"PHARMACIE +" }}</h1>
+            <p class="text-green-400 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Portail d'Accès Sécurisé 🛰️</p>
+        </div>
+
+        <!-- 🛡️ Carte de Connexion -->
+        <div class="glass-card rounded-[40px] p-8 md:p-10">
+            <h2 class="text-2xl font-bold text-white mb-6">Connexion 🔐</h2>
+
+            <form method="POST">
+                {% csrf_token %}
+
+                <!-- 🎭 SÉLECTEUR DE RÔLE (ADMIN, CAISSIERE, CLIENT) -->
+                <label class="text-[10px] font-black text-white/50 uppercase tracking-widest mb-3 block">Choisissez votre accès 🎫</label>
+                <div class="grid grid-cols-3 gap-3 mb-8">
+                    <div class="role-option">
+                        <input type="radio" name="role" id="role_client" value="client" class="hidden" checked>
+                        <label for="role_client" class="flex flex-col items-center justify-center p-3 rounded-2xl border border-white/10 bg-white/5 text-white/60 cursor-pointer transition-all hover:bg-white/10">
+                            <i class="bi bi-person text-xl mb-1"></i>
+                            <span class="text-[9px] font-bold uppercase">Client</span>
+                        </label>
                     </div>
-                    <div class="mb-4">
-                        <label class="form-label small fw-bold text-muted">Mot de passe</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-light border-0"><i class="bi bi-key"></i></span>
-                            <input type="password" name="password" class="form-control bg-light border-0" placeholder="••••••••" required>
-                        </div>
+                    <div class="role-option">
+                        <input type="radio" name="role" id="role_caissiere" value="caissiere" class="hidden">
+                        <label for="role_caissiere" class="flex flex-col items-center justify-center p-3 rounded-2xl border border-white/10 bg-white/5 text-white/60 cursor-pointer transition-all hover:bg-white/10">
+                            <i class="bi bi-wallet2 text-xl mb-1"></i>
+                            <span class="text-[9px] font-bold uppercase">Caisse</span>
+                        </label>
                     </div>
-                    <button type="submit" class="btn btn-success btn-lg w-100 rounded-pill shadow-sm">
-                        Se connecter
-                    </button>
-                </form>
-
-                <div class="mt-4 text-center">
-                    <p class="mb-0 small text-muted">Besoin d'aide ?</p>
-                    <a href="mailto:admin@pharmacieplus.com" class="small text-success text-decoration-none">Contacter le support médical</a>
+                    <div class="role-option">
+                        <input type="radio" name="role" id="role_admin" value="admin" class="hidden">
+                        <label for="role_admin" class="flex flex-col items-center justify-center p-3 rounded-2xl border border-white/10 bg-white/5 text-white/60 cursor-pointer transition-all hover:bg-white/10">
+                            <i class="bi bi-shield-lock text-xl mb-1"></i>
+                            <span class="text-[9px] font-bold uppercase">Admin</span>
+                        </label>
+                    </div>
                 </div>
+
+                <!-- 👤 IDENTIFIANT -->
+                <div class="mb-5">
+                    <div class="relative">
+                        <span class="absolute left-4 top-3.5 text-white/30"><i class="bi bi-at"></i></span>
+                        <input type="text" name="username" class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-12 pr-4 text-white focus:border-green-500 outline-none transition" placeholder="Nom d'utilisateur" required>
+                    </div>
+                </div>
+
+                <!-- 🛡️ MOT DE PASSE -->
+                <div class="mb-8">
+                    <div class="relative">
+                        <span class="absolute left-4 top-3.5 text-white/30"><i class="bi bi-key"></i></span>
+                        <input type="password" name="password" id="id_password" class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-12 pr-12 text-white focus:border-green-500 outline-none transition" placeholder="Mot de passe" required>
+                        <button type="button" onclick="togglePass()" class="absolute right-4 top-3.5 text-white/30 hover:text-white transition">
+                            <i class="bi bi-eye" id="toggleIcon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 🚀 BOUTON DE LANCEMENT -->
+                <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-green-900/30 flex justify-between items-center px-8 transition-all transform hover:scale-[1.02]">
+                    <span>ACCÉDER AU SYSTÈME</span>
+                    <i class="bi bi-arrow-right-circle-fill"></i>
+                </button>
+            </form>
+
+            <div class="mt-8 text-center">
+                <a href="{% url 'core:signup' %}" class="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest no-underline transition">
+                    Créer un nouveau profil 🧬
+                </a>
             </div>
         </div>
     </div>
-</div>
-{% endblock %}
+
+    <script>
+        function togglePass() {
+            const p = document.getElementById('id_password');
+            const i = document.getElementById('toggleIcon');
+            if (p.type === "password") {
+                p.type = "text";
+                i.classList.replace('bi-eye', 'bi-eye-slash');
+            } else {
+                p.type = "password";
+                i.classList.replace('bi-eye-slash', 'bi-eye');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,84 +1,204 @@
+<!-- core/templates/core/base.html -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Pharmacie+{% endblock %}</title>
+    <title>{% block title %}{{ p_nom|default:"Pharmacie+" }}{% endblock %}</title>
 
     {% load static %}
-    <!-- Bootstrap 5.3.2 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons (Nécessaire pour 2026) -->
-    <link rel="stylesheet" href="cdn.jsdelivr.net">
-    <!-- Style personnalisé -->
-    <link rel="stylesheet" href="{% static 'style.css' %}">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com"></script>
+    <!-- FIX DES LIENS CDN : ICONES & FONTS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    
+    <style>
+        .glass-nav {
+            background: rgba(25, 135, 84, 0.9);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .menu-link {
+            display: flex; align-items: center; gap: 15px; padding: 12px 20px;
+            border-radius: 15px; color: #64748b; font-weight: 700;
+            text-decoration: none; transition: all 0.3s;
+        }
+        .dark .menu-link { color: #94a3b8; }
+        .menu-link:hover { background: #f8fafc; color: #10b981; transform: translateX(5px); }
+        .dark .menu-link:hover { background: #1e293b; color: #10b981; }
+        .menu-divider { padding: 20px 20px 5px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; color: #94a3b8; }
+        a { text-decoration: none !important; }
+    </style>
+
+    <script>
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
 </head>
 
-<body class="bg-light d-flex flex-column min-vh-100">  
-    <nav class="navbar navbar-expand-lg navbar-dark bg-success shadow-sm sticky-top">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="{% url 'core:home' %}">
-                <i class="bi bi-capsule-pill me-2"></i>Pharmacie +
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col min-h-screen font-sans transition-colors duration-300">  
+    
+    {% if messages %}
+        {% for message in messages %}
+            {% if "Bienvenue" in message.message %}
+            <div id="welcome-splash" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-xl animate-fade-out">
+                <div class="text-center">
+                    <div class="relative inline-block mb-6">
+                        <div class="absolute inset-0 bg-green-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
+                        <img src="{% if p_logo %}{{ p_logo.url }}{% else %}/static/logo.png{% endif %}" class="h-32 w-32 relative rounded-3xl shadow-2xl border border-white/10">
+                    </div>
+                    <h1 class="text-5xl md:text-7xl font-black text-white tracking-tighter mb-4">
+                    Salut, <span class="text-green-500">{{ user.username }}</span> !
+                    </h1>
+                    <p class="text-green-400 font-black uppercase tracking-[0.5em] text-sm">
+                        Accès : {% if user.is_superuser %}ADMINISTRATEUR{% elif user.is_staff %}CAISSE{% else %}CLIENT{% endif %} 🛰️
+                    </p>
+                </div>
+            </div>
+            <script>setTimeout(() => { document.getElementById('welcome-splash').style.display = 'none'; }, 3500);</script>
+            <style>
+                @keyframes fade-out { 0% { opacity: 1; } 85% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.1); visibility: hidden; } }
+                .animate-fade-out { animation: fade-out 3.8s forwards; }
+            </style>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+
+    <!-- 🍔 BARRE MINIMALISTE -->
+    <nav class="glass-nav sticky top-0 z-50 text-white shadow-lg p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <a class="flex items-center space-x-2 text-white no-underline" href="{% url 'core:home' %}">
+                <img src="{% if p_logo %}{{ p_logo.url }}{% else %}{% static 'logo.png' %}{% endif %}" alt="Logo" class="h-10 w-10 rounded-lg shadow-md">
+                <span class="font-bold text-xl tracking-tight uppercase">{{ p_nom|default:"Pharmacie+" }}</span>
             </a>
             
-            <!-- Bouton Menu Mobile -->
-            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
+            <div class="flex items-center gap-3">
+                <!-- ☀️/🌙 TOGGLE MODE CLAIR/SOMBRE -->
+                <button id="theme-toggle" class="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all">
+                    🌙<i id="theme-toggle-dark-icon" class="bi bi-moon-stars hidden text-xl"></i>
+                    ☀️<i id="theme-toggle-light-icon" class="bi bi-sun hidden text-xl"></i>
+                </button>
 
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'core:catalogue' %}">Catalogue</a>
-                    </li>
-                    {% if user.is_authenticated %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'core:panier' %}">Mon Panier</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'core:mes_commandes' %}">Mes Factures</a>
-                    </li>
-                    {% endif %}
-                </ul>
-                
-                <div class="navbar-nav ms-auto align-items-center">
-                    {% if user.is_authenticated %}
-                        <span class="nav-link text-white-50 me-lg-3 small d-none d-lg-block">
-                             <i class="bi bi-person-circle me-1"></i>{{ user.username }}
-                        </span>
-                        <a class="btn btn-outline-light btn-sm rounded-pill px-3" href="{% url 'logout' %}">Déconnexion</a>
-                    {% else %}
-                        <a class="btn btn-light btn-sm rounded-pill px-4 fw-bold text-success" href="{% url 'login' %}">Connexion</a>
-                    {% endif %}
-                </div>
+                <!-- ☰ BOUTON MENU PARALLÈLE -->
+                <button onclick="toggleMenu()" class="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all active:scale-95 shadow-inner"> ☰
+                    <i class="bi bi-list text-2xl"></i>
+                </button>
             </div>
         </div>
     </nav>
 
-    <!-- Gestion des messages Django (Succès/Erreurs) -->
-    <div class="container mt-4">
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show rounded-3 shadow-sm" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
+    <!-- 🛰️ SIDEBAR DRAWER -->
+    <div id="side-menu" class="fixed inset-0 z-[60] invisible">
+        <div onclick="toggleMenu()" id="menu-backdrop" class="absolute inset-0 bg-slate-950/60 backdrop-blur-md opacity-0 transition-opacity duration-500"></div>
+        <div id="menu-panel" class="absolute top-0 right-0 h-full w-full max-w-sm bg-white dark:bg-slate-900 shadow-2xl transform translate-x-full transition-transform duration-500 flex flex-col">
+            <div class="p-8 flex justify-between items-center border-b dark:border-slate-800">
+                <h3 class="text-xl font-black dark:text-white">BARRE DE NAVIGATION</h3>
+                <button onclick="toggleMenu()" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-0 cursor-pointer text-slate-500 hover:text-red-500"><i class="bi bi-x-lg"></i></button>
+            </div>
+            
+            <div class="flex-grow overflow-y-auto p-6 space-y-1">
+                {% if user.is_authenticated %}
+                    <a href="{% url 'core:home' %}" class="menu-link"><i class="bi bi-house"></i> Accueil</a>
+                    <div class="relative">
+                        <button class="menu-link w-full border-0 bg-transparent text-left cursor-pointer" onclick="document.getElementById('notif-pane').classList.toggle('hidden')">
+                            <i class="bi bi-bell"></i> Notifications
+                            {% if messages %}<span class="ml-auto w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>{% endif %}
+                        </button>
+                        <div id="notif-pane" class="hidden mt-2 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-xs space-y-2 max-h-40 overflow-y-auto">
+                            {% if messages %}{% for m in messages %}<p class="border-l-2 border-green-500 pl-2 text-slate-600 dark:text-slate-400">{{ m }}</p>{% endfor %}
+                            {% else %}<p class="opacity-50 italic text-center py-2">Aucun message</p>{% endif %}
+                        </div>
+                    </div>
+
+                    {% if user.is_superuser %}
+                        <a href="{% url 'core:dashboard_boss' %}" class="menu-link"><i class="bi bi-speedometer2"></i> Tableau de bord</a>
+                        <a href="{% url 'core:fournisseurs_boss' %}" class="menu-link"><i class="bi bi-truck"></i> Partenaires</a>
+                        <a href="{% url 'core:gestion_stocks_boss' %}" class="menu-link"><i class="bi bi-box-seam"></i> Stocks</a>
+                        <a href="{% url 'core:historique_ventes_boss' %}" class="menu-link"><i class="bi bi-clock-history"></i> Historiques</a>
+                        <a href="{% url 'core:rapports_boss' %}" class="menu-link"><i class="bi bi-graph-up-arrow"></i> Rapports</a>
+                        <a href="{% url 'core:reapprovisionnement_boss' %}" class="menu-link"><i class="bi bi-arrow-repeat"></i> Réappro</a>
+                        <a href="{% url 'core:parametres_boss' %}" class="menu-link"><i class="bi bi-gear"></i> Paramètres</a>
+                    {% elif user.is_staff %}
+                        <div class="menu-divider">Caisse</div>
+                        <a href="{% url 'core:point_de_vente' %}" class="menu-link"><i class="bi bi-cpu"></i> Point de Vente</a>
+                        <a href="{% url 'core:gestion_ordonnances' %}" class="menu-link"><i class="bi bi-file-earmark-medical"></i> Ordonnances</a>
+                        <a href="{% url 'core:historique_ventes_boss' %}" class="menu-link"><i class="bi bi-journal-text"></i> Historique Global</a>
+                    {% else %}
+                        <div class="menu-divider">Client</div>
+                        <a href="{% url 'core:catalogue' %}" class="menu-link"><i class="bi bi-capsule"></i> Catalogue</a>
+                        <a href="{% url 'core:panier' %}" class="menu-link"><i class="bi bi-cart3"></i> Mon Panier</a>
+                        <a href="{% url 'core:mes_commandes' %}" class="menu-link"><i class="bi bi-bag-check"></i> Mes Commandes</a>
+                    {% endif %}
+                {% else %}
+                    <a href="{% url 'login' %}" class="menu-link !text-green-600 font-bold"><i class="bi bi-person-lock"></i> Connexion</a>
+                {% endif %}
+            </div>
+            
+            <div class="p-8 border-t dark:border-slate-800">
+                <a href="#footer-logout" onclick="toggleMenu()" class="flex items-center gap-3 text-red-500 font-black text-xs uppercase no-underline hover:opacity-70 transition"><i class="bi bi-power text-xl"></i> Terminer la session</a>
+            </div>
+        </div>
     </div>
 
-    <main class="container my-4 flex-grow-1">
+    <main class="flex-grow">
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="bg-white border-top py-4 mt-5">
-        <div class="container text-center">
-            <p class="text-muted mb-0 small">© 2026 Pharmacie + - Plateforme certifiée de District Hospitalier</p>
-            <p class="text-muted extra-small" style="font-size: 0.7rem;">Tous droits réservés</p>
+    <!-- 🛋️ FOOTER DECONNEXION -->
+    <footer id="footer-logout" class="bg-slate-900 text-white p-16 border-t-8 border-red-600 mt-20">
+        <div class="container mx-auto max-w-2xl text-center">
+            <div class="text-5xl mb-4">🛰️</div>
+            <h3 class="text-2xl font-black mb-4 uppercase tracking-tighter">Fin de Session</h3>
+            <p class="text-slate-400 text-sm mb-10">Vous quittez l'interface sécurisée de {{ p_nom|default:"Pharmacie+" }}.</p>
+            {% if user.is_authenticated %}
+                <form action="{% url 'logout' %}" method="post">{% csrf_token %}
+                    <button type="submit" class="bg-red-600 hover:bg-red-500 text-white px-12 py-4 rounded-2xl font-black border-0 cursor-pointer shadow-xl transition-all hover:scale-105">DECONNEXION</button>
+                </form>
+            {% else %}
+                <a href="{% url 'login' %}" class="text-green-500 font-bold no-underline uppercase tracking-widest text-xs">Se Connecter 🔐</a>
+            {% endif %}
         </div>
     </footer>
 
-    <!-- JS Bootstrap -->
-    <script src="cdn.jsdelivr.net"></script>
+    <script>
+        // Gestion Thème (Mode Clair/Sombre)
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const darkIcon = document.getElementById('theme-toggle-dark-icon');
+        const lightIcon = document.getElementById('theme-toggle-light-icon');
+
+        if (document.documentElement.classList.contains('dark')) { lightIcon.classList.remove('hidden'); } else { darkIcon.classList.remove('hidden'); }
+
+        themeToggleBtn.addEventListener('click', function() {
+            darkIcon.classList.toggle('hidden'); lightIcon.classList.toggle('hidden');
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark'); localStorage.setItem('color-theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark'); localStorage.setItem('color-theme', 'dark');
+            }
+        });
+
+        // Gestion Menu
+        function toggleMenu() {
+            const menu = document.getElementById('side-menu');
+            const backdrop = document.getElementById('menu-backdrop');
+            const panel = document.getElementById('menu-panel');
+            if (menu.classList.contains('invisible')) {
+                menu.classList.remove('invisible');
+                setTimeout(() => { backdrop.classList.add('opacity-100'); panel.classList.remove('translate-x-full'); }, 10);
+            } else {
+                backdrop.classList.remove('opacity-100'); panel.classList.add('translate-x-full');
+                setTimeout(() => { menu.classList.add('invisible'); }, 500);
+            }
+        }
+    </script>
 </body>
 </html>

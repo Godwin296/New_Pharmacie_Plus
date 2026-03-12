@@ -1,0 +1,107 @@
+{% extends "core/admin/base_boss.html" %}
+
+{% block boss_content %}
+<style>
+    /* ✨ SaaS POS Terminal - Design 2026 */
+    .pos-card { border-radius: 35px; border: 1px solid #f1f5f9; transition: 0.3s; }
+    .dark .pos-card { background: #1e293b; border-color: #334155; }
+    
+    .product-item {
+        border: 2px solid #f8fafc;
+        border-radius: 24px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        background: white;
+    }
+    .dark .product-item { background: #0f172a; border-color: #1e293b; }
+    .product-item:hover { 
+        border-color: #10b981; 
+        transform: translateY(-5px);
+        box-shadow: 0 15px 30px rgba(16, 185, 129, 0.1);
+    }
+
+    .ticket-dark {
+        background: #0f172a;
+        border-radius: 40px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Scrollbar invisible pour la grille */
+    .scroll-hide::-webkit-scrollbar { display: none; }
+</style>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+    <!-- 🔍 RECHERCHE & SELECTION (GAUCHE) -->
+    <div class="lg:col-span-2">
+        <div class="pos-card bg-white p-10 shadow-sm border border-slate-100">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-3xl font-black text-slate-800 dark:text-white tracking-tighter">🛒 Caisse <span class="text-emerald-500">Rapide</span></h2>
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800 px-4 py-2 rounded-full">⚡ Terminal Actif</span>
+            </div>
+            
+            <div class="relative mb-10 group">
+                <i class="bi bi-search absolute left-6 top-5 text-slate-400 text-xl group-focus-within:text-emerald-500 transition-colors"></i>
+                <input type="text" name="q" 
+                       class="w-full bg-slate-50 dark:bg-slate-900 border-2 border-transparent focus:border-emerald-500 rounded-3xl py-5 pl-16 pr-8 font-bold text-lg outline-none transition-all shadow-inner"
+                       placeholder="Scanner ou taper le nom du produit..."
+                       hx-get="{% url 'core:point_de_vente' %}"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#pos-results"
+                       hx-select="#pos-results">
+            </div>
+
+            <div id="pos-results" class="grid grid-cols-1 md:grid-cols-2 gap-5 max-h-[60vh] overflow-y-auto scroll-hide pr-2">
+                {% for p in produits %}
+                <div class="product-item p-6 flex justify-between items-center cursor-pointer group"
+                     hx-post="{% url 'core:ajouter_au_panier' p.id %}"
+                     hx-target="#pos-cart"
+                     hx-swap="innerHTML">
+                    <div>
+                        <div class="font-black text-slate-800 dark:text-white text-lg group-hover:text-emerald-500 transition-colors">{{ p.nom }}</div>
+                        <div class="text-emerald-600 font-black text-sm mt-1">{{ p.prix|floatformat:0 }} <small class="text-[10px]">{{ p_devise }}</small></div>
+                        <div class="text-[10px] font-bold text-slate-400 uppercase mt-2">En rayon: {{ p.quantite }}</div>
+                    </div>
+                    <div class="bg-slate-50 dark:bg-slate-800 group-hover:bg-emerald-500 group-hover:text-white w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-sm">
+                        <i class="bi bi-plus-lg text-xl"></i>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 🧾 PANIER DE VENTE & ENCAISSEMENT (DROITE) -->
+    <div class="lg:col-span-1">
+        <div class="ticket-dark p-10 text-white shadow-2xl sticky top-24 border border-white/5">
+            <div class="flex justify-between items-center mb-8 border-b border-white/10 pb-6">
+                <div>
+                    <h4 class="font-black text-xs uppercase tracking-[0.3em] text-emerald-500 mb-1">Ticket de Vente</h4>
+                    <p class="text-[10px] font-bold text-slate-500">ID: #{{ date_heure|date:"Hi" }}</p>
+                </div>
+                <div class="text-3xl">🧾</div>
+            </div>
+            
+            <div id="pos-cart" class="min-h-[250px] mb-10 space-y-5 overflow-y-auto scroll-hide pr-2">
+                <!-- Les articles s'afficheront ici via HTMX -->
+                <div class="text-center py-16 opacity-30">
+                    <i class="bi bi-cart-x text-5xl mb-4 block"></i>
+                    <p class="text-[10px] font-black uppercase tracking-widest">En attente d'articles...</p>
+                </div>
+            </div>
+
+            <div class="border-t border-white/10 pt-8">
+                <div class="flex justify-between items-end mb-8">
+                    <span class="text-slate-500 font-black text-[10px] uppercase tracking-widest">Montant Total</span>
+                    <div class="text-4xl font-black text-emerald-400">
+                        0 <small class="text-sm font-bold text-slate-500">{{ p_devise }}</small>
+                    </div>
+                </div>
+                
+                <button class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-black py-5 rounded-[22px] transition-all transform hover:scale-[1.02] active:scale-95 shadow-xl shadow-emerald-500/20 flex justify-between items-center px-10">
+                    <span>ENCAISSER</span>
+                    <i class="bi bi-printer-fill"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

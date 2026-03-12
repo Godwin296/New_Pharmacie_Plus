@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page { size: A4; margin: 2cm; }
+        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #1a1a1a; line-height: 1.4; }
+        .no-print { display: none; }
+        @media screen { 
+            body { background: #f0f2f5; display: flex; justify-content: center; padding: 40px; }
+            .page { background: white; width: 21cm; padding: 2cm; shadow: 0 0 20px rgba(0,0,0,0.1); border-radius: 10px; }
+            .no-print { display: block; position: fixed; top: 20px; right: 20px; }
+        }
+        .header { border-bottom: 4px solid #198754; padding-bottom: 20px; margin-bottom: 30px; }
+        .kpi-grid { display: flex; justify-content: space-between; margin-bottom: 40px; gap: 20px; }
+        .kpi-box { flex: 1; border: 1px solid #eee; padding: 15px; border-radius: 8px; text-align: center; }
+        .kpi-box b { font-size: 1.2rem; color: #198754; display: block; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background: #f8f9fa; text-align: left; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 1px; padding: 10px; border-bottom: 2px solid #eee; }
+        td { padding: 10px; border-bottom: 1px solid #f0f0f0; font-size: 0.9rem; }
+        .footer { margin-top: 50px; font-size: 0.7rem; color: #777; text-align: center; border-top: 1px solid #eee; pt: 20px; }
+    </style>
+</head>
+<body>
+    <button class="no-print" onclick="window.print()" style="background:#198754; color:white; border:none; padding:12px 25px; border-radius:50px; font-weight:bold; cursor:pointer;">🖨️ IMPRIMER LE RAPPORT</button>
+    
+    <div class="page">
+        <div class="header">
+            <div style="float: right; text-align: right;">
+                <h2 style="margin:0; color:#198754;">RAPPORT FINANCIER</h2>
+                <small>Généré le {{ date_heure|date:"d/m/Y à H:i" }}</small>
+            </div>
+            <img src="{% if config.logo %}{{ config.logo.url }}{% else %}/static/logo.png{% endif %}" style="height:60px;">
+            <div style="clear:both;"></div>
+        </div>
+
+        <div class="kpi-grid">
+            <div class="kpi-box">RECETTES 💰<b>{{ ca_total|floatformat:0 }} {{ config.devise_preferee|default:"FCFA" }}</b></div>
+            <div class="kpi-box">VENTES 🧾<b>{{ nb_trans }}</b></div>
+            <div class="kpi-box">PANIER MOYEN ⚖️<b>{{ moyenne|floatformat:0 }} {{ config.devise_preferee|default:"FCFA" }}</b></div>
+        </div>
+
+        <h3 style="border-left: 5px solid #198754; padding-left: 10px;">🏆 Performance des Produits (Top 10)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Rang</th>
+                    <th>Médicament</th>
+                    <th>Catégorie</th>
+                    <th style="text-align:right;">Volume Vendu</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in top_produits %}
+                <tr>
+                    <td>#{{ forloop.counter }}</td>
+                    <td><b>{{ p.nom }}</b></td>
+                    <td>{{ p.get_categorie_display }}</td>
+                    <td style="text-align:right;">{{ p.vendu|default:0 }} unités</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" style="text-align:center; padding:20px; color:#94a3b8;">Aucune vente enregistrée pour le moment.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="footer">
+            <b>{{ config.nom|default:"Pharmacie+" }}</b> - {{ config.adresse }} | {{ config.telephone }}<br>
+            <i>Document confidentiel généré par le système Pharmacie+ 🛰️</i>
+        </div>
+    </div>
+</body>
+</html>

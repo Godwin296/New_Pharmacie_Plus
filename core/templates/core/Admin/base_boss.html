@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="fr">
+    <head>
+        <meta charset="UTF-8">
+        <title>CONTROLE GENERAL | {{ p_nom|default:"Pharmacie+" }}</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {
+                darkMode: 'class',
+            }
+        </script>
+        <!-- FIX DES LIENS CDN -->
+        <script src="https://unpkg.com"></script>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net">
+
+        <style>
+            :root { --sidebar-width: 260px; --boss-color: #111827; }
+            body { font-family: 'Inter', 'Segoe UI', sans-serif; }
+
+            .sidebar { 
+                width: var(--sidebar-width); 
+                height: 100vh; 
+                background: var(--boss-color); 
+                position: fixed; 
+                top: 0; 
+                left: 0; 
+                padding-top: 80px; 
+                color: white; 
+                display: flex; 
+                flex-direction: column; 
+                z-index: 40;
+                border-right: 1px solid rgba(255,255,255,0.05);
+            }
+
+            /* ✨ Design amélioré des liens avec détection d'onglet actif */
+            .nav-link { 
+                color: #9ca3af; 
+                transition: all 0.3s ease; 
+                padding: 12px 25px; 
+                display: flex; 
+                align-items: center; 
+                text-decoration: none; 
+                border-left: 4px solid transparent;
+                margin: 2px 0;
+            }
+
+            .nav-link:hover { 
+                color: white; 
+                background: rgba(255,255,255,0.05); 
+            }
+
+            /* 🎯 MARQUEUR D'ONGLET ACTIF DYNAMIQUE */
+            .nav-link.active { 
+                color: white; 
+                background: rgba(16, 185, 129, 0.1); 
+                border-left-color: #10b981;
+                font-weight: 600;
+            }
+
+            .nav-link.active i { color: #10b981; }
+
+            .main-content { margin-left: var(--sidebar-width); padding-top: 100px; }
+        </style>
+        <script>
+            if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        </script>
+    </head>
+    <body class="bg-[#f8fafc] dark:bg-slate-950 transition-colors duration-300">
+        <header class="fixed top-0 left-0 right-0 h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-8 z-50 no-print text-slate-800 dark:text-white">
+            <div class="flex items-center">
+                <img src="{% if p_logo %}{{ p_logo.url }}{% else %}/static/logo.png{% endif %}" height="40" class="me-3 rounded shadow-sm">
+                <div>
+                    <span class="font-bold text-xl uppercase tracking-tighter">{{ p_nom|default:"PHARMACIE +" }}</span>
+                    <span class="block text-[9px] font-black text-red-500 animate-pulse uppercase tracking-widest">🛰️MODE ADMIN</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-6">
+                <!-- 🏠 BOUTON RETOUR AU SITE (Maintenu dans ton style) -->
+                <a href="{% url 'core:home' %}" class="text-xs font-bold bg-slate-800 text-white px-4 py-2 rounded-xl transition no-underline hover:bg-slate-700">
+                    ⬅️ Retour au Site
+                </a>
+
+                <button id="theme-toggle" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-xl border-0 bg-transparent focus:outline-none">
+                    <span id="theme-toggle-dark-icon" class="hidden">🌙</span>
+                    <span id="theme-toggle-light-icon" class="hidden">☀️</span>
+                </button>
+
+                <div class="text-right border-l pl-6 dark:border-slate-700">
+                    <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Temps Réel</div>
+                    <div class="text-lg font-bold text-green-600" id="real-time-date"></div>
+                </div>
+            </div>
+        </header>
+
+        <nav class="sidebar shadow no-print">
+            <div class="px-6 mb-4 mt-4 text-[10px] uppercase text-gray-500 font-bold tracking-widest">Menu Principal 📂</div>
+
+            <a href="{% url 'core:dashboard_boss' %}" class="nav-link {% if 'dashboard' in request.path %}active{% endif %}">
+                <i class="bi bi-speedometer2 me-3"></i> Dashboard
+            </a>
+
+            <a href="{% url 'core:gestion_stocks_boss' %}" class="nav-link {% if 'stocks' in request.path %}active{% endif %}">
+                <i class="bi bi-box-seam me-3"></i> Stocks
+            </a>
+
+            <a href="{% url 'core:historique_ventes_boss' %}" class="nav-link {% if 'historique' in request.path %}active{% endif %}">
+                <i class="bi bi-clock-history me-3"></i> Historique
+            </a>
+
+            <a href="{% url 'core:fournisseurs_boss' %}" class="nav-link {% if 'fournisseurs' in request.path %}active{% endif %}">
+                <i class="bi bi-truck me-3"></i> Fournisseurs
+            </a>
+
+            <a href="{% url 'core:rapports_boss' %}" class="nav-link {% if 'rapports' in request.path %}active{% endif %}">
+                <i class="bi bi-graph-up-arrow me-3"></i> Rapports
+            </a>
+
+            <hr class="mx-6 my-4 opacity-10">
+
+            <a href="{% url 'core:parametres_boss' %}" class="nav-link text-warning {% if 'parametres' in request.path %}active{% endif %}">
+                <i class="bi bi-gear me-3"></i> Paramètres
+            </a>
+
+            <form action="{% url 'logout' %}" method="post" class="mt-auto mb-6 px-6">
+                {% csrf_token %}
+                <button type="submit" class="w-full bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white py-3 rounded-2xl font-bold text-xs transition border-0">
+                    <i class="bi bi-power me-2"></i> QUITTER
+                </button>
+            </form>
+        </nav>
+
+        <main class="main-content px-10 pb-12">
+            {% block boss_content %}{% endblock %}
+        </main>
+
+        <script src="https://cdn.jsdelivr.net"></script>
+        <script>
+            function updateDate() {
+                const opt = { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+                document.getElementById('real-time-date').innerText = new Date().toLocaleDateString('fr-FR', opt);
+            }
+            setInterval(updateDate, 1000); updateDate();
+
+            const themeToggleBtn = document.getElementById('theme-toggle');
+            const darkIcon = document.getElementById('theme-toggle-dark-icon');
+            const lightIcon = document.getElementById('theme-toggle-light-icon');
+
+            if (document.documentElement.classList.contains('dark')) {
+                lightIcon.classList.remove('hidden');
+            } else {
+                darkIcon.classList.remove('hidden');
+            }
+
+            themeToggleBtn.addEventListener('click', function() {
+                darkIcon.classList.toggle('hidden');
+                lightIcon.classList.toggle('hidden');
+                if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                } else {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                }
+            });
+        </script>
+    </body>
+</html>

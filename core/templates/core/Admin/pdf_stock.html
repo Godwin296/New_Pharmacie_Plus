@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Arial', sans-serif; padding: 40px; }
+        .header { border-bottom: 3px solid #dc3545; padding-bottom: 20px; margin-bottom: 30px; display: flex; align-items: center; }
+        .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 40px; }
+        .summary-box { background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center; font-size: 0.9rem; }
+        .val { display: block; font-size: 1.2rem; font-weight: bold; color: #dc3545; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { border: 1px solid #eee; padding: 10px; text-align: center; }
+        th { background: #333; color: white; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="{% if config.logo %}{{ config.logo.url }}{% else %}/static/logo.png{% endif %}" style="width:70px; margin-right:20px;">
+        <div>
+            <h1 style="margin:0;">{{ config.nom|default:"PHARMACIE +" }}</h1>
+            <small>📦 RAPPORT D'ÉTAT DES STOCKS | {{ date_heure|date:"d/m/Y" }}</small>
+        </div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-box">TOTAL MÉDICAMENTS <span class="val">{{ total_med }}</span></div>
+        <div class="summary-box">VALEUR DU STOCK <span class="val">{{ valeur_stock|floatformat:0 }} {{ config.devise_preferee|default:"FCFA" }}</span></div>
+        <div class="summary-box">STOCK FAIBLE <span class="val">⚠️ {{ stock_faible }}</span></div>
+        <div class="summary-box">EXPIRATIONS (60J) <span class="val">⌛ {{ expirent_bientot.count }}</span></div>
+    </div>
+
+    <h3 style="color:#dc3545;">🚨 Alertes de péremption (Sous 60 jours)</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Médicament</th>
+                <th>Catégorie</th>
+                <th>Date d'expiration</th>
+                <th>Stock restant</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in expirent_bientot %}
+            <tr style="background:#fff5f5;">
+                <td><b>{{ a.nom }}</b></td>
+                <td>{{ a.get_categorie_display }}</td>
+                <td>{{ a.date_expiration|date:"d/m/Y" }}</td>
+                <td><b style="color:#dc3545;">{{ a.quantite }}</b></td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" style="padding: 20px; color: #16a34a; font-weight: bold;">✅ Aucun produit n'expire dans les 60 prochains jours.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div style="margin-top: 30px; font-size: 0.7rem; color: #666; text-align: center;">
+        <i>Note : Ce rapport inclut les alertes de stock et de péremption basées sur un seuil critique de 2 mois.</i>
+    </div>
+</body>
+</html>

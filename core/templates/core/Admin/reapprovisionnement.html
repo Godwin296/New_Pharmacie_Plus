@@ -1,0 +1,145 @@
+{% extends "core/admin/base_boss.html" %}
+
+{% block boss_content %}
+<style>
+    /* ✨ SaaS Empire 2026 UI */
+    .reappro-card { 
+        border: 1px solid rgba(241, 245, 249, 0.5); 
+        border-radius: 35px; 
+        background: white; 
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .dark .reappro-card { background: #1e293b; border-color: #334155; }
+    
+    .reappro-card:hover { transform: translateY(-5px); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.05); }
+
+    .status-pulse { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 12px; }
+    .bg-pulse-red { 
+        background: #ef4444; 
+        animation: pulse-red 2s infinite; 
+        box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+    }
+    @keyframes pulse-red { 0% { transform: scale(0.95); opacity: 0.8; } 70% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { transform: scale(0.95); opacity: 0.8; } }
+
+    .saas-table th { font-[10px] font-black uppercase tracking-[0.2em] text-slate-400 py-4; border-bottom: 2px solid #f8fafc; }
+    .dark .saas-table th { border-bottom-color: #334155; }
+
+    .input-saas { 
+        background: #f8fafc !important; 
+        border: 2px solid #f1f5f9 !important; 
+        border-radius: 18px !important; 
+        padding: 12px 20px !important;
+        font-weight: 700 !important;
+        transition: 0.3s;
+    }
+    .dark .input-saas { background: #0f172a !important; border-color: #334155 !important; color: white !important; }
+    .input-saas:focus { border-color: #10b981 !important; outline: none; }
+</style>
+
+<div class="mb-10">
+    <div class="inline-block bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-3">Logistique Stratégique 🛰️</div>
+    <h2 class="text-4xl font-black text-slate-800 dark:text-white tracking-tighter">Flux de <span class="text-emerald-500">Réapprovisionnement</span></h2>
+    <p class="text-slate-500 dark:text-slate-400 font-medium">Gestion automatisée des ruptures et commandes partenaires.</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <!-- 🚨 ZONE DES ALERTES CRITIQUES -->
+    <div class="lg:col-span-8">
+        <div class="reappro-card shadow-sm p-8 h-100">
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h5 class="text-xl font-black text-slate-800 dark:text-white mb-1">⚠️ Alertes Critiques</h5>
+                    <p class="text-xs text-slate-400 font-bold uppercase tracking-widest">{{ nb_alertes }} Produits sous le seuil</p>
+                </div>
+                <span class="bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 px-4 py-2 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-red-100 dark:border-red-900/30">Action Requise</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full saas-table align-middle">
+                    <thead>
+                        <tr class="text-left">
+                            <th class="pb-4">Médicament</th>
+                            <th class="text-center pb-4">Stock</th>
+                            <th class="text-center pb-4">Seuil</th>
+                            <th class="text-right pb-4">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm">
+                        {% for p in alertes %}
+                        <tr class="border-b border-slate-50 dark:border-slate-800">
+                            <td class="py-5">
+                                <div class="flex items-center">
+                                    <span class="status-pulse bg-pulse-red"></span>
+                                    <span class="font-black text-slate-800 dark:text-slate-200">{{ p.nom }}</span>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <span class="bg-red-50 dark:bg-red-900/30 text-red-600 px-3 py-1 rounded-lg font-black">{{ p.quantite }}</span>
+                            </td>
+                            <td class="text-center text-slate-400 font-bold italic">{{ p.seuil_alerte }}</td>
+                            <td class="text-right">
+                                <button class="bg-slate-900 dark:bg-slate-700 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition border-0 cursor-pointer">Commander</button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-20">
+                                <div class="text-6xl mb-4">✅</div>
+                                <h4 class="text-lg font-black text-slate-800 dark:text-white uppercase">Stocks Optimisés</h4>
+                                <p class="text-slate-400 text-xs font-bold uppercase mt-2">Tous les voyants sont au vert.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 📝 LANCER UN BON DE COMMANDE -->
+    <div class="lg:col-span-4">
+        <div class="reappro-card shadow-2xl p-8 bg-slate-900 text-white border-0 sticky top-24">
+            <div class="flex items-center gap-3 mb-8">
+                <div class="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">📥</div>
+                <h5 class="text-xl font-black tracking-tighter">Nouveau Bon</h5>
+            </div>
+            
+            <form class="space-y-6">
+                <div>
+                    <label class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 block">Partenaire Stratégique</label>
+                    <select class="w-full input-saas !bg-slate-800 !border-slate-700 !text-white cursor-pointer">
+                        {% for f in fournisseurs %}
+                            <option value="{{ f.id }}">{{ f.nom }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 block">Niveau d'Urgence</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="prio" class="hidden peer" checked>
+                            <div class="text-center p-3 rounded-2xl border-2 border-slate-700 text-slate-500 font-bold text-xs peer-checked:border-emerald-500 peer-checked:text-emerald-500 peer-checked:bg-emerald-500/10 transition">Normale</div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="prio" class="hidden peer">
+                            <div class="text-center p-3 rounded-2xl border-2 border-slate-700 text-slate-500 font-bold text-xs peer-checked:border-orange-500 peer-checked:text-orange-500 peer-checked:bg-orange-500/10 transition">Urgent ⚡</div>
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-black py-4 rounded-2xl transition-all transform hover:scale-[1.02] shadow-xl shadow-emerald-500/20 border-0 cursor-pointer text-sm">
+                    GÉNÉRER LE BON NUMÉRIQUE
+                </button>
+            </form>
+
+            <div class="mt-8 pt-6 border-t border-white/5 flex gap-4 items-start">
+                <i class="bi bi-shield-check text-emerald-500 text-xl"></i>
+                <p class="text-[10px] text-slate-500 font-medium leading-relaxed">
+                    L'émission de ce bon déclenche une notification automatique vers le canal de communication du fournisseur.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

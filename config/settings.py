@@ -116,8 +116,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles' 
 STATICFILES_DIRS = [
-    BASE_DIR / "core"/"static",
+    BASE_DIR / "core" / "static",
 ]
 
 # Default primary key field type
@@ -128,4 +129,4 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'login'              # utilise le rout 'login' integre de django
 LOGIN_REDIRECT_URL = 'core:home' # redirige vers l'accueil apres connexion
-LOGOUT_REDIRECT_URL = 'core:home' # redirige vers l'accueil apres deconnexion
+LOGOUT_REDIRECT_URL = 'login' # redirige vers le portail stellaire apres deconnexion

@@ -1,93 +1,86 @@
-{% extends "core/base.html"  %}
-{% block title %}Catalogue produit{% endblock %}
+{% extends "core/base.html" %}
+{% block title %}Catalogue Santé | {{ p_nom }}{% endblock %}
+
 {% block content %}
-
-<div class="text-center mb-5">
-    <h2 class="fw-bold">Catalogue des produits</h2>
-
-    <!-- BARRE DE RECHERCHE -->
-    <div class="row justify-content-center mt-4">
-        <div class="col-md-6">
-            <form method="GET" action="{% url 'core:catalogue' %}" class="d-flex shadow-sm">
-                <!-- On garde la catégorie active lors d'une recherche texte -->
-                {% if active_cat %}<input type="hidden" name="cat" value="{{ active_cat }}">{% endif %}
-                <input type="text" name="q" class="form-control border-success rounded-start-pill ps-4" 
-                       placeholder="Rechercher un médicament..." 
-                       value="{{ search_query|default:'' }}">
-                <button type="submit" class="btn btn-success rounded-end-pill px-4">Rechercher</button>
-            </form>
-        </div>
-    </div>
+<div class="max-w-7xl mx-auto px-4 py-8">
     
-    <!-- BARRE DE FILTRAGE -->
-    <div class="mt-4">
-        <a href="{% url 'core:catalogue' %}{% if search_query %}?q={{ search_query }}{% endif %}" 
-           class="btn btn-sm {% if not active_cat %}btn-success shadow-sm{% else %}btn-outline-success{% endif %} rounded-pill px-3 me-2">
-           Tous
-        </a>
+    <!-- 🎯 HEADER & RECHERCHE INSTANTANÉE -->
+    <div class="text-center mb-12">
+        <h1 class="text-4xl font-black text-slate-800 dark:text-white tracking-tighter mb-4">
+            Catalogue <span class="text-green-600">Médicaments</span> 💊
+        </h1>
+        <p class="text-slate-500 dark:text-slate-400 mb-8 font-medium">Disponibilité en temps réel et prix certifiés.</p>
+
+        <form method="GET" action="{% url 'core:catalogue' %}" class="max-w-2xl mx-auto relative group">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <i class="bi bi-search text-green-500 text-xl"></i>
+            </div>
+            
+            <input type="text" 
+                   name="q"  
+                   id="search-input"
+                   placeholder="Tapez un nom ou un laboratoire..." 
+                   class="w-full pl-12 pr-32 py-4 rounded-full border-2 border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-green-500 focus:ring-4 focus:ring-green-100 dark:focus:ring-green-900 outline-none transition-all shadow-sm group-hover:shadow-md"
+                   hx-get="{% url 'core:catalogue' %}" 
+                   hx-target="#liste-produits" 
+                   hx-trigger="keyup changed delay:200ms"
+                   hx-indicator="#loading-spinner"
+                   value="{{ search_query|default:'' }}">
+            
+            <button type="submit" class="absolute right-2 top-2 bottom-2 bg-green-600 text-white px-6 rounded-full font-bold hover:bg-green-700 transition">
+                Chercher
+            </button>
+
+            <div id="loading-spinner" class="htmx-indicator absolute right-32 top-4">
+                <div class="animate-spin h-6 w-6 border-4 border-green-500 border-t-transparent rounded-full"></div>
+            </div>
+        </form>
+    </div>
+
+    <!-- 🏷️ FILTRAGE PAR CATÉGORIE (HTMX + GESTION ACTIVE) -->
+    <div class="flex flex-wrap justify-center gap-3 mb-12">
+        <!-- Bouton TOUT : on vide le paramètre 'cat' -->
+        <button hx-get="{% url 'core:catalogue' %}" 
+                hx-target="#liste-produits" 
+                hx-push-url="true"
+                class="px-6 py-2 rounded-full font-bold text-sm transition-all {% if not active_cat %}bg-green-600 text-white shadow-lg{% else %}bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700{% endif %}">
+            Tous les soins ✨
+        </button>
+    
         {% for code, nom in categories %}
-        <a href="{% url 'core:catalogue' %}?cat={{ code }}{% if search_query %}&q={{ search_query }}{% endif %}" 
-           class="btn btn-sm {% if active_cat == code %}btn-success shadow-sm{% else %}btn-outline-success{% endif %} rounded-pill px-3 me-2">
-           {{ nom }}
-        </a>
+        <!-- Bouton CATÉGORIE : on passe le 'code' (ex: antalgique) à la vue -->
+        <button hx-get="{% url 'core:catalogue' %}?cat={{ code }}" 
+                hx-target="#liste-produits"
+                hx-push-url="true"
+                class="px-6 py-2 rounded-full border font-bold text-sm transition-all {% if active_cat == code %}bg-green-600 text-white shadow-lg{% else %}bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700{% endif %}">
+            {{ nom }}
+        </button>
         {% endfor %}
     </div>
-    <p class="text-muted mt-3 small">Consultez la disponibilité et les prix de nos médicaments en temps réel.</p>
-</div>
 
-<div class="row g-4">
-    {% for produit in produits %}
-    <div class="col-lg-4 col-md-6">
-        <div class="card h-100 border-0 shadow-sm product-card rounded-4 overflow-hidden">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h5 class="card-title fw-bold mb-0">{{ produit.nom }}</h5>
-                    {% if produit.quantite > 0 %}
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">En stock</span>
-                    {% else %}
-                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Rupture</span>
-                    {% endif %}
-                </div>
-                
-                <p class="card-text text-muted small mb-4" style="min-height: 40px;">
-                    {{ produit.description|default:"Aucune description disponible." }}
-                </p>
 
-                <div class="mt-auto">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="fs-5 fw-bold text-success">{{ produit.prix|floatformat:2 }} FCFA</span>
-                        <small class="text-muted">Reste : {{ produit.quantite }}</small>
-                    </div>
-
-                    <form method="POST" action="{% url 'core:ajouter_au_panier' produit.id %}">
-                        {% csrf_token %}
-                        <div class="input-group input-group-sm mb-2 shadow-sm">
-                            <span class="input-group-text bg-white">Qté</span>
-                            <input type="number" name="selection_quantite" class="form-control text-center" 
-                                   value="1" min="1" max="{{ produit.quantite }}" 
-                                   {% if produit.quantite <= 0 %}disabled{% endif %} required>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100 rounded-3 py-2 fw-bold" 
-                                {% if produit.quantite <= 0 %}disabled{% endif %}>
-                            {% if produit.quantite > 0 %}Ajouter au panier{% else %}Indisponible{% endif %}
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
+    <!-- 🏗️ GRILLE DES PRODUITS (DYNAMIQUE VIA PARTIAL) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="liste-produits">
+        {% include 'core/partials/liste_produits_partial.html' %}
     </div>
-    {% empty %}
-    <div class="col-12 text-center py-5">
-        <div class="display-1 text-muted opacity-25 mb-4">🔍</div>
-        {% if search_query or active_cat %}
-            <h4 class="text-dark fw-bold">Aucun résultat trouvé</h4>
-            <p class="text-muted">Essayez d'autres mots-clés ou changez de catégorie.</p>
-            <a href="{% url 'core:catalogue' %}" class="btn btn-outline-success rounded-pill px-4 mt-2">Réinitialiser</a>
-        {% else %}
-            <h4 class="text-dark fw-bold">Le catalogue est vide</h4>
-            <p class="text-muted">Aucun produit n'est disponible pour le moment.</p>
-        {% endif %}
-    </div>
-    {% endfor %}
-</div>
+
+
+<script>
+    // ✨ Magie pour changer le style du bouton actif instantanément
+    function setActive(el) {
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('bg-green-600', 'text-white', 'shadow-lg', 'shadow-green-200');
+            btn.classList.add('bg-white', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
+        });
+        el.classList.add('bg-green-600', 'text-white', 'shadow-lg', 'shadow-green-200');
+        el.classList.remove('bg-white', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
+    }
+</script>
+
+<style>
+    .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .htmx-indicator { display: none; }
+    .htmx-requesting .htmx-indicator { display: block; }
+</style>
 {% endblock %}

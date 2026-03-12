@@ -1,0 +1,149 @@
+{% extends "core/admin/base_boss.html" %}
+
+{% block boss_content %}
+<style>
+    /* ✨ SaaS Settings Design 2026 */
+    .saas-settings-container { max-width: 1100px; margin: 0 auto; }
+    
+    .config-card { 
+        border: 1px solid #f1f5f9; 
+        border-radius: 30px; 
+        background: white; 
+        transition: all 0.3s ease;
+    }
+    .dark .config-card { background: #1e293b; border-color: #334155; }
+
+    .form-label { 
+        font-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block;
+    }
+
+    .saas-input {
+        width: 100%;
+        padding: 12px 20px;
+        border-radius: 16px;
+        border: 2px solid #f1f5f9;
+        background: #f8fafc;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        outline: none;
+    }
+    .dark .saas-input { background: #0f172a; border-color: #334155; color: white; }
+    
+    .saas-input:focus { border-color: #10b981; background: white; }
+    .dark .saas-input:focus { background: #1e293b; }
+
+    .logo-zone {
+        border: 3px dashed #e2e8f0;
+        border-radius: 24px;
+        padding: 20px;
+        text-align: center;
+        transition: 0.3s;
+    }
+    .dark .logo-zone { border-color: #334155; }
+    
+    .logo-preview { 
+        width: 120px; height: 120px; 
+        border-radius: 20px; 
+        object-fit: cover; 
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+        margin-bottom: 15px;
+    }
+</style>
+
+<div class="saas-settings-container">
+    <div class="flex justify-between items-end mb-10">
+        <div>
+            <div class="inline-block bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-3">System Control</div>
+            <h2 class="text-4xl font-black text-slate-800 dark:text-white tracking-tighter">Paramètres de <span class="text-emerald-500">l'Empire</span> ⚙️</h2>
+        </div>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- 🌍 COLONNE GAUCHE : IDENTITÉ VISUELLE -->
+            <div class="lg:col-span-4 space-y-8">
+                <div class="config-card p-8 shadow-sm">
+                    <h5 class="font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">🖼️ LOGO</h5>
+                    
+                    <div class="logo-zone">
+                        <img src="{% if config.logo %}{{ config.logo.url }}{% else %}/static/logo.png{% endif %}" class="logo-preview bg-white mx-auto" id="preview">
+                        <label class="block">
+                            <span class="bg-slate-800 text-white text-[10px] font-bold px-4 py-2 rounded-full cursor-pointer hover:bg-emerald-600 transition">CHANGER LOGO</span>
+                            <input type="file" name="logo" class="hidden" onchange="previewImage(this)">
+                        </label>
+                    </div>
+                </div>
+
+                <div class="config-card p-8 shadow-sm">
+                    <h5 class="font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">🌍 Localisation</h5>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="form-label">Langue de l'interface</label>
+                            <select name="langue" class="saas-input">
+                                <option value="fr" {% if config.langue_preferee == 'fr' %}selected{% endif %}>🇫🇷 Français</option>
+                                <option value="en" {% if config.langue_preferee == 'en' %}selected{% endif %}>🇺🇸 English</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">Devise de facturation</label>
+                            <select name="devise" class="saas-input">
+                                <option value="FCFA" {% if config.devise_preferee == 'FCFA' %}selected{% endif %}>CFA (Afrique Centrale)</option>
+                                <option value="EUR" {% if config.devise_preferee == 'EUR' %}selected{% endif %}>Euro (€)</option>
+                                <option value="USD" {% if config.devise_preferee == 'USD' %}selected{% endif %}>Dollar ($)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 🏥 COLONNE DROITE : INFOS LÉGALES -->
+            <div class="lg:col-span-8">
+                <div class="config-card p-8 shadow-sm h-full">
+                    <h5 class="font-bold text-slate-800 dark:text-white mb-8 flex items-center gap-2">🏥 Informations de l'Établissement</h5>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="md:col-span-2">
+                            <label class="form-label">Nom de la Pharmacie</label>
+                            <input type="text" name="nom" class="saas-input" placeholder="Ex: Grande Pharmacie du Centre" value="{{ config.nom|default:'' }}">
+                        </div>
+                        
+                        <div>
+                            <label class="form-label">Téléphone Officiel</label>
+                            <input type="text" name="tel" class="saas-input" placeholder="+237 6xx xxx xxx" value="{{ config.telephone|default:'' }}">
+                        </div>
+
+                        <div>
+                            <label class="form-label">Adresse Physique</label>
+                            <input type="text" name="adresse" class="saas-input" placeholder="Rue, Ville, Pays" value="{{ config.adresse|default:'' }}">
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <label class="form-label">Message de courtoisie (Bas de facture)</label>
+                            <textarea name="message" class="saas-input" rows="4" placeholder="Merci de votre confiance. Prenez soin de vous !">{{ config.message_remerciement|default:'' }}</textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-10 pt-8 border-t border-slate-50 dark:border-slate-800">
+                        <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-emerald-200 dark:shadow-none transition transform hover:scale-[1.02]">
+                            SAUVEGARDER LA CONFIGURATION 💾
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    function previewImage(input) {
+        if (input.files && input.files[0]) {
+            var reader = new FileReader();
+            reader.onload = function(e) { document.getElementById('preview').src = e.target.result; }
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+</script>
+{% endblock %}

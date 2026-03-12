@@ -1,0 +1,85 @@
+<!-- core/templates/core/partials/liste_produits_partial.html -->
+{% for produit in produits %}
+<div class="animate-fade-in">
+    <div class="bg-white dark:bg-slate-800 rounded-[25px] border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-xl transition-all overflow-hidden flex flex-col h-full group">
+        <!-- 📸 ZONE PHOTO (Cliquable pour Admin/Staff) -->
+        <div class="relative h-40 bg-slate-100 overflow-hidden">
+            {% if produit.image %}
+                <img src="{{ produit.image.url }}" class="w-full h-full object-cover">
+            {% else %}
+                <div class="w-full h-full flex items-center justify-center text-slate-300 text-4xl">💊</div>
+            {% endif %}
+
+            {% if user.is_staff %}
+                <form action="{% url 'core:modifier_photo_produit' produit.id %}" method="POST" enctype="multipart/form-data" class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center cursor-pointer">
+                    {% csrf_token %}
+                    <label class="cursor-pointer text-white text-center p-2">
+                        <i class="bi bi-camera-fill text-2xl"></i><br>
+                        <span class="text-[10px] font-bold uppercase">Changer Photo</span>
+                        <input type="file" name="nouvelle_photo" class="hidden" onchange="this.form.submit()">
+                    </label>
+                </form>
+            {% endif %}
+        </div>
+
+        <div class="p-5 flex-grow">
+            <!-- 🏷️ Badge Catégorie & Statut -->
+            <div class="flex justify-between items-center mb-3">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-700 px-2 py-1 rounded">
+                    {{ produit.get_categorie_display }}
+                </span>
+                {% if produit.quantite > 0 %}
+                    <span class="text-[9px] font-bold text-green-600">● EN STOCK</span>
+                {% else %}
+                    <span class="text-[9px] font-bold text-red-600">🚫 RUPTURE</span>
+                {% endif %}
+            </div>
+            
+            <h3 class="text-lg font-black text-slate-800 dark:text-white mb-1 group-hover:text-green-600 transition">
+                {{ produit.nom }}
+            </h3>
+            
+            <div class="text-[10px] font-bold text-blue-600 mb-3 uppercase">
+                🏭 {{ produit.laboratoire|default:"Labo Certifié" }}
+            </div>
+
+            <p class="text-slate-500 dark:text-slate-400 text-xs mb-4 line-clamp-2">
+                {{ produit.description|default:"Aucune description disponible." }}
+            </p>
+
+            <!-- 💰 Prix -->
+            <div class="flex justify-between items-end border-t border-slate-50 pt-3">
+                <div>
+                    <div class="text-[9px] font-bold text-slate-400 uppercase">Prix</div>
+                    <div class="text-xl font-black text-green-600">{{ produit.prix|floatformat:0 }} <small class="text-[10px]">{{ p_devise|default:"FCFA" }}</small></div>
+                </div>
+                <div class="text-right text-[10px] font-bold text-slate-400">
+                    Stock: <span class="text-slate-800 dark:text-slate-200">{{ produit.quantite }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🛒 Action d'Achat -->
+        <div class="p-4 bg-slate-50/50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700">
+            <form method="POST" action="{% url 'core:ajouter_au_panier' produit.id %}" class="flex gap-2">
+                {% csrf_token %}
+                <input type="number" name="selection_quantite" 
+                       class="w-16 bg-white dark:bg-slate-800 border border-slate-200 rounded-lg text-center font-bold text-sm outline-none" 
+                       value="1" min="1" max="{{ produit.quantite }}"
+                       {% if produit.quantite <= 0 %}disabled{% endif %}>
+                
+                <button type="submit" 
+                        class="flex-1 bg-slate-800 hover:bg-green-600 text-white font-bold py-2 rounded-lg text-xs transition flex justify-center items-center gap-2"
+                        {% if produit.quantite <= 0 %}disabled{% endif %}>
+                    {% if produit.quantite > 0 %}Prendre{% else %}Indisponible{% endif %}
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% empty %}
+<div class="col-12 text-center py-20">
+    <div class="text-5xl mb-4">🔍</div>
+    <h3 class="text-xl font-black text-slate-800 dark:text-white">Aucun produit trouvé</h3>
+</div>
+{% endfor %}

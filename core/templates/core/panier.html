@@ -4,74 +4,172 @@
 
 {% block content %}
 <style>
-    .panier-container { width: 100%; max-width: 900px; margin: 2rem auto; }
-    .panier-item { display: flex; justify-content: space-between; padding: 1.5rem; border-bottom: 1px solid #eee; align-items: center; }
-    .total-box { text-align: right; margin-top: 2rem; padding: 1.5rem; background: #f8f9fa; border-radius: 15px; }
-    .total-amount { font-size: 1.5rem; font-weight: 800; color: #198754; }
-    .btn-step { padding: 0.8rem 2rem; border-radius: 50px; font-weight: 600; transition: 0.3s; border: none; }
+    /* ✨ SaaS City Pharma Design - 2026 */
+    .panier-wrapper { max-width: 950px; margin: 2.5rem auto; padding: 0 1.5rem; }
+    
+    .saas-card { 
+        background: #ffffff; 
+        border: 1px solid #e2e8f0; 
+        border-radius: 20px; 
+        overflow: hidden;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+    }
+    .dark .saas-card { background: #1e293b; border-color: #334155; box-shadow: none; }
+
+    .panier-item { 
+        display: flex; 
+        justify-content: space-between; 
+        padding: 1.25rem 2rem; 
+        border-bottom: 1px solid #f1f5f9; 
+        align-items: center; 
+    }
+    .dark .panier-item { border-bottom-color: #334155; }
+    .panier-item:last-child { border-bottom: none; }
+
+    .qty-label {
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: #64748b;
+        background: #f8fafc;
+        padding: 5px 12px;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+    }
+    .dark .qty-label { background: #0f172a; border-color: #334155; color: #94a3b8; }
+
+    .summary-box { 
+        background: #f8fafc; 
+        padding: 2rem; 
+        border-top: 1px solid #e2e8f0;
+    }
+    .dark .summary-box { background: #0f172a; border-top-color: #334155; }
+
+    .price-main { font-size: 1.75rem; font-weight: 900; color: #10b981; letter-spacing: -1px; }
+
+    .btn-step { 
+        padding: 1rem 2rem; 
+        border-radius: 14px; 
+        font-weight: 800; 
+        text-transform: uppercase; 
+        transition: all 0.2s ease;
+        border: none;
+        width: 100%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+
+    /* Alertes SaaS */
+    .saas-alert {
+        padding: 1rem;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
 </style>
 
-<div class="panier-container bg-white p-4 shadow-sm rounded-4">
-    <h2 class="fw-bold mb-4"><i class="bi bi-cart3"></i> Mon Panier</h2>
+<div class="panier-wrapper">
+    <div class="flex items-center gap-3 mb-6">
+        <i class="bi bi-cart3 text-3xl text-emerald-500"></i>
+        <h2 class="text-3xl font-black text-slate-800 dark:text-white tracking-tight">Mon Panier</h2>
+    </div>
     
-    {% if commande and commande.items.all %}
-        <div class="table-responsive">
-            {% for item in commande.items.all %}
-                <div class="panier-item">
+    <div class="saas-card">
+        {% if commande and commande.items.all %}
+            <div class="table-responsive">
+                {% for item in commande.items.all %}
+                    <div class="panier-item">
+                        <div class="flex-1">
+                            <h6 class="mb-0 font-black text-slate-800 dark:text-white text-lg">{{ item.produit.nom }}</h6>
+                            <small class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">{{ item.produit.prix|floatformat:0 }} FCFA / UNITÉ</small>
+                        </div>
+                        <div class="text-center px-4">
+                            <span class="qty-label">Quantité : {{ item.quantite }}</span>
+                        </div>
+                        <div class="text-end">
+                            <span class="font-black text-slate-800 dark:text-white text-lg">{{ item.total|floatformat:0 }} FCFA</span>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            
+            <div class="summary-box">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
                     <div>
-                        <h6 class="mb-0 fw-bold">{{ item.produit.nom }}</h6>
-                        <small class="text-muted">{{ item.produit.prix|floatformat:2 }} FCFA l'unité</small>
+                        <p class="mb-1 text-slate-400 font-bold uppercase text-[10px] tracking-widest">Total de votre commande</p>
+                        <div class="price-main">{{ total|floatformat:0 }} FCFA</div>
                     </div>
-                    <div class="text-center">
-                        <span class="badge bg-light text-dark border px-3 py-2">Quantité : {{ item.quantite }}</span>
-                    </div>
-                    <div class="text-end">
-                        <span class="fw-bold">{{ item.total|floatformat:2 }} FCFA</span>
+
+                    <div class="w-full md:w-80">
+                        <!-- ❌ CAS 0 : ORDONNANCE REFUSÉE PAR LA CAISSE -->
+                        {% if commande.motif_refus and not commande.ordonnance_valide %}
+                            <div class="saas-alert bg-red-50 text-red-700 border border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50 flex-col items-start p-4">
+                                <div class="flex items-center gap-2 mb-2 font-black uppercase text-[10px]">
+                                    <i class="bi bi-x-circle-fill"></i> Document Refusé
+                                </div>
+                                <p class="text-xs italic mb-4">" {{ commande.motif_refus }} "</p>
+                            </div>
+                            <a href="{% url 'core:uploader_ordonnance' commande.id %}" class="btn-step bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-200 dark:shadow-none no-underline">
+                                <i class="bi bi-arrow-repeat"></i> Renvoyer une Ordonnance
+                            </a>
+
+                        <!-- 📄 CAS 1 : PAS ENCORE D'ORDONNANCE -->
+                        {% elif not commande.ordonnance %}
+                            <div class="saas-alert bg-amber-50 text-amber-700 border border-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/50">
+                                <i class="bi bi-exclamation-triangle-fill"></i> Une ordonnance est requise.
+                            </div>
+                            <a href="{% url 'core:uploader_ordonnance' commande.id %}" class="btn-step bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 dark:shadow-none no-underline">
+                                <i class="bi bi-file-earmark-medical"></i> Joindre l'Ordonnance
+                            </a>
+
+                        <!-- ⏳ CAS 2 : EN ATTENTE DE VALIDATION CAISSE -->
+                        {% elif not commande.ordonnance_valide %}
+                            <div class="saas-alert bg-blue-50 text-blue-700 border border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/50">
+                                <div class="spinner-border spinner-border-sm" role="status"></div> Vérification par la pharmacie...
+                            </div>
+                            <button class="btn-step bg-slate-200 text-slate-400 cursor-not-allowed" disabled>Patientez svp...</button>
+
+                        <!-- ✅ CAS 3 : TOUT EST OK -->
+                        {% else %}
+                            <div class="saas-alert bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/50">
+                                <i class="bi bi-check-circle-fill"></i> Document validé !
+                            </div>
+                            <form method="post" action="{% url 'core:facture_commande' commande.id %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn-step bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200 dark:shadow-none">
+                                    Confirmer et Payer
+                                </button>
+                                <!-- À insérer juste au-dessus du bouton de paiement dans panier.html -->
+                                <div class="saas-alert bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 p-4 rounded-2xl mb-4">
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-xl">⏳</span>
+                                        <div>
+                                            <p class="text-[11px] font-black uppercase tracking-wider mb-1">Délai de Retrait</p>
+                                            <p class="text-xs font-medium">
+                                                Une fois validée, vous avez <b>48 heures</b> pour régler et retirer votre commande en caisse. 
+                                                Passé ce délai, elle sera <b>automatiquement annulée</b>.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        {% endif %}
                     </div>
                 </div>
-            {% endfor %}
-        </div>
-        
-        <div class="total-box shadow-sm">
-            <p class="mb-1 text-muted">Total de votre commande</p>
-            <div class="total-amount mb-4">{{ total|floatformat:2 }} FCFA</div>
-
-            <hr>
-
-            <!-- GESTION DU FLUX ORDONNANCE (Tendance 2026) -->
-            <div class="mt-4">
-                {% if not commande.ordonnance %}
-                    <div class="alert alert-warning border-0 rounded-3 small mb-3">
-                        <i class="bi bi-exclamation-triangle-fill"></i> Une ordonnance est requise pour finaliser cet achat.
-                    </div>
-                    <a href="{% url 'core:uploader_ordonnance' commande.id %}" class="btn btn-primary btn-step shadow-sm">
-                        <i class="bi bi-file-earmark-medical"></i> Joindre mon Ordonnance
-                    </a>
-                {% elif not commande.ordonnance_valide %}
-                    <div class="alert alert-info border-0 rounded-3 small mb-3">
-                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                        Analyse en cours : Notre pharmacien vérifie l'écriture de votre ordonnance.
-                    </div>
-                    <button class="btn btn-secondary btn-step" disabled>En attente de validation...</button>
-                {% else %}
-                    <div class="alert alert-success border-0 rounded-3 small mb-3">
-                        <i class="bi bi-check-circle-fill"></i> Ordonnance validée par le personnel médical.
-                    </div>
-                    <form method="post" action="{% url 'core:facture_commande' commande.id %}">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-success btn-step btn-lg w-100 shadow">
-                            Confirmer et Payer la commande
-                        </button>
-                    </form>
-                {% endif %}
             </div>
-        </div>
-    {% else %}
-        <div class="text-center py-5">
-            <div class="display-1 text-light mb-4">🛒</div>
-            <h4 class="text-muted">Votre panier est actuellement vide.</h4>
-            <a href="{% url 'core:catalogue' %}" class="btn btn-success btn-lg rounded-pill px-5 mt-3">Voir le catalogue</a>
-        </div>
-    {% endif %}
+        {% else %}
+            <div class="text-center py-20">
+                <div class="text-6xl mb-4">🛒</div>
+                <h4 class="text-slate-400 font-bold">Votre panier est actuellement vide.</h4>
+                <a href="{% url 'core:catalogue' %}" class="btn-step bg-emerald-500 text-white w-auto px-10 mt-6 no-underline inline-flex">Voir le catalogue</a>
+            </div>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}
