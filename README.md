@@ -12,9 +12,13 @@ C'est un ERP pharmaceutique léger qui combine une boutique en ligne pour les pa
 Qu'apporte Pharmacie + ?
 
 .📦 Gestion Multi-Stocks : Suivi des quantités, alertes de péremption et réapprovisionnement.
+
 .📄 Traitement des Ordonnances : Système d'analyse et de validation des prescriptions uploadées.
+
 .💰 Point de Vente (POS) : Interface caisse optimisée pour des ventes rapides au comptoir.
+
 .📊 Rapports Financiers : Génération de bilans de ventes et exports PDF automatisés.
+
 .🔐 Contrôle d'Accès : Rôles distincts pour l'Administrateur, le Caissier et le Client.
 
 🚀 Démarrage rapide
