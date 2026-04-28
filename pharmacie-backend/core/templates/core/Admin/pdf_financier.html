@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page { size: A4; margin: 0; }
+        body { 
+            font-family: 'Helvetica', 'Arial', sans-serif; 
+            margin: 0; padding: 0; 
+            background-color: #f1f5f9; 
+            color: #0f172a;
+        }
+        /* Conteneur Format A4 */
+        .page-container {
+            width: 21cm;
+            min-height: 29.7cm;
+            margin: auto;
+            background: white;
+            padding: 1.5cm;
+            box-sizing: border-box;
+        }
+
+        /* Header */
+        .header {
+            border-bottom: 6px solid #059669; /* emerald-600 */
+            padding-bottom: 30px;
+            margin-bottom: 40px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .header-left { display: table-cell; vertical-align: middle; }
+        .logo-box {
+            width: 70px; height: 70px;
+            background: #059669;
+            border-radius: 15px;
+            color: white;
+            text-align: center;
+            line-height: 70px;
+            font-weight: 900;
+            font-size: 24px;
+            float: left;
+            margin-right: 20px;
+        }
+        .logo-img {
+            width: 70px; height: 70px;
+            border-radius: 15px;
+            object-fit: cover;
+            float: left;
+            margin-right: 20px;
+        }
+        .doc-badge {
+            background: #0f172a;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 8px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+        .pharmacy-name { font-size: 20px; font-weight: 900; text-transform: uppercase; margin: 0; }
+        .sub-title { font-size: 9px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin: 0; font-style: italic; }
+
+        .header-right { text-align: right; display: table-cell; }
+        .report-type { color: #059669; font-size: 28px; font-weight: 900; margin: 0; font-style: italic; text-transform: uppercase; }
+        .gen-date { font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* KPI Grid */
+        .kpi-container { width: 100%; display: table; border-spacing: 15px 0; margin-bottom: 40px; }
+        .kpi-card { 
+            display: table-cell; 
+            background: #f8fafc; 
+            padding: 20px; 
+            border-radius: 25px; 
+            text-align: center; 
+            width: 33%;
+        }
+        .kpi-label { font-size: 9px; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 5px; }
+        .kpi-val { font-size: 18px; font-weight: 900; color: #1e293b; }
+        .currency { font-size: 10px; opacity: 0.5; }
+
+        /* Table Section */
+        .section-title { font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px; border-left: 5px solid #059669; padding-left: 10px; }
+        
+        table { width: 100%; border-collapse: collapse; border-radius: 15px; overflow: hidden; }
+        thead tr { background: #0f172a; color: white; text-align: left; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+        th { padding: 15px; }
+        td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
+        .rang { color: #94a3b8; font-family: monospace; }
+        .med-nom { font-weight: 900; text-transform: uppercase; color: #1e293b; }
+        .med-lab { color: #64748b; font-weight: bold; font-style: italic; }
+        .med-qty { text-align: right; font-weight: 900; color: #059669; font-size: 13px; }
+
+        /* Footer */
+        .footer { margin-top: 50px; border-top: 2px dashed #e2e8f0; padding-top: 30px; text-align: center; }
+        .footer-cert { color: #059669; font-weight: 900; font-size: 10px; text-transform: uppercase; letter-spacing: 2px; }
+        .footer-info { font-size: 10px; color: #64748b; font-weight: bold; margin-top: 10px; }
+        
+        /* Signatures */
+        .signature-container { margin-top: 50px; width: 100%; display: table; }
+        .sig-box { display: table-cell; width: 50%; text-align: center; font-size: 9px; font-weight: 900; color: #94a3b8; text-transform: uppercase; font-style: italic; }
+        .sig-line { width: 120px; height: 1px; background: #e2e8f0; margin: 60px auto 0; }
+    </style>
+</head>
+<body>
+    <div class="page-container">
+        <div class="header">
+            <div class="header-left">
+                {% if config.logo %}
+                    <img src="{{ config.logo.url }}" class="logo-img">
+                {% else %}
+                    <div class="logo-box">P+</div>
+                {% endif %}
+                <div style="display: inline-block;">
+                    <div class="doc-badge">Document Officiel 🛰️</div>
+                    <h1 class="pharmacy-name">{{ config.nom_pharmacie|default:"PHARMACIE +" }}</h1>
+                    <p class="sub-title">Système d'Audit Centralisé</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <h2 class="report-type">Audit Financier</h2>
+                <p class="gen-date">Généré le {{ date_heure|date:"d/m/Y" }} à {{ date_heure|date:"H:i" }}</p>
+            </div>
+        </div>
+
+        <div class="kpi-container">
+            <div class="kpi-card">
+                <span class="kpi-label">Recettes Totales</span>
+                <b class="kpi-val">{{ ca_total|floatformat:0 }} <small class="currency">FCFA</small></b>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Volume Ventes</span>
+                <b class="kpi-val">{{ nb_trans }} <small class="currency">TX</small></b>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Panier Moyen</span>
+                <b class="kpi-val">{{ moyenne|floatformat:0 }} <small class="currency">FCFA</small></b>
+            </div>
+        </div>
+
+        <div class="section-title">Performance des Stocks & Produits</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Rang</th>
+                    <th>Médicament</th>
+                    <th>Laboratoire</th>
+                    <th style="text-align: right;">Stock</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in top_produits %}
+                <tr>
+                    <td class="rang">#0{{ forloop.counter }}</td>
+                    <td class="med-nom">{{ p.nom }}</td>
+                    <td class="med-lab">{{ p.laboratoire|default:"Générique" }}</td>
+                    <td class="med-qty">{{ p.vendu|default:0 }} <small style="font-size: 8px; color: #94a3b8;">UNITÉS</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="footer">
+            <div class="footer-cert">🛡️ Rapport Financier Certifié par {{ config.nom_pharmacie|default:"PHARMACIE+" }}</div>
+            <p class="footer-info">
+                {{ config.adresse|default:"ADRESSE NON CONFIGURÉE" }} | Tel: {{ config.telephone|default:"N/A" }}<br>
+                <span style="color: #059669; font-style: italic;">"{{ config.message_remerciement|default:"Merci de votre confiance." }}"</span>
+            </p>
+
+            <div class="signature-container">
+                <div class="sig-box">
+                    <span>Visa de la Direction</span>
+                    <div class="sig-line"></div>
+                </div>
+                <div class="sig-box">
+                    <span>Signature de l'Auditeur</span>
+                    <div class="sig-line"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page { size: A4; margin: 0; }
+        body { 
+            font-family: 'Helvetica', sans-serif; 
+            background-color: #f8fafc; 
+            margin: 0; 
+            padding: 40px;
+            color: #1e293b;
+        }
+        /* Conteneur principal style "Card" */
+        .invoice-container {
+            background-color: white;
+            border-radius: 48px; /* Correspond à rounded-[3rem] */
+            padding: 50px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            border: 1px solid #f1f5f9;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        /* En-tête */
+        .header {
+            display: table;
+            width: 100%;
+            border-bottom: 2px solid #f8fafc;
+            padding-bottom: 30px;
+            margin-bottom: 30px;
+        }
+        .header-left { display: table-cell; vertical-align: middle; }
+        .logo-box {
+            width: 70px;
+            height: 70px;
+            background-color: #10b981;
+            border-radius: 16px;
+            color: white;
+            text-align: center;
+            line-height: 70px;
+            font-weight: 900;
+            font-size: 24px;
+            display: inline-block;
+        }
+        .header-info { display: inline-block; vertical-align: middle; margin-left: 20px; }
+        .pharmacie-nom { 
+            font-size: 24px; 
+            font-weight: 900; 
+            text-transform: uppercase; 
+            font-style: italic; 
+            color: #1e293b;
+            margin: 0;
+        }
+        /* Badge Statut */
+        .status-badge {
+            display: table-cell;
+            text-align: right;
+            vertical-align: top;
+        }
+        .badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background-color: #ecfdf5;
+            color: #059669;
+        }
+        /* Infos Client */
+        .client-section {
+            background-color: #f8fafc;
+            border-radius: 40px;
+            padding: 30px;
+            margin-bottom: 40px;
+        }
+        .label { font-size: 9px; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin-bottom: 5px; }
+        .value { font-size: 18px; font-weight: 900; color: #1e293b; text-transform: uppercase; font-style: italic; }
+
+        /* Table des articles */
+        table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+        th { 
+            text-align: left; 
+            font-size: 10px; 
+            font-weight: 900; 
+            color: #94a3b8; 
+            text-transform: uppercase; 
+            padding: 15px; 
+            border-bottom: 1px solid #f1f5f9;
+        }
+        td { padding: 20px 15px; border-bottom: 1px solid #f8fafc; }
+        .item-nom { font-weight: 900; text-transform: uppercase; font-style: italic; font-size: 13px; }
+        .item-qty { color: #64748b; font-weight: 900; }
+
+        /* Total */
+        .total-section {
+            text-align: right;
+            border-top: 4px solid #10b98120;
+            padding-top: 20px;
+            font-size: 32px;
+            font-weight: 900;
+            color: #059669;
+            font-style: italic;
+        }
+        /* QR Code & Footer */
+        .footer {
+            margin-top: 50px;
+            border-top: 2px solid #f8fafc;
+            padding-top: 30px;
+            display: table;
+            width: 100%;
+        }
+        .footer-note { display: table-cell; width: 70%; font-size: 11px; color: #64748b; font-style: italic; }
+        .qr-box { 
+            display: table-cell; 
+            width: 30%; 
+            text-align: right; 
+        }
+        .qr-img { width: 90px; height: 90px; border: 1px solid #f1f5f9; padding: 5px; border-radius: 12px; }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <div class="header">
+            <div class="header-left">
+                {% if config.logo %}
+                    <img src="{{ logo_url }}" style="width: 70px; height: 70px; border-radius: 16px;">
+                {% else %}
+                    <div class="logo-box">P+</div>
+                {% endif %}
+                <div class="header-info">
+                    <h1 class="pharmacie-nom">{{ config.nom|default:"PHARMACIE +" }}</h1>
+                    <div style="font-size: 10px; color: #94a3b8; font-weight: bold;">{{ config.adresse }}</div>
+                </div>
+            </div>
+            <div class="status-badge">
+                <div class="badge">{% if commande.payee %}PAYÉE{% else %}EN ATTENTE{% endif %}</div>
+                <div style="font-size: 12px; font-weight: bold; margin-top: 10px;">#FAC-{{ commande.id }}</div>
+            </div>
+        </div>
+
+        <div class="client-section">
+            <div style="display: table; width: 100%;">
+                <div style="display: table-cell;">
+                    <div class="label">Patient / Client</div>
+                    <div class="value">{{ commande.client.nom|default:"Client au Guichet" }}</div>
+                </div>
+                <div style="display: table-cell; text-align: right;">
+                    <div class="label">Émis le</div>
+                    <div class="value">{{ commande.date|date:"d/m/Y" }}</div>
+                </div>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Désignation</th>
+                    <th style="text-align: center;">Qté</th>
+                    <th style="text-align: right;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td><div class="item-nom">{{ item.produit.nom }}</div></td>
+                    <td style="text-align: center;" class="item-qty">x{{ item.quantite }}</td>
+                    <td style="text-align: right; font-weight: 900;">{{ item.total }} CFA</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="total-section">
+            TOTAL {{ commande.total }} <span style="font-size: 14px;">CFA</span>
+        </div>
+
+        <div class="footer">
+            <div class="footer-note">
+                <strong>Note Pharmaceutique :</strong><br>
+                {{ config.message_remerciement|default:"Merci de votre confiance. Respectez les doses prescrites." }}
+            </div>
+            <div class="qr-box">
+                {% if qr_code %}
+                    <img src="data:image/png;base64,{{ qr_code }}" class="qr-img" alt="QR Code" width="100">
+                {% endif %}
+                <div style="font-size: 7px; color: #94a3b8; font-weight: 900; margin-top: 5px;">CERTIFICATION PHARMACIE +</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
