@@ -1,0 +1,260 @@
+"use client";
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Pill, ShoppingCart, Info, Loader2, Filter, Plus, Minus, AlertCircle, X, Check, Camera } from 'lucide-react';
+import axios from 'axios';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mw69zhwz-8000.uks1.devtunnels.ms';
+
+interface Produit {
+  id: number;
+  nom: string;
+  prix: number;
+  categorie: string;
+  quantite: number;
+  laboratoire: string;
+  description: string;
+  statut_stock_label: string;
+  image?: string; // Ajout du champ image
+}
+
+export default function CataloguePage() {
+  const [produits, setProduits] = useState<Produit[]>([]);
+  const [categories, setCategories] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
+  const [activeCat, setActiveCat] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [quantites, setQuantites] = useState<Record<number, number>>({});
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/catalogue/`);
+        setProduits(res.data.produits);
+        setCategories(res.data.categories);
+      } catch (err) {
+        console.error("Erreur Catalogue:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  // 📸 Fonction pour modifier la photo via l'API
+  const handleUpdatePhoto = async (produitId: number, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const res = await axios.post(`${API_URL}/api/produit/${produitId}/modifier-photo/`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        withCredentials: true
+      });
+      
+      // Mise à jour locale de l'état pour afficher la nouvelle image immédiatement
+      setProduits(prev => prev.map(p => 
+        p.id === produitId ? { ...p, image: res.data.image_url } : p
+      ));
+      
+      alert("Photo mise à jour ! 📸");
+    } catch (err) {
+      console.error("Erreur upload:", err);
+      alert("Erreur lors de la mise à jour de la photo.");
+    }
+  };
+
+  const handleAddToCart = async (produitId: number) => {
+    const qte = quantites[produitId] || 1;
+    try {
+      await axios.post(`${API_URL}/api/panier/`, 
+        { produit_id: produitId, quantite: qte },
+        { withCredentials: true }
+      );
+      alert(`Ajouté : ${qte} unité(s) au panier ! ✅`);
+    } catch (err: any) {
+      alert(err.response?.data?.error || "Erreur lors de l'ajout");
+    }
+  };
+
+  const updateLocalQte = (id: number, delta: number, max: number) => {
+    const current = quantites[id] || 1;
+    const next = Math.max(1, Math.min(max, current + delta));
+    setQuantites({ ...quantites, [id]: next });
+  };
+
+  const filteredProduits = useMemo(() => {
+    return produits.filter(p => {
+      const nom = (p.nom || "").toLowerCase();
+      const labo = (p.laboratoire || "").toLowerCase();
+      const recherche = search.toLowerCase();
+      const matchSearch = nom.includes(recherche) || labo.includes(recherche);
+      const matchCat = activeCat === "all" || p.categorie === activeCat;
+      return matchSearch && matchCat;
+    });
+  }, [search, activeCat, produits]);
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin text-emerald-500" size={48} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-6 py-12">
+      
+      {/* 🎯 HEADER & RECHERCHE */}
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-16">
+        <h1 className="text-5xl font-black text-slate-800 dark:text-white tracking-tighter mb-4">
+          Catalogue <span className="text-emerald-500 italic">Médicaments</span> 💊
+        </h1>
+        <p className="text-slate-500 dark:text-slate-400 font-medium text-lg">Stock réel synchronisé avec la pharmacie.</p>
+
+        <div className="max-w-2xl mx-auto mt-10 flex gap-4">
+          <div className="relative flex-grow">
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-emerald-500" size={24} />
+            <input 
+              type="text" 
+              placeholder="Nom, Laboratoire, Symptôme..." 
+              className="w-full pl-16 pr-8 py-5 rounded-full border-2 border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-lg font-bold focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all shadow-xl"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-slate-900 text-white p-5 rounded-full hover:bg-emerald-600 transition-all shadow-xl flex items-center justify-center border-none cursor-pointer"
+          >
+            <Filter size={24} />
+          </button>
+        </div>
+
+        {activeCat !== 'all' && (
+          <div className="mt-4 text-[10px] font-black uppercase text-emerald-500 tracking-widest">
+            Filtre : {categories[activeCat]} 
+            <button onClick={() => setActiveCat('all')} className="ml-2 underline cursor-pointer bg-transparent border-none text-slate-400">Réinitialiser</button>
+          </div>
+        )}
+      </motion.div>
+
+      {/* 🏗️ GRILLE DES PRODUITS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <AnimatePresence mode="popLayout">
+          {filteredProduits.map((p) => (
+            <motion.div
+              key={p.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+              className="bg-white dark:bg-slate-900 rounded-[3rem] p-8 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-2xl transition-all group flex flex-col justify-between"
+            >
+              <div>
+                <div className="relative h-48 bg-slate-50 dark:bg-slate-950 rounded-[2rem] mb-6 overflow-hidden flex items-center justify-center group-hover:bg-emerald-50 transition-colors">
+                  
+                  {/* Image dynamique avec fallback émoji */}
+                  {p.image ? (
+                    <img src={`${API_URL}${p.image}`} alt={p.nom} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  ) : (
+                    <div className="text-7xl group-hover:scale-110 transition-transform">💊</div>
+                  )}
+
+                  {/* Zone d'upload pour Admin (cachée, activée par clic sur le label) */}
+                  <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all z-20">
+                    <Camera className="text-white mb-2" size={32} />
+                    <span className="text-white text-[10px] font-black uppercase tracking-tighter">Modifier Photo</span>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/*"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) handleUpdatePhoto(p.id, e.target.files[0]);
+                      }}
+                    />
+                  </label>
+
+                  <div className={`absolute top-4 right-4 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm z-10 ${p.quantite > 0 ? 'bg-white text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+                    {p.statut_stock_label}: {p.quantite}
+                  </div>
+                </div>
+
+                <h3 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter mb-1">
+                  {p.nom}
+                </h3>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800 px-3 py-1 rounded-lg">
+                  {categories[p.categorie] || p.categorie || "Général"}
+                </span>
+                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mt-2 mb-3 italic">
+                  {p.laboratoire ? `🔬 ${p.laboratoire}` : "🧪 Laboratoire non spécifié"}
+                </p>
+                <p className="text-slate-500 dark:text-slate-400 text-xs font-medium leading-relaxed line-clamp-2 mb-4">
+                  {p.description || "Aucune description disponible pour ce médicament."}
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 p-2 rounded-2xl">
+                  <span className="text-[10px] font-black text-slate-400 uppercase ml-4">Quantité</span>
+                  <div className="flex items-center gap-4">
+                    <button onClick={() => updateLocalQte(p.id, -1, p.quantite)} className="p-2 text-slate-400 hover:text-emerald-500 border-none bg-transparent cursor-pointer"><Minus size={16}/></button>
+                    <span className="font-black text-lg text-slate-800 dark:text-white">{quantites[p.id] || 1}</span>
+                    <button onClick={() => updateLocalQte(p.id, 1, p.quantite)} className="p-2 text-slate-400 hover:text-emerald-500 border-none bg-transparent cursor-pointer"><Plus size={16}/></button>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <div className="text-3xl font-black text-slate-800 dark:text-white">
+                    {p.prix.toLocaleString()} <small className="text-xs text-slate-400 tracking-normal">FCFA</small>
+                  </div>
+                  <button 
+                    disabled={p.quantite <= 0}
+                    onClick={() => handleAddToCart(p.id)}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-white p-5 rounded-[1.5rem] shadow-lg shadow-emerald-500/20 transition-all active:scale-90 border-none cursor-pointer disabled:opacity-20 disabled:grayscale"
+                  >
+                    <ShoppingCart size={24} strokeWidth={2.5} />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {/* 🖼️ FENÊTRE DE SÉLECTION (MODALE) */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white dark:bg-slate-900 w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-800"
+            >
+              <div className="p-8 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center bg-slate-900 text-white">
+                <h3 className="text-xl font-black italic uppercase">Choisir une catégorie</h3>
+                <button onClick={() => setIsModalOpen(false)} className="text-white bg-transparent border-none cursor-pointer hover:rotate-90 transition-transform"><X /></button>
+              </div>
+
+              <div className="p-8 max-h-[60vh] overflow-y-auto space-y-3 custom-scrollbar">
+                <button 
+                  onClick={() => { setActiveCat("all"); setIsModalOpen(false); }}
+                  className={`w-full p-5 rounded-2xl text-left font-black text-[10px] uppercase tracking-widest transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === 'all' ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100'}`}
+                >
+                  Tous les soins ✨ {activeCat === 'all' && <Check size={16}/>}
+                </button>
+                {Object.entries(categories).map(([code, nom]) => (
+                  <button 
+                    key={code}
+                    onClick={() => { setActiveCat(code); setIsModalOpen(false); }}
+                    className={`w-full p-5 rounded-2xl text-left font-black text-[10px] uppercase tracking-widest transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === code ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100'}`}
+                  >
+                    {nom} {activeCat === code && <Check size={16}/>}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
