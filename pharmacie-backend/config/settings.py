@@ -9,12 +9,16 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-
+import os
 from pathlib import Path
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+]
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -24,8 +28,9 @@ SECRET_KEY = 'django-insecure-f5!-cvm9b^xn#hd^qmh79=68!an-ozcqray-b(*lkwsnzk5u#2
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-
-ALLOWED_HOSTS = ['*', 'mw69zhwz-8000.uks1.devtunnels.ms']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'mw69zhwz-8000.uks1.devtunnels.ms']
+if not DEBUG:
+    ALLOWED_HOSTS = ['mw69zhwz-8000.uks1.devtunnels.ms']
 
 
 # Application definition
@@ -37,7 +42,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework',      
+    'rest_framework',
+    'rest_framework_simplejwt', 
+    'rest_framework_simplejwt.token_blacklist',     
     'corsheaders',
     'core',
 ]
@@ -53,21 +60,49 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://mw69zhwz-3000.uks1.devtunnels.ms",
+    "https://mw69zhwz-8000.uks1.devtunnels.ms",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = ["http://localhost:3000", "https://mw69zhwz-3000.uks1.devtunnels.ms", "https://mw69zhwz-8000.uks1.devtunnels.ms"]
-CSRF_COOKIE_SECURE = True
-CSRF_COOKIE_SAMESITE = 'None'
-CSRF_COOKIE_HTTPONLY = False
 CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
-SESSION_COOKIE_SAMESITE = 'None'
-SESSION_COOKIE_SECURE = True
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = ["http://localhost:3000", "https://mw69zhwz-3000.uks1.devtunnels.ms", "http://127.0.0.1:3000", "https://mw69zhwz-8000.uks1.devtunnels.ms"]
+
+if DEBUG:
+    # Permet à Next.js en local (HTTP) de recevoir les cookies sans rejet du navigateur
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    CSRF_COOKIE_SAMESITE = 'Lax'
+else:
+    # Blindage absolu pour la production (HTTPS obligatoire)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SAMESITE = 'None'
+    CSRF_COOKIE_SAMESITE = 'None'
+    # Protection HTTP supplémentaire
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# JavaScript ne pourra jamais lire ou voler ces cookies (Contre les failles XSS)
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False
 
 ROOT_URLCONF = 'config.urls'
 
@@ -124,7 +159,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'fr-fr'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Africa/Douala'
 
 USE_I18N = True
 
@@ -150,12 +185,33 @@ LOGIN_URL = 'login'              # utilise le rout 'login' integre de django
 LOGIN_REDIRECT_URL = 'core:home' # redirige vers l'accueil apres connexion
 LOGOUT_REDIRECT_URL = 'login' # redirige vers le portail stellaire apres deconnexion
 
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=100), # Durée d'une session active
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),    # Durée avant reconnexion totale
+    'ROTATE_REFRESH_TOKENS': True,                  # Sécurité accrue : change le token à chaque usage
+    'BLACKLIST_AFTER_ROTATION': True, # Important pour éviter des erreurs de refresh
+    'UPDATE_LAST_LOGIN': True,
+
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY, # Utilise ta clé secrète pour signer
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+}
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticated',
     ],
 }

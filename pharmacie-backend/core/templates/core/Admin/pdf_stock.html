@@ -2,170 +2,286 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <title>Inventaire Global Stock</title>
     <style>
-        @page { size: A4; margin: 0; }
-        body { 
-            font-family: 'Helvetica', 'Arial', sans-serif; 
-            margin: 0; padding: 0; 
-            background-color: #f1f5f9; 
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             color: #0f172a;
+            background-color: #ffffff;
+            margin: 0;
+            padding: 0;
+            font-size: 11px;
         }
-        .document-container {
-            width: 21cm;
-            min-height: 29.7cm;
-            margin: auto;
-            background: white;
-            padding: 1.5cm;
-            box-sizing: border-box;
-        }
-        /* Header */
         .header {
-            border-bottom: 6px solid #0f172a;
-            padding-bottom: 30px;
-            margin-bottom: 40px;
-            display: table;
-            width: 100%;
+            border-bottom: 6px solid #10b981;
+            padding-bottom: 20px;
+            margin-bottom: 25px;
         }
-        .header-left { display: table-cell; vertical-align: middle; }
+        .header-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
         .logo-box {
-            width: 60px; height: 60px;
-            background: #0f172a;
+            width: 55px;
+            height: 55px;
+            background-color: #10b981;
             border-radius: 12px;
-            color: white;
             text-align: center;
-            line-height: 60px;
+            line-height: 55px;
+            color: #ffffff;
             font-weight: 900;
-            font-size: 24px;
-            float: left;
-            margin-right: 15px;
+            font-size: 20px;
         }
         .logo-img {
-            width: 64px; height: 64px;
+            width: 55px;
+            height: 55px;
             border-radius: 12px;
             object-fit: cover;
-            float: left;
-            margin-right: 15px;
-            border: 1px solid #f1f5f9;
         }
-        .pharmacy-name { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; letter-spacing: -1px; }
-        .tagline { font-size: 9px; font-weight: bold; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px; font-style: italic; margin-top: 4px; }
-
-        .header-right { display: table-cell; text-align: right; vertical-align: top; }
-        .title { font-size: 24px; font-weight: 900; text-transform: uppercase; font-style: italic; margin: 0; }
-        .gen-date { font-size: 9px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin-top: 5px; }
-
-        /* KPI Grid */
-        .kpi-container { width: 100%; display: table; border-spacing: 15px 0; margin-bottom: 40px; }
-        .kpi-card { 
-            display: table-cell; 
-            padding: 24px; 
-            border-radius: 16px; 
-            border: 1px solid #f1f5f9;
-            text-align: center; 
+        .company-name {
+            font-size: 20px;
+            font-weight: 900;
+            text-transform: uppercase;
+            margin: 0;
+            letter-spacing: -0.5px;
+        }
+        .subtitle {
+            font-size: 9px;
+            font-weight: 900;
+            color: #10b981;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 2px 0;
+            font-style: italic;
+        }
+        .address {
+            font-size: 8px;
+            color: #94a3b8;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 0;
+        }
+        .title-right {
+            text-align: right;
+            font-size: 20px;
+            font-weight: 900;
+            color: #10b981;
+            text-transform: uppercase;
+            font-style: italic;
+            margin: 0;
+        }
+        .date-right {
+            text-align: right;
+            font-size: 8px;
+            font-weight: 900;
+            color: #94a3b8;
+            text-transform: uppercase;
+            margin: 2px 0 0 0;
+        }
+        .stats-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 15px 0;
+            margin-bottom: 30px;
+            margin-left: -15px;
+            margin-right: -15px;
+        }
+        .stat-card-total {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 15px;
+            text-align: center;
             width: 50%;
         }
-        .bg-slate { background: #f8fafc; }
-        .bg-red { background: #fef2f2; border-color: #fee2e2; }
-        .kpi-label { font-size: 9px; font-weight: 900; color: #94a3b8; text-transform: uppercase; display: block; margin-bottom: 5px; }
-        .kpi-val { font-size: 24px; font-weight: 900; }
-        .red-text { color: #dc2626; }
-
-        /* Table */
-        table { width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; }
-        thead tr { background: #0f172a; color: white; font-size: 10px; font-weight: 900; text-transform: uppercase; }
-        th { padding: 15px; text-align: left; border-right: 1px solid rgba(255,255,255,0.1); }
-        td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 11px; border-right: 1px solid #f1f5f9; }
-        .row-even { background: #ffffff; }
-        .row-odd { background: rgba(248, 250, 252, 0.5); }
-        .ref { font-family: monospace; color: #94a3b8; font-size: 9px; }
-        .nom { font-weight: 900; text-transform: uppercase; }
-        .cat { color: #64748b; font-style: italic; }
-        .stock-val { font-weight: 900; text-align: center; }
-        .obs { text-align: right; font-weight: 900; font-size: 9px; text-transform: uppercase; color: #94a3b8; }
-        .alert { color: #dc2626; }
-
-        /* Footer */
-        .footer { margin-top: 60px; padding-top: 30px; border-top: 2px dashed #e2e8f0; text-align: center; }
-        .certif { font-size: 10px; font-weight: 900; text-transform: uppercase; color: #0f172a; letter-spacing: 1px; margin-bottom: 10px; }
-        .address { font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase; line-height: 1.5; }
-        .signatures { margin-top: 40px; width: 100%; display: table; }
-        .sig-box { display: table-cell; width: 50%; font-size: 9px; font-weight: 900; text-transform: uppercase; color: #94a3b8; font-style: italic; }
+        .stat-card-alert {
+            background-color: #fef2f2;
+            border: 1px solid #fee2e2;
+            border-left: 4px solid #ef4444;
+            border-radius: 16px;
+            padding: 15px;
+            text-align: center;
+            width: 50%;
+        }
+        .stat-label {
+            font-size: 8px;
+            font-weight: 900;
+            text-transform: uppercase;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .stat-number {
+            font-size: 20px;
+            font-weight: 900;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #e2e8f0;
+        }
+        .data-table th {
+            background-color: #10b981;
+            color: #ffffff;
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            padding: 10px;
+            text-align: left;
+            border-right: 1px solid rgba(255,255,255,0.2);
+        }
+        .data-table td {
+            padding: 10px;
+            border-bottom: 1px solid #e2e8f0;
+            border-right: 1px solid #e2e8f0;
+        }
+        .bg-row-even { background-color: #ffffff; }
+        .bg-row-odd { background-color: #f8fafc; }
+        .font-mono { font-family: monospace; color: #94a3b8; font-size: 9px; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .font-bold { font-weight: 900; text-transform: uppercase; }
+        .text-danger { color: #ef4444 !important; }
+        .text-muted { color: #94a3b8; font-size: 9px; }
+        .footer {
+            margin-top: 35px;
+            text-align: center;
+        }
+        .certif-text {
+            color: #10b981;
+            font-weight: 900;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-style: italic;
+            margin-bottom: 5px;
+        }
+        .footer-address {
+            font-size: 9px;
+            color: #64748b;
+            font-weight: 900;
+            text-transform: uppercase;
+            line-height: 1.5;
+        }
+        .thanks-msg {
+            color: #10b981;
+            font-style: italic;
+            font-size: 12px;
+            font-weight: bold;
+            margin-top: 5px;
+            display: block;
+        }
+        .signature-section {
+            margin-top: 40px;
+            width: 100%;
+        }
+        .signature-box {
+            width: 50%;
+            font-size: 9px;
+            font-weight: 900;
+            text-transform: uppercase;
+            color: #94a3b8;
+        }
+        .signature-line {
+            margin-top: 45px;
+            border-bottom: 1px solid #e2e8f0;
+            width: 85%;
+        }
     </style>
 </head>
 <body>
-    <div class="document-container">
-        <div class="header">
-            <div class="header-left">
-                {% if config.logo %}
-                    <img src="{{ config.logo.url }}" class="logo-img">
-                {% else %}
-                    <div class="logo-box">P+</div>
-                {% endif %}
-                <div style="display: inline-block; vertical-align: middle;">
-                    <h1 class="pharmacy-name">{{ config.nom|default:"PHARMACIE +" }}</h1>
-                    <p class="tagline">Inventaire Physique Stratégique 🛰️</p>
-                </div>
-            </div>
-            <div class="header-right">
-                <h2 class="title">État du Stock</h2>
-                <p class="gen-date">Généré le {{ date_heure|date:"d/m/Y" }} à {{ date_heure|date:"H:i" }}</p>
-            </div>
-        </div>
 
-        <div class="kpi-container">
-            <div class="kpi-card bg-slate">
-                <span class="kpi-label">Total Références</span>
-                <span class="kpi-val">{{ total_med }} Médicaments</span>
-            </div>
-            <div class="kpi-card bg-red">
-                <span class="kpi-label" style="color: #f87171;">Articles en Alerte</span>
-                <span class="kpi-val red-text">{{ stock_faible }}</span>
-            </div>
-        </div>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>Réf.</th>
-                    <th>Désignation</th>
-                    <th>Catégorie</th>
-                    <th style="text-align: center;">Stock</th>
-                    <th style="text-align: right;">Observation</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for p in produits %}
-                <tr class="{% cycle 'row-even' 'row-odd' %}">
-                    <td class="ref">#PH-{{ p.id }}</td>
-                    <td class="nom">{{ p.nom }}</td>
-                    <td class="cat">{{ p.categorie.nom|default:p.categorie }}</td>
-                    <td class="stock-val {% if p.quantite <= p.seuil_alerte %}alert{% endif %}">
-                        {{ p.quantite }}
-                    </td>
-                    <td class="obs">
-                        {% if p.quantite <= p.seuil_alerte %}
-                            <span class="alert">⚠️ RÉAPPRO</span>
-                        {% else %}
-                            ✅ OK
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
+    <!-- HEADER -->
+    <div class="header">
+        <table class="header-table">
+            <tr>
+                <td style="width: 65px; vertical-align: middle;">
+                    {% if config.logo %}
+                        <img src="{{ config.logo.path }}" class="logo-img" alt="Logo">
+                    {% else %}
+                        <div class="logo-box">P+</div>
+                    {% endif %}
+                </td>
+                <td style="vertical-align: middle;">
+                    <h1 class="company-name">{{ config.nom|default:"PHARMACIE PLUS +" }}</h1>
+                    <div class="subtitle">Inventaire Physique Stratégique 🛰️</div>
+                    <p class="address">{{ config.adresse }}</p>
+                </td>
+                <td style="vertical-align: middle; text-align: right;">
+                    <h2 class="title-right">État du Stock</h2>
+                    <p class="date-right">Fait le {{ date_heure|date:"l d F Y à H:i" }}</p>
+                </td>
+            </tr>
         </table>
-
-        <div class="footer">
-            <div class="certif">🛡️ Certifié par le système PHARMACIE +</div>
-            <p class="address">
-                {{ config.adresse|default:"ADRESSE NON CONFIGURÉE" }} | Tel: {{ config.telephone|default:"NUMÉRO NON CONFIGURÉ" }} <br>
-                <span style="font-style: italic; opacity: 0.6;">" {{ config.message_remerciement|default:"Votre santé, notre priorité." }} "</span>
-            </p>
-            
-            <div class="signatures">
-                <div class="sig-box" style="text-align: left; padding-left: 40px;">Visa de la Direction</div>
-                <div class="sig-box" style="text-align: right; padding-right: 40px;">Signature du Responsable</div>
-            </div>
-        </div>
     </div>
+
+    <!-- STATS COMPTEURS -->
+    <table class="stats-table">
+        <tr>
+            <td class="stat-card-total">
+                <span class="stat-label" style="color: #94a3b8;">Total Références</span>
+                <span class="stat-number">{{ total_med }} Médicaments</span>
+            </td>
+            <td class="stat-card-alert">
+                <span class="stat-label" style="color: #ef4444;">Articles en Alerte</span>
+                <span class="stat-number text-danger">{{ stock_faible }}</span>
+            </td>
+        </tr>
+    </table>
+
+    <!-- TABLEAU DES PRODUITS -->
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th style="width: 12%;">Réf.</th>
+                <th style="width: 43%;">Désignation</th>
+                <th style="width: 20%;">Catégorie</th>
+                <th style="width: 10%; text-align: center;">Stock</th>
+                <th style="width: 15%; text-align: right;">Observation</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in produits %}
+            <tr class="{% if forloop.counter|divisibleby:2 %}bg-row-even{% else %}bg-row-odd{% endif %}">
+                <td class="font-mono">#PH-{{ p.id }}</td>
+                <td class="font-bold" style="color: #1e293b;">{{ p.nom }}</td>
+                <td style="color: #64748b; font-style: italic;">{{ p.get_categorie_display }}</td>
+                <td class="text-center font-bold {% if p.quantite <= p.seuil_alerte %}text-danger{% endif %}">
+                    {{ p.quantite }}
+                </td>
+                <td class="text-right font-bold text-muted" style="{% if p.quantite <= p.seuil_alerte %}color: #ef4444;{% endif %}">
+                    {% if p.quantite <= p.seuil_alerte %}⚠️ RÉAPPRO{% else %}✅ OK{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- SIGNATURES SECTION -->
+    <table class="signature-section">
+        <tr>
+            <td class="signature-box" style="text-align: left;">
+                <span>VISA DE LA DIRECTION</span>
+                <div class="signature-line" style="text-align: left;"></div>
+            </td>
+            <td class="signature-box" style="text-align: right;">
+                <span style="padding-right: 15%;">SIGNATURE DE L'AUDITEUR</span>
+                <div class="signature-line" style="margin-left: auto; text-align: right;"></div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- FOOTER ENCHAÎNÉ -->
+    <div class="footer">
+        <div class="certif-text">🛡️ RAPPORT DE STOCKS CERTIFIÉ PAR {{ config.nom|default:"PHARMACIE+" }}</div>
+        <p class="footer-address">
+            {{ config.adresse|default:"ADRESSE NON CONFIGURÉE" }} | Tel: {{ config.telephone|default:"NUMÉRO NON CONFIGURÉ" }}
+            <span class="thanks-msg">" {{ config.message_remerciement|default:"Merci de votre confiance !" }} "</span>
+        </p>
+    </div>
+
 </body>
 </html>
