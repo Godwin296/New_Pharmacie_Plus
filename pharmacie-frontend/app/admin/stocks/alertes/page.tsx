@@ -2,27 +2,28 @@
 import React, { useState, useEffect } from 'react';
 import { CalendarClock, ShieldAlert, Printer, ChevronLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mw69zhwz-8000.uks1.devtunnels.ms';
+// 🌟 CONFIGURATION : Importation de l'apiClient unifié (Gère l'URL brute et injecte le JWT de l'Admin)
+import apiClient from '../../../../lib/apiClient'; // Ajustez le nombre de '../' selon l'arborescence exacte admin/stocks/alertes
 
 export default function StockAlertReport() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [config, setConfig] = useState<any>(null);
 
+  // 🌟 ÉTAPE 1 : Récupération parallèle et sécurisée des alertes via apiClient
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // On récupère les données de stock et la config de la pharmacie (Logo, Nom)
+        // apiClient ajoute automatiquement l'adresse du tunnel et transmet l'access_token JWT de manière invisible
         const [resDashboard, resConfig] = await Promise.all([
-          axios.get(`${API_URL}/api/boss-dashboard/`, { withCredentials: true }),
-          axios.get(`${API_URL}/api/infos-pharmacie/`)
+          apiClient.get('/api/boss-dashboard/'),
+          apiClient.get('/api/infos-pharmacie/')
         ]);
         setData(resDashboard.data);
         setConfig(resConfig.data);
       } catch (err) {
-        console.error("Erreur de chargement des alertes:", err);
+        console.error("Erreur de chargement des alertes ou de droits admin:", err);
       } finally {
         setLoading(false);
       }
@@ -32,7 +33,8 @@ export default function StockAlertReport() {
 
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center text-red-500 gap-4">
-      <Loader2 className="animate-spin" size={48} />
+      {/* 🌟 ACCESSIBILITÉ : Intégration préventive des attributs d'accessibilité exigés par Next.js */}
+      <Loader2 className="animate-spin" size={48}  aria-label="Génération du rapport d'alertes critiques" />
       <span className="font-black uppercase text-[10px] tracking-widest">Génération du rapport critique...</span>
     </div>
   );
@@ -41,6 +43,7 @@ export default function StockAlertReport() {
     if (!dateStr) return "N/A";
     return new Date(dateStr).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
+
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-10 print:p-0 print:bg-white">
@@ -59,7 +62,7 @@ export default function StockAlertReport() {
       </div>
 
       {/* 📄 LE DOCUMENT A4 */}
-      <div className="mx-auto w-[21cm] min-h-[29.7cm] bg-white p-[1.5cm] shadow-2xl print:shadow-none print:w-full print:p-4 text-slate-900 border-t-[12px] border-red-600 flex flex-col">
+      <div className="mx-auto w-[21cm] min-h-[29.7cm] bg-white p-[1.5cm] shadow-2xl print:shadow-none print:w-full print:p-4 text-slate-900 border-t-12 border-red-600 flex flex-col">
         
         {/* HEADER DYNAMIQUE AVEC LOGO */}
         <div className="flex justify-between items-start mb-12 border-b-2 border-slate-100 pb-8">
@@ -76,7 +79,7 @@ export default function StockAlertReport() {
                 {config?.nom || "PHARMACIE +"}
               </h1>
               <p className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mt-2">📦 État des Stocks & Risques</p>
-              <p className="text-[9px] text-slate-400 font-bold max-w-[300px] mt-1">{config?.adresse}</p>
+              <p className="text-[9px] text-slate-400 font-bold max-w-75 mt-1">{config?.adresse}</p>
             </div>
           </div>
           <div className="text-right">
@@ -102,7 +105,7 @@ export default function StockAlertReport() {
         </div>
 
         {/* 🚨 TABLEAU DES ALERTES DE PÉREMPTION DYNAMIQUE */}
-        <div className="mb-10 flex-grow">
+        <div className="mb-10 grow">
           <h3 className="text-sm font-black text-red-600 uppercase tracking-widest mb-6 flex items-center gap-2">
             <CalendarClock size={20} /> Médicaments critiques (Péremption & Seuil)
           </h3>

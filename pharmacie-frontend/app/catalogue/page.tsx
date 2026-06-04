@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Pill, ShoppingCart, Info, Loader2, Filter, Plus, Minus, AlertCircle, X, Check, Camera } from 'lucide-react';
-import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mw69zhwz-8000.uks1.devtunnels.ms';
+// 🌟 CONFIGURATION : Utilisation de l'instance unifiée apiClient (Gère l'URL de base et le JWT)
+import apiClient from '../../lib/apiClient';
 
 interface Produit {
   id: number;
@@ -15,7 +15,7 @@ interface Produit {
   laboratoire: string;
   description: string;
   statut_stock_label: string;
-  image?: string; // Ajout du champ image
+  image?: string;
 }
 
 export default function CataloguePage() {
@@ -27,10 +27,11 @@ export default function CataloguePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [quantites, setQuantites] = useState<Record<number, number>>({});
 
+  // 1. RÉCUPÉRATION DU CATALOGUE SYNCHRONISÉ
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/catalogue/`);
+        const res = await apiClient.get('/api/catalogue/');
         setProduits(res.data.produits);
         setCategories(res.data.categories);
       } catch (err) {
@@ -42,39 +43,38 @@ export default function CataloguePage() {
     fetchData();
   }, []);
 
-  // 📸 Fonction pour modifier la photo via l'API
+  // 2. MODIFICATION DE LA PHOTO PAR L'ADMINISTRATEUR (Via le bon endpoint core/urls.py)
   const handleUpdatePhoto = async (produitId: number, file: File) => {
     const formData = new FormData();
     formData.append('image', file);
 
     try {
-      const res = await axios.post(`${API_URL}/api/produit/${produitId}/modifier-photo/`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        withCredentials: true
+      const res = await apiClient.post(`/api/modifier-photo/${produitId}/`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
       
-      // Mise à jour locale de l'état pour afficher la nouvelle image immédiatement
       setProduits(prev => prev.map(p => 
         p.id === produitId ? { ...p, image: res.data.image_url } : p
       ));
       
       alert("Photo mise à jour ! 📸");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erreur upload:", err);
-      alert("Erreur lors de la mise à jour de la photo.");
+      alert(err.response?.data?.error || "Erreur lors de la mise à jour de la photo. Droits admin requis.");
     }
   };
 
+  // 3. AJOUT SÉCURISÉ AU PANIER CLIENT (Le token est injecté par apiClient)
   const handleAddToCart = async (produitId: number) => {
     const qte = quantites[produitId] || 1;
     try {
-      await axios.post(`${API_URL}/api/panier/`, 
-        { produit_id: produitId, quantite: qte },
-        { withCredentials: true }
-      );
+      await apiClient.post('/api/panier/', { 
+        produit_id: produitId, 
+        quantite: qte 
+      });
       alert(`Ajouté : ${qte} unité(s) au panier ! ✅`);
     } catch (err: any) {
-      alert(err.response?.data?.error || "Erreur lors de l'ajout");
+      alert(err.response?.data?.error || "Erreur lors de l'ajout. Veuillez vérifier votre session.");
     }
   };
 
@@ -127,6 +127,8 @@ export default function CataloguePage() {
           
           <button 
             onClick={() => setIsModalOpen(true)}
+            title="Ouvrir les filtres de catégorie"
+            aria-label="Ouvrir les filtres de catégorie"
             className="bg-slate-900 text-white p-5 rounded-full hover:bg-emerald-600 transition-all shadow-xl flex items-center justify-center border-none cursor-pointer"
           >
             <Filter size={24} />
@@ -152,14 +154,14 @@ export default function CataloguePage() {
               <div>
                 <div className="relative h-48 bg-slate-50 dark:bg-slate-950 rounded-[2rem] mb-6 overflow-hidden flex items-center justify-center group-hover:bg-emerald-50 transition-colors">
                   
-                  {/* Image dynamique avec fallback émoji */}
+                  {/* 🌟 IMAGE STABILISÉE : Utilise l'URL absolue renvoyée proprement par le backend Django */}
                   {p.image ? (
-                    <img src={`${API_URL}${p.image}`} alt={p.nom} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                    <img src={p.image} alt={p.nom} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                   ) : (
                     <div className="text-7xl group-hover:scale-110 transition-transform">💊</div>
                   )}
 
-                  {/* Zone d'upload pour Admin (cachée, activée par clic sur le label) */}
+                  {/* Zone d'upload pour Admin */}
                   <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all z-20">
                     <Camera className="text-white mb-2" size={32} />
                     <span className="text-white text-[10px] font-black uppercase tracking-tighter">Modifier Photo</span>
@@ -196,9 +198,9 @@ export default function CataloguePage() {
                 <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 p-2 rounded-2xl">
                   <span className="text-[10px] font-black text-slate-400 uppercase ml-4">Quantité</span>
                   <div className="flex items-center gap-4">
-                    <button onClick={() => updateLocalQte(p.id, -1, p.quantite)} className="p-2 text-slate-400 hover:text-emerald-500 border-none bg-transparent cursor-pointer"><Minus size={16}/></button>
+                    <button onClick={() => updateLocalQte(p.id, -1, p.quantite)} title="Diminuer la quantité" aria-label="Diminuer la quantité" className="p-2 text-slate-400 hover:text-emerald-500 border-none bg-transparent cursor-pointer"><Minus size={16}/></button>
                     <span className="font-black text-lg text-slate-800 dark:text-white">{quantites[p.id] || 1}</span>
-                    <button onClick={() => updateLocalQte(p.id, 1, p.quantite)} className="p-2 text-slate-400 hover:text-emerald-500 border-none bg-transparent cursor-pointer"><Plus size={16}/></button>
+                    <button onClick={() => updateLocalQte(p.id, 1, p.quantite)} title="Augmenter la quantité" aria-label="Augmenter la quantité" className="p-2 text-slate-400 hover:text-emerald-500 border-none bg-transparent cursor-pointer"><Plus size={16}/></button>
                   </div>
                 </div>
 
@@ -209,6 +211,8 @@ export default function CataloguePage() {
                   <button 
                     disabled={p.quantite <= 0}
                     onClick={() => handleAddToCart(p.id)}
+                    title="Ajouter au panier"
+                    aria-label="Ajouter au panier"
                     className="bg-emerald-500 hover:bg-emerald-400 text-white p-5 rounded-[1.5rem] shadow-lg shadow-emerald-500/20 transition-all active:scale-90 border-none cursor-pointer disabled:opacity-20 disabled:grayscale"
                   >
                     <ShoppingCart size={24} strokeWidth={2.5} />
@@ -231,7 +235,7 @@ export default function CataloguePage() {
             >
               <div className="p-8 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center bg-slate-900 text-white">
                 <h3 className="text-xl font-black italic uppercase">Choisir une catégorie</h3>
-                <button onClick={() => setIsModalOpen(false)} className="text-white bg-transparent border-none cursor-pointer hover:rotate-90 transition-transform"><X /></button>
+                <button onClick={() => setIsModalOpen(false)} title="Fermer" aria-label="Fermer" className="text-white bg-transparent border-none cursor-pointer hover:rotate-90 transition-transform"><X /></button>
               </div>
 
               <div className="p-8 max-h-[60vh] overflow-y-auto space-y-3 custom-scrollbar">

@@ -9,11 +9,12 @@ import {
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   
-  const isSpecialRoute = pathname.startsWith('/admin') || pathname.startsWith('/caisse');
+  const isSpecialRoute = pathname.startsWith('/admin') || pathname.startsWith('/caisse') || pathname === '/login' || pathname === '/register';
 
   const [isDark, setIsDark] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -68,6 +69,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="fr">
+      <head>
+        {/* 🌟 INTEGRATION PWA ET SÉCURITÉ CONFORME AUX COMPOSANTS CLIENTS */}
+        <title>Pharmacie +</title>
+        <meta name="description" content="Portail d'Accès Sécurisé 🛰️" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/favicon.ico" />
+        <meta name="theme-color" content="#059669" />
+      </head>
       <body className="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300">
         
         {/* SPLASH SCREEN */}
@@ -103,10 +113,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </Link>
         
                 <div className="flex items-center gap-3">
-                  <button onClick={toggleTheme} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all outline-none">
+                  <button aria-label="Basculer le thème" onClick={toggleTheme} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all outline-none">
                     {isDark ? <Sun size={20} /> : <Moon size={20} />}
                   </button>
-                  <button onClick={() => setIsMenuOpen(true)} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all shadow-inner outline-none">
+                  <button aria-label="Ouvrir le menu" onClick={() => setIsMenuOpen(true)} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all shadow-inner outline-none">
                     <Menu size={20} />
                   </button>
                 </div>
@@ -123,7 +133,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   >
                     <div className="p-8 flex justify-between items-center border-b dark:border-slate-800">
                       <h3 className="text-xl font-black dark:text-white uppercase tracking-tighter italic text-emerald-600">Navigation</h3>
-                      <button onClick={() => setIsMenuOpen(false)} className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border-none text-slate-500 hover:text-red-500 cursor-pointer transition-colors"><X size={20} /></button>
+                      <button aria-label="Fermer le menu" onClick={() => setIsMenuOpen(false)} className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border-none text-slate-500 hover:text-red-500 cursor-pointer transition-colors"><X size={20} /></button>
                     </div>
 
                     <div className="flex-grow overflow-y-auto p-8 space-y-2">

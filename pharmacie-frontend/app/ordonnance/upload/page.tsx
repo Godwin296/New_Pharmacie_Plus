@@ -7,15 +7,14 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mw69zhwz-8000.uks1.devtunnels.ms';
+// 🌟 CONFIGURATION : Remplacement de l'axios brut par l'instance apiClient sécurisée
+import apiClient from '../../../lib/apiClient'; // Ajustez le chemin selon votre dossier app/ordonnance/upload
 
-// Composant interne pour gérer les paramètres d'URL (requis par Next.js 13/14)
 function UploadContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const commandeId = searchParams.get('id'); // Récupère le ?id=XXX du panier
+  const commandeId = searchParams.get('id'); 
 
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -47,17 +46,16 @@ function UploadContent() {
     setLoading(true);
     setError('');
 
-    // Utilisation de FormData pour envoyer un fichier réel 📎
     const formData = new FormData();
     formData.append('fichier_ordonnance', file);
 
     try {
-      await axios.post(`${API_URL}/api/ordonnances/${commandeId}/`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        withCredentials: true
+      // 🌟 STABLE : Appel sur le bon endpoint Django (path avec commande_id et slash final)
+      // apiClient injecte de lui-même le token JWT requis par le décorateur IsAuthenticated
+      await apiClient.post(`/api/ordonnances/${commandeId}/`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
       
-      // Succès : Redirection vers le panier pour voir le statut "En attente"
       router.push('/panier');
     } catch (err: any) {
       setError(err.response?.data?.error || "Erreur lors de l'envoi du document.");
@@ -90,7 +88,7 @@ function UploadContent() {
             onClick={() => fileInputRef.current?.click()}
             className={`relative border-4 border-dashed rounded-[2.5rem] p-10 text-center transition-all cursor-pointer group ${file ? 'border-emerald-500 bg-emerald-50/10' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 hover:border-emerald-500'}`}
           >
-            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.pdf" />
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.pdf" aria-label='Sélectionner un fichier' />
 
             <AnimatePresence mode="wait">
               {!file ? (
@@ -103,7 +101,7 @@ function UploadContent() {
                 <motion.div key="preview" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="relative">
                   {preview ? (
                     <div className="rounded-2xl overflow-hidden border-4 border-white shadow-2xl">
-                      <img src={preview} alt="Aperçu" className="max-h-[300px] w-full object-cover" />
+                      <img src={preview} alt="Aperçu de l'ordonnance sélectionnée" className="max-h-[300px] w-full object-cover" />
                     </div>
                   ) : (
                     <div className="bg-white dark:bg-slate-800 p-10 rounded-2xl flex flex-col items-center gap-4 text-emerald-500">
@@ -111,7 +109,16 @@ function UploadContent() {
                       <span className="font-bold text-xs text-slate-500">{file.name}</span>
                     </div>
                   )}
-                  <button onClick={(e) => { e.stopPropagation(); setFile(null); setPreview(null); }} className="absolute -top-4 -right-4 bg-red-500 text-white p-2 rounded-full shadow-lg border-none cursor-pointer"><X size={20} /></button>
+                  
+                  {/* 🌟 ACCESSIBILITÉ : Ajout de title et aria-label pour éliminer définitivement l'erreur Element has no title attribute */}
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setFile(null); setPreview(null); }} 
+                    title="Supprimer le document sélectionné"
+                    aria-label="Supprimer le document sélectionné"
+                    className="absolute -top-4 -right-4 bg-red-500 text-white p-2 rounded-full shadow-lg border-none cursor-pointer flex items-center justify-center hover:scale-110 transition-transform"
+                  >
+                    <X size={20} />
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -121,6 +128,8 @@ function UploadContent() {
             <button 
               type="submit"
               disabled={!file || loading}
+              title="Soumettre le document de santé pour contrôle"
+              aria-label="Soumettre le document de santé pour contrôle"
               className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-200 text-white font-black py-6 rounded-[2rem] shadow-2xl transition-all flex items-center justify-center gap-4 border-none cursor-pointer group"
             >
               <span className="text-sm uppercase tracking-[0.2em]">
@@ -151,10 +160,9 @@ function UploadContent() {
   );
 }
 
-// Export final avec Suspense pour éviter les erreurs de build Next.js liées au searchParams
 export default function UploadOrdonnance() {
   return (
-    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-emerald-500" /></div>}>
+    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-emerald-500"  aria-label="Chargement du module d'envoi" /></div>}>
       <UploadContent />
     </Suspense>
   );

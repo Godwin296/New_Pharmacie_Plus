@@ -5,13 +5,13 @@ import {
   ShoppingCart, FilePlus, ClipboardCheck, 
   AlertTriangle, XCircle, RefreshCw, 
   CreditCard, ChevronLeft, Loader2,
-  CheckCircle2 // Ajouté pour corriger le statut VALIDATED
+  CheckCircle2 
 } from 'lucide-react';
 import Link from 'next/link';
-import axios from 'axios';
 import { useRouter } from 'next/navigation';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mw69zhwz-8000.uks1.devtunnels.ms';
+// 🌟 CONFIGURATION : Importation de l'apiClient unifié
+import apiClient from '../../lib/apiClient'; // Ajustez le chemin selon votre dossier app/panier
 
 export default function PanierPage() {
   const router = useRouter();
@@ -19,22 +19,31 @@ export default function PanierPage() {
   const [commande, setCommande] = useState<any>(null);
   const [status, setStatus] = useState<'REFUSED' | 'MISSING_DOC' | 'PENDING_VAL' | 'VALIDATED' | 'EMPTY'>('EMPTY');
 
-  // 1. RÉCUPÉRATION DU PANIER RÉEL 🛰️
+  // 🌟 RÉCUPÉRATION DU PANIER RÉEL STABILISÉE
   const fetchPanier = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/panier/`, { withCredentials: true });
+      // apiClient ajoute l'URL du tunnel, injecte le Token Bearer et cible /api/panier/ avec le slash final
+      const res = await apiClient.get('/api/panier/');
       const data = res.data;
       
       if (!data.items || data.items.length === 0) {
         setStatus('EMPTY');
       } else {
         setCommande(data);
+        
         // LOGIQUE DE DÉTERMINATION DU STATUT 🧠
-        if (data.motif_refus) setStatus('REFUSED');
-        else if (data.ordonnance_valide) setStatus('VALIDATED');
-        else if (data.statut === 'attente_validation') setStatus('PENDING_VAL');
-        else if (data.items.some((it: any) => it.ordonnance_requise) && !data.ordonnance) setStatus('MISSING_DOC');
-        else setStatus('VALIDATED'); // Si rien n'est requis, c'est validé par défaut
+        if (data.motif_refus) {
+          setStatus('REFUSED');
+        } else if (data.ordonnance_valide) {
+          setStatus('VALIDATED');
+        } else if (data.statut === 'attente_validation') {
+          setStatus('PENDING_VAL');
+        } else if (data.items.some((it: any) => it.ordonnance_requise) && !data.ordonnance) {
+          // Note : Assurez-vous que votre ItemCommandeSerializer expose bien ce champ
+          setStatus('MISSING_DOC');
+        } else {
+          setStatus('VALIDATED'); // Validé par défaut si aucun médicament n'exige d'ordonnance
+        }
       }
     } catch (err) {
       console.error("Erreur panier:", err);
@@ -53,7 +62,6 @@ export default function PanierPage() {
       <Loader2 className="animate-spin" size={48} />
     </div>
   );
-
   return (
     <div className="max-w-[950px] mx-auto px-6 py-12">
       

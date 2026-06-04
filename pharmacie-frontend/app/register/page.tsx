@@ -3,10 +3,9 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, UserCheck, Phone, Key, ArrowRightCircle, LogIn, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import axios from 'axios';
+import apiClient from '../../lib/apiClient';
 import { useRouter } from 'next/navigation';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mw69zhwz-8000.uks1.devtunnels.ms';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -33,16 +32,47 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const res = await axios.post(`${API_URL}/api/register/`, formData);
+      // 1. Soumission des données d'inscription au validateur Django
+      const res = await apiClient.post(`/api/register/`, formData);
       
       if (res.status === 201) {
-        // Session persistante immédiate 🛰️
-        localStorage.setItem('user_role', 'CLIENT');
-        localStorage.setItem('username', res.data.username);
-        router.push('/'); // Redirection vers le catalogue
+        
+        // 2. 🛰️ STRATÉGIE AUTO-LOGIN : On connecte automatiquement le client dans la foulée
+        try {
+          const loginRes = await apiClient.post(`/api/login/`, {
+            username: formData.username,
+            password: formData.password,
+            role: 'client' // Rôle client par défaut sur ce formulaire
+          });
+
+          if (loginRes.status === 200) {
+            // Stockage impératif des jetons de sécurité JWT pour Next.js
+            localStorage.setItem('access_token', loginRes.data.access);
+            localStorage.setItem('refresh_token', loginRes.data.refresh);
+            
+            // Profil utilisateur
+            localStorage.setItem('user_role', loginRes.data.role);
+            localStorage.setItem('username', loginRes.data.user);
+            
+            // Redirection fluide et synchronisée vers le catalogue
+            window.location.href = '/';
+          }
+        } catch (loginErr) {
+          // Si l'auto-login échoue exceptionnellement, on redirige vers le login manuel
+          window.location.href = '/login';
+        }
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || "Une erreur est survenue lors de l'inscription.");
+      // 🕵️ DÉCODAGE DES ERREURS VALIDATEURS : Gère les dictionnaires d'erreurs DRF
+      const backendErrors = err.response?.data;
+      if (backendErrors && typeof backendErrors === 'object') {
+        // Si Django renvoie une erreur sur un champ spécifique (ex: password ou telephone)
+        const premierChamp = Object.keys(backendErrors)[0];
+        const messageErreur = backendErrors[premierChamp];
+        setError(`${premierChamp.toUpperCase()} : ${Array.isArray(messageErreur) ? messageErreur[0] : messageErreur}`);
+      } else {
+        setError(backendErrors?.error || "Une erreur est survenue lors de l'inscription.");
+      }
     } finally {
       setLoading(false);
     }

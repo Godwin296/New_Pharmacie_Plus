@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, Box, History, Truck, 
   BarChart3, Settings, Power, Sun, Moon,
-  House, Pill
-} from 'lucide-react';
+  House, Pill, ShieldAlert, ArrowLeft
+} from 'lucide-react'; // 🌟 Ajout de ShieldAlert et ArrowLeft
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -16,9 +16,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [currentTime, setCurrentTime] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [adminName, setAdminName] = useState('Admin');
+  const [authorized, setAuthorized] = useState<boolean | null>(null); // 🌟 null pendant la vérification
 
   useEffect(() => {
-    setAdminName(localStorage.getItem('username') || 'Admin');
+    const role = localStorage.getItem('user_role')?.toLowerCase();
+    const token = localStorage.getItem('access_token');
+
+    // 🛡️ FILTRAGE STRICT SANS REDIRECTION AUTOMATIQUE
+    if (!token || role !== 'admin') {
+      setAuthorized(false); // Bloqué sur place
+    } else {
+      setAuthorized(true); // Autorisé
+      setAdminName(localStorage.getItem('username') || 'Admin');
+    }
+
     const timer = setInterval(() => {
       const opt: any = { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', second: '2-digit' };
       setCurrentTime(new Date().toLocaleDateString('fr-FR', opt));
@@ -42,7 +53,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     router.push('/login');
   };
 
-  // MENU RESTREINT : Uniquement les outils de gestion
   const menuItems = [
     { name: 'Accueil Site', icon: House, href: '/' },
     { name: 'Tableau de Bord', icon: LayoutDashboard, href: '/admin/dashboard' },
@@ -52,6 +62,45 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Fournisseurs', icon: Truck, href: '/admin/fournisseurs' },
     { name: 'Rapports & Stats', icon: BarChart3, href: '/admin/rapports' },
   ];
+
+  // 1️⃣ En attente de la vérification initiale
+  if (authorized === null) {
+    return <div className="min-h-screen bg-[#f8fafc] dark:bg-slate-950" />;
+  }
+
+  // 2️⃣ 🚨 CAS INTERCEPTÉ : L'utilisateur n'est pas Admin (Caisse, Client, etc.) -> Panneau d'alerte fixe
+  if (!authorized) {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_center,#1e1e2f_0%,#0f0f16_100%)] text-white flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+        <motion.div 
+          initial={{ scale: 0.9, opacity: 0 }} 
+          animate={{ scale: 1, opacity: 1 }} 
+          className="bg-slate-900/80 border border-red-500/30 p-10 rounded-[3rem] max-w-md w-full shadow-2xl backdrop-blur-md"
+        >
+          <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20 animate-bounce">
+            <ShieldAlert size={40} />
+          </div>
+          
+          <h3 className="text-3xl font-black italic tracking-tighter uppercase mb-4 text-red-400">
+            ⚠️ ATTENTION ⚠️
+          </h3>
+          
+          <p className="text-sm text-slate-300 leading-relaxed font-medium mb-8">
+            Votre compte actuel <span className="text-red-400 font-bold">ne possède pas</span> les privilèges requis pour accéder au panneau de contrôle Admin. Vous avez été maintenu sur place par sécurité. 🛰️
+          </p>
+
+          <button 
+            onClick={() => router.back()} // 🌟 Retourne à la page d'où elle vient (ex: son espace caisse) sans casser sa session !
+            title="Retourner à la page précédente"
+            aria-label="Retourner à la page précédente"
+            className="w-full bg-slate-800 hover:bg-slate-700 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer border border-white/5"
+          >
+            <ArrowLeft size={16} /> Retourner à mon espace
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
@@ -67,7 +116,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         <div className="flex items-center gap-6">
-          <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border-none bg-transparent cursor-pointer">
+          {/* 🌟 ACCESSIBILITÉ : Ajout de title et aria-label sur le changement de thème */}
+          <button 
+            onClick={toggleTheme} 
+            title="Basculer le thème de couleur (Clair / Sombre)"
+            aria-label="Basculer le thème de couleur (Clair / Sombre)"
+            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border-none bg-transparent cursor-pointer flex items-center justify-center"
+          >
             {isDark ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} className="text-slate-600" />}
           </button>
           <div className="text-right border-l pl-6 border-gray-200 dark:border-slate-700 hidden md:block">
@@ -78,7 +133,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </header>
 
       {/* SIDEBAR */}
-      <nav className="fixed top-0 left-0 w-[260px] h-screen bg-slate-900 pt-24 text-white z-40 border-r border-white/5 hidden lg:flex flex-col no-print">
+      <nav className="fixed top-0 left-0 w-65 h-screen bg-slate-900 pt-24 text-white z-40 border-r border-white/5 hidden lg:flex flex-col no-print">
         <div className="px-6 mb-4 text-[10px] uppercase text-gray-500 font-bold tracking-widest opacity-50 italic">Contrôle Inventaire 📂</div>
         
         <div className="flex flex-col gap-1">
@@ -117,7 +172,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* DIALOGUE DE DÉCONNEXION */}
       <AnimatePresence>
         {showLogoutConfirm && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md no-print">
+          <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md no-print">
             <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity: 1}} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] max-w-sm w-full text-center shadow-2xl">
                 <div className="text-5xl mb-4">🛰️</div>
                 <h3 className="text-xl font-black mb-2 dark:text-white">Déconnexion</h3>
@@ -132,7 +187,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </AnimatePresence>
 
       {/* CONTENU PRINCIPAL */}
-      <main className="lg:ml-[260px] pt-28 px-6 lg:px-10 pb-12">
+      <main className="lg:ml-65 pt-28 px-6 lg:px-10 pb-12">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
           {children}
         </motion.div>

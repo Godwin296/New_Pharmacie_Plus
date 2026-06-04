@@ -5,14 +5,13 @@ import {
   PackageSearch, AlertCircle, TrendingUp, Printer, 
   ChevronRight, Filter, Search, Loader2, X, Check, Download
 } from 'lucide-react';
-import axios from 'axios';
 import Link from 'next/link';
-// IMPORT DU COMPOSANT DE PRINT POUR L'INCLURE DANS LA PAGE
+import { useRouter } from 'next/navigation'; 
 import StockPrintPage from './print/page'; 
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mw69zhwz-8000.uks1.devtunnels.ms';
+import apiClient from '../../../lib/apiClient';
 
 export default function InventoryPage() {
+  const router = useRouter(); 
   const [produits, setProduits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -21,8 +20,10 @@ export default function InventoryPage() {
 
   const fetchInventory = async () => {
     try {
-      setCurrency(localStorage.getItem('app_currency') || 'FCFA');
-      const res = await axios.get(`${API_URL}/api/catalogue/`, { withCredentials: true });
+      if (typeof window !== 'undefined') {
+        setCurrency(localStorage.getItem('app_currency') || 'FCFA');
+      }
+      const res = await apiClient.get('/api/catalogue/');
       setProduits(res.data.produits || []);
     } catch (err) {
       console.error("Erreur inventaire:", err);
@@ -35,13 +36,43 @@ export default function InventoryPage() {
 
   const handleQuickUpdate = async (id: number, newQty: number) => {
     try {
-      await axios.post(`${API_URL}/api/boss/update-stock/${id}/`, { quantite: newQty }, { withCredentials: true });
+      await apiClient.post(`/api/boss/update-stock/${id}/`, { quantite: newQty });
       fetchInventory();
       setSelectedProduct(null);
-    } catch (err) {
-      alert("Erreur de mise à jour");
+    } catch (err: any) {
+      alert(err.response?.data?.error || "Erreur de mise à jour. Droits administrateur requis.");
     }
   };
+
+  const handleDownloadInventoryPDF = async () => {
+    try {
+      // 1. Appel direct via ton apiClient sécurisé qui injecte déjà le token et gère le Refresh !
+      // On spécifie simplement 'blob' pour traiter le flux binaire du PDF envoyé par Django
+      const response = await apiClient.get('/api/export-pdf/rapport-stock/', {
+        responseType: 'blob', 
+      });
+
+      // 2. Transformation de la réponse brute en fichier PDF virtuel pour le navigateur
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+
+      // 3. Simulation invisible d'un clic de téléchargement automatique
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'Inventaire_Global_Stocks.pdf'); 
+      document.body.appendChild(link);
+      link.click();
+      // 4. Nettoyage propre des éléments du DOM et libération de la mémoire vive
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Erreur lors du téléchargement direct du PDF :", error);
+      alert("Erreur d'authentification ou technique lors de l'extraction du PDF d'inventaire.");
+    }
+  };
+
+
 
   const convert = (amount: number) => {
     if (!amount) return "0";
@@ -58,9 +89,10 @@ export default function InventoryPage() {
   const nbCritiques = produits.filter(p => p.quantite <= (p.seuil_alerte || 10)).length;
   const valeurTotale = produits.reduce((acc, p) => acc + (p.prix * p.quantite), 0);
 
+  if (loading) return <div className="p-10 text-center font-bold">Chargement de l'inventaire...</div>;
 
   return (
-    <div className="max-w-[1600px] mx-auto pb-20">
+    <div className="max-w-7xl mx-auto pb-20 px-4">
       
       {/* --- CONTENU VISIBLE (TABLEAU DE GESTION) --- */}
       <div className="no-print">
@@ -74,7 +106,7 @@ export default function InventoryPage() {
             </h2>
           </motion.div>
 
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-6">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-6">
             <div className="text-right border-r pr-6 border-slate-100 dark:border-slate-800">
               <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest block mb-1 italic">Valeur en {currency}</span>
               <h4 className="text-3xl font-black text-emerald-600">
@@ -91,7 +123,7 @@ export default function InventoryPage() {
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 mb-8">
-          <div className="relative flex-grow group">
+          <div className="relative grow group">
             <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input 
               type="text" placeholder="Recherche rapide médicament..."
@@ -114,7 +146,7 @@ export default function InventoryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                {filteredProduits.map((p, i) => (
+                {filteredProduits.map((p) => (
                   <tr key={p.id} className="group hover:bg-emerald-50/30 dark:hover:bg-slate-800/30 transition-all">
                     <td className="px-8 py-6">
                       <span className="font-black text-slate-800 dark:text-white text-base block uppercase tracking-tight">{p.nom}</span>
@@ -134,7 +166,9 @@ export default function InventoryPage() {
                       {convert(p.prix * p.quantite)} <small className="text-[9px] opacity-60">{currency}</small>
                     </td>
                     <td className="px-8 py-6 text-right">
-                      <button onClick={() => setSelectedProduct(p)} className="p-3 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition-all border-none cursor-pointer shadow-lg shadow-emerald-500/20"><TrendingUp size={16} /></button>
+                      <button onClick={() => setSelectedProduct(p)} className="p-3 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition-all border-none cursor-pointer shadow-lg shadow-emerald-500/20" aria-label="Mettre à jour le stock">
+                        <TrendingUp size={16} />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -144,35 +178,32 @@ export default function InventoryPage() {
         </div>
 
         <div className="mt-12 flex flex-col items-center gap-4">
-          <div className="flex bg-slate-900 rounded-[2rem] overflow-hidden shadow-2xl">
+          <div className="flex bg-slate-900 rounded-full overflow-hidden shadow-2xl">
             <button 
               onClick={() => window.print()}
               className="bg-transparent text-white px-10 py-5 font-black text-xs uppercase tracking-widest border-none cursor-pointer hover:bg-emerald-600 transition-all flex items-center gap-3"
+              aria-label="Imprimer l'état"
             >
               <Printer size={20} /> Imprimer l'état
             </button>
-            <a 
-              href={`${API_URL}/api/export-pdf/rapport-stock/`} 
-              download="Inventaire_Stock.pdf"
-              className="bg-white/10 text-white px-10 py-5 font-black text-xs uppercase tracking-widest flex items-center gap-3 no-underline border-l border-white/10 hover:bg-emerald-600 transition-all cursor-pointer"
+            <button 
+              onClick={handleDownloadInventoryPDF}
+              className="bg-white/10 text-white px-10 py-5 font-black text-xs uppercase tracking-widest flex items-center gap-3 border-none border-l border-white/10 hover:bg-emerald-600 transition-all cursor-pointer"
             >
               <Download size={20} /> Télécharger
-            </a>
+            </button>
           </div>
-          <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest italic text-center">
-            Aperçu Windows direct sans quitter le dashboard 🛰️
-          </p>
         </div>
       </div>
 
       {/* --- MODALE RÉAPPRO --- */}
       <AnimatePresence>
         {selectedProduct && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md no-print">
-            <motion.div initial={{scale: 0.9}} animate={{scale: 1}} className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] w-full max-w-md shadow-2xl">
+          <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md no-print">
+            <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity: 1}} exit={{scale: 0.9, opacity: 0}} className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] w-full max-w-md shadow-2xl">
               <h3 className="text-xl font-black mb-6 uppercase italic text-emerald-500 text-center">Mise à jour Stock</h3>
               <p className="text-sm font-bold text-slate-400 mb-8 uppercase tracking-widest text-center">{selectedProduct.nom}</p>
-              <input type="number" defaultValue={selectedProduct.quantite} id="new_qty" className="w-full p-6 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none font-black text-3xl text-center mb-8 outline-none focus:ring-4 focus:ring-emerald-500/20" />
+              <input type="number" defaultValue={selectedProduct.quantite} id="new_qty" className="w-full p-6 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none font-black text-3xl text-center mb-8 outline-none focus:ring-4 focus:ring-emerald-500/20" aria-label="Nouvelle quantité" />
               <div className="grid grid-cols-2 gap-4">
                 <button onClick={() => setSelectedProduct(null)} className="p-5 rounded-2xl bg-slate-100 font-bold border-none cursor-pointer">Annuler</button>
                 <button onClick={() => handleQuickUpdate(selectedProduct.id, Number((document.getElementById('new_qty') as HTMLInputElement).value))} className="p-5 rounded-2xl bg-emerald-500 text-white font-black border-none cursor-pointer">Confirmer</button>
@@ -182,50 +213,19 @@ export default function InventoryPage() {
         )}
       </AnimatePresence>
 
-      {/* --- COMPOSANT D'IMPRESSION (INVISIBLE À L'ÉCRAN, VISIBLE À L'IMPRIMANTE) --- */}
+      {/* --- COMPOSANT D'IMPRESSION --- */}
       <div className="hidden print:block">
         <StockPrintPage />
       </div>
 
       <style jsx global>{`
-        @media screen {
-          .print-only { display: none; }
-        }
+        @media screen { .print-only { display: none; } }
         @media print {
-          /* 1. FORCE LA COULEUR 🎨 */
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-          }
-
-          /* 2. SUPPRIME LA PAGE VIDE 📄 */
-          .no-print { 
-            display: none !important; 
-            height: 0 !important; 
-            overflow: hidden !important; 
-          }
-    
-          /* 3. POSITIONNE LE RAPPORT PRO COMME SEUL ÉLÉMENT */
-          body, html { 
-            background: white !important; 
-            margin: 0 !important; 
-            padding: 0 !important;
-          }
-
-          .hidden.print\:block { 
-            display: block !important; 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            width: 100%;
-            z-index: 9999;
-          }
-
-          @page { 
-            size: A4; 
-            margin: 0; /* On gère les marges dans le composant print */
-          }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .no-print { display: none !important; height: 0 !important; }
+          body, html { background: white !important; margin: 0 !important; }
+          .hidden.print\:block { display: block !important; position: absolute; top: 0; left: 0; width: 100%; z-index: 9999; }
+          @page { size: A4; margin: 0; }
         }
       `}</style>
     </div>

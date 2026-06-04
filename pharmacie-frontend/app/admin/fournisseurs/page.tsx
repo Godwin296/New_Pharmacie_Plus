@@ -5,9 +5,9 @@ import {
   Building2, Phone, Mail, MapPin, Search, 
   Plus, Trash2, ShieldCheck, User, Loader2, X, MessageCircle 
 } from 'lucide-react';
-import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mw69zhwz-8000.uks1.devtunnels.ms';
+// 🌟 CONFIGURATION : Remplacement de l'axios brut par l'instance apiClient sécurisée
+import apiClient from '../../../lib/apiClient'; // Ajustez le chemin selon l'arborescence app/admin/fournisseurs
 
 interface Fournisseur {
   id: number;
@@ -36,9 +36,11 @@ export default function FournisseursPage() {
     fetchFournisseurs();
   }, []);
 
+  // 🌟 ÉTAPE 1 : Récupération des fournisseurs stabilisée
   const fetchFournisseurs = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/fournisseurs/`);
+      // apiClient ajoute l'URL du tunnel, le slash final et injecte le Token JWT de l'Admin
+      const res = await apiClient.get('/api/fournisseurs/');
       setFournisseurs(res.data);
     } catch (error) {
       console.error("Erreur chargement fournisseurs:", error);
@@ -47,34 +49,37 @@ export default function FournisseursPage() {
     }
   };
 
+  // 🌟 ÉTAPE 2 : Envoi au backend aligné sur le FournisseurSerializer
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Note: Ton backend attend 'contact_personne', j'adapte ici l'envoi pour correspondre au model.py
+      // STABLE : On conserve la clé 'manager' attendue par votre FournisseurSerializer Django
       const payload = {
         nom: formData.nom,
         telephone: formData.telephone,
         email: formData.email,
         adresse: formData.adresse,
-        contact_personne: formData.manager 
+        manager: formData.manager 
       };
       
-      const res = await axios.post(`${API_URL}/api/fournisseurs/`, payload);
+      const res = await apiClient.post('/api/fournisseurs/', payload);
       setFournisseurs([res.data, ...fournisseurs]);
       setIsModalOpen(false);
       setFormData({ nom: '', telephone: '', email: '', adresse: '', manager: '' });
-    } catch (error) {
-      alert("Erreur lors de l'enregistrement. Vérifiez la connexion au serveur.");
+    } catch (error: any) {
+      alert(error.response?.data?.error || "Erreur lors de l'enregistrement. Vérifiez vos droits administrateur.");
     }
   };
 
+  // 🌟 ÉTAPE 3 : Suppression physique sécurisée
   const handleDelete = async (id: number) => {
     if (confirm("⚠️ Supprimer ce partenaire ? Cette action est irréversible.")) {
       try {
-        await axios.delete(`${API_URL}/api/fournisseurs/${id}/`);
+        // Aligné sur core/urls.py : path("fournisseurs/<int:pk>/") avec slash final
+        await apiClient.delete(`/api/fournisseurs/${id}/`);
         setFournisseurs(fournisseurs.filter(f => f.id !== id));
-      } catch (error) {
-        alert("Erreur lors de la suppression.");
+      } catch (error: any) {
+        alert(error.response?.data?.error || "Erreur lors de la suppression. Action réservée au superutilisateur.");
       }
     }
   };
@@ -83,8 +88,6 @@ export default function FournisseursPage() {
     f.nom.toLowerCase().includes(search.toLowerCase()) || 
     (f.manager && f.manager.toLowerCase().includes(search.toLowerCase()))
   );
-
-  
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-10 relative p-4">
@@ -137,7 +140,7 @@ export default function FournisseursPage() {
                    <Building2 size={28} />
                  </div>
                  <div className="flex gap-2">
-                   <button onClick={() => handleDelete(f.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors bg-transparent border-none cursor-pointer">
+                   <button aria-label="Supprimer le fournisseur" onClick={() => handleDelete(f.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors bg-transparent border-none cursor-pointer">
                      <Trash2 size={18} />
                    </button>
                  </div>
@@ -191,32 +194,32 @@ export default function FournisseursPage() {
               <form onSubmit={handleSubmit} className="p-8 space-y-5">
                 <div>
                   <label className="text-[10px] font-bold uppercase text-slate-400 ml-2">Nom de l'entreprise</label>
-                  <input required className="w-full p-4 mt-1 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none focus:ring-2 ring-emerald-500 border-none dark:text-white" 
+                  <input aria-label="Nom de l'entreprise" required className="w-full p-4 mt-1 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none focus:ring-2 ring-emerald-500 border-none dark:text-white" 
                     value={formData.nom} onChange={e => setFormData({...formData, nom: e.target.value})} />
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-bold uppercase text-slate-400 ml-2">Téléphone</label>
-                    <input required className="w-full p-4 mt-1 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none border-none dark:text-white" 
+                    <input aria-label="Numéro de téléphone" required className="w-full p-4 mt-1 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none border-none dark:text-white" 
                       value={formData.telephone} onChange={e => setFormData({...formData, telephone: e.target.value})} />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase text-slate-400 ml-2">Manager</label>
-                    <input required className="w-full p-4 mt-1 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none border-none dark:text-white" 
+                    <input aria-label="Nom du manager" required className="w-full p-4 mt-1 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none border-none dark:text-white" 
                       value={formData.manager} onChange={e => setFormData({...formData, manager: e.target.value})} />
                   </div>
                 </div>
 
                 <div>
                   <label className="text-[10px] font-bold uppercase text-slate-400 ml-2">Email Professionnel</label>
-                  <input type="email" className="w-full p-4 mt-1 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none border-none dark:text-white" 
+                  <input aria-label="Email professionnel" type="email" className="w-full p-4 mt-1 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none border-none dark:text-white" 
                     value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                 </div>
 
                 <div>
                   <label className="text-[10px] font-bold uppercase text-slate-400 ml-2">Adresse / Localisation</label>
-                  <input className="w-full p-4 mt-1 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none border-none dark:text-white" 
+                  <input aria-label="Adresse / Localisation" className="w-full p-4 mt-1 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none border-none dark:text-white" 
                     value={formData.adresse} onChange={e => setFormData({...formData, adresse: e.target.value})} />
                 </div>
 

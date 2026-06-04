@@ -6,10 +6,7 @@ import {
   Key, Eye, EyeOff, ArrowRight, Sparkles 
 } from 'lucide-react';
 import Link from 'next/link';
-import axios from 'axios';
-
-// Configuration de l'URL Backend
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mw69zhwz-8000.uks1.devtunnels.ms';
+import apiClient from '../../lib/apiClient';
 
 export default function LoginPage() {
   // --- STATES LOGIQUE ---
@@ -26,25 +23,29 @@ export default function LoginPage() {
     { id: 'admin', label: 'Admin', icon: <Shield size={20} /> },
   ];
 
-  // --- FONCTION DE CONNEXION MODIFIÉE POUR LE REFRESH DU LAYOUT ---
+    // --- FONCTION DE CONNEXION SÉCURISÉE AVEC CAPTURE JWT ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API_URL}/api/login/`, {
+      const response = await apiClient.post(`/api/login/`, {
         username: username,
         password: password,
         role: role 
       });
 
       if (response.status === 200) {
-        // Stockage des infos de base
+        // 🔐 CAPTURE DES JETONS JWT REÇUS DU BACKEND DJANGO
+        localStorage.setItem('access_token', response.data.access);  // Jeton de session actif
+        localStorage.setItem('refresh_token', response.data.refresh); // Jeton de renouvellement automatique
+        
+        // Stockage des informations de profil
         localStorage.setItem('user_role', response.data.role);
         localStorage.setItem('username', response.data.user);
         
-        // EMPLACEMENT MODIFIÉ : Utilisation de window.location pour forcer RootLayout à se mettre à jour
+        // Redirection avec rafraîchissement complet du layout Next.js
         if (response.data.role === 'admin') {
           window.location.href = '/admin/dashboard';
         } else if (response.data.role === 'caissiere') {
@@ -54,9 +55,11 @@ export default function LoginPage() {
         }
       }
     } catch (err: any) {
+      // Interception propre des messages d'erreurs sécurisés de Django
       const msg = err.response?.data?.error || "Identifiants invalides ou erreur réseau";
       setError(msg);
     } finally {
+      // Désactivation de l'état de chargement sur l'interface
       setLoading(false);
     }
   };

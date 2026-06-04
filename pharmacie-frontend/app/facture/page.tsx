@@ -6,9 +6,9 @@ import {
   ArrowLeft, Loader2, ShieldCheck
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mw69zhwz-8000.uks1.devtunnels.ms';
+// 🌟 CONFIGURATION : Importation de l'apiClient unifié
+import apiClient from '../../lib/apiClient'; // Ajustez le chemin selon votre dossier app/facture
 
 function FactureContent() {
   const searchParams = useSearchParams();
@@ -21,12 +21,12 @@ function FactureContent() {
     const loadFacture = async () => {
       if (!factureId) return;
       try {
+        // 🌟 STABLE : apiClient injecte automatiquement l'access_token JWT requis par Django
         const [resFacture, resConfig] = await Promise.all([
-          axios.get(`${API_URL}/api/panier/`, {
-            params: { id: factureId },
-            withCredentials: true
+          apiClient.get('/api/panier/', {
+            params: { id: factureId }
           }),
-          axios.get(`${API_URL}/api/infos-pharmacie/`)
+          apiClient.get('/api/infos-pharmacie/')
         ]);
      
         const facture = Array.isArray(resFacture.data)
@@ -38,7 +38,7 @@ function FactureContent() {
         }
         setConfig(resConfig.data);
       } catch (err) {
-        console.error("Erreur:", err);
+        console.error("Erreur chargement facture:", err);
       } finally {
         setLoading(false);
       }
@@ -48,7 +48,7 @@ function FactureContent() {
 
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-emerald-500">
-      <Loader2 className="animate-spin" size={48} />
+      <Loader2 className="animate-spin" size={48}  aria-label="Génération de la facture" />
     </div>
   );
  
@@ -58,7 +58,7 @@ function FactureContent() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-12 px-6 print:p-0 print:bg-white print:block">
       
       {/* 🛠️ ACTIONS */}
-      <div className="max-w-[850px] mx-auto mb-8 flex justify-between items-center no-print">
+      <div className="max-w-212.5 mx-auto mb-8 flex justify-between items-center no-print">
         <button onClick={() => window.history.back()} className="flex items-center gap-2 text-slate-500 hover:text-emerald-500 font-bold text-xs transition-all uppercase tracking-widest bg-transparent border-none cursor-pointer">
           <ArrowLeft size={16} /> Retour
         </button>
@@ -70,7 +70,7 @@ function FactureContent() {
       {/* Wrapper de centrage pour l'impression */}
       <div className="print-wrapper">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="invoice-container max-w-[850px] mx-auto bg-white dark:bg-slate-900 p-10 md:p-16 rounded-[3rem] shadow-2xl border border-slate-100 dark:border-slate-800 print:shadow-none print:border-none print:m-0 print:p-4 print:w-[80mm]"
+          className="invoice-container max-w-212.5 mx-auto bg-white dark:bg-slate-900 p-10 md:p-16 rounded-[3rem] shadow-2xl border border-slate-100 dark:border-slate-800 print:shadow-none print:border-none print:m-0 print:p-4 print:w-[80mm]"
         >
           {/* 🔝 EN-TÊTE */}
           <div className="flex flex-col md:flex-row justify-between items-start border-b-2 border-slate-50 dark:border-slate-800 pb-10 mb-10 gap-8">

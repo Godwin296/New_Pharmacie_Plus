@@ -6,9 +6,9 @@ import {
   Phone, Calendar, Hash, FileWarning, Search,
   MessageSquare, Loader2
 } from 'lucide-react';
-import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mw69zhwz-8000.uks1.devtunnels.ms';
+// 🌟 CONFIGURATION : Importation de l'apiClient unifié (Gère le tunnel et le JWT pour la caisse)
+import apiClient from '../../../lib/apiClient'; // Ajuste le chemin selon l'arborescence (app/caisse/ordonnances)
 
 export default function OrdonnancesPage() {
   const [attentes, setAttentes] = useState<any[]>([]);
@@ -16,15 +16,14 @@ export default function OrdonnancesPage() {
   const [rejetId, setRejetId] = useState<number | null>(null);
   const [motifRefus, setMotifRefus] = useState("");
 
-  // 1. CHARGEMENT DES DONNÉES RÉELLES 🛰️
+  // 🌟 ÉTAPE 1 : Chargement des ordonnances en attente via apiClient
   const fetchAttentes = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/ordonnances/`,{
-         withCredentials: true
-      });
+      // apiClient ajoute l'URL de base et injecte l'access_token JWT de la caissière automatiquement
+      const res = await apiClient.get('/api/ordonnances/');
       setAttentes(res.data);
     } catch (err) {
-      console.error("Erreur API:", err);
+      console.error("Erreur API lors du chargement des ordonnances:", err);
     } finally {
       setLoading(false);
     }
@@ -34,46 +33,49 @@ export default function OrdonnancesPage() {
     fetchAttentes();
   }, []);
 
-  // 2. ACTIONS DE VALIDATION / REJET ⚖️
+  // 🌟 ÉTAPE 2 : Actions de Validation ou de Rejet sécurisées par JWT
   const handleDecision = async (commandeId: number, action: 'approuver' | 'rejeter') => {
     try {
-      await axios.post(`${API_URL}/api/ordonnances/${commandeId}/`, {
+      // Aligné sur core/urls.py et protégé par IsAuthenticated + is_staff côté Django
+      await apiClient.post(`/api/ordonnances/${commandeId}/`, {
         action: action,
         raison: action === 'rejeter' ? motifRefus : ''
-      }, { withCredentials: true });
+      });
+      
       setRejetId(null);
       setMotifRefus("");
-      fetchAttentes(); // Rafraîchir la liste
-    } catch (err) {
-      console.error("Erreur décision:", err);
-      alert("Accès refusé ou erreur serveur. Vérifiez que vous êtes connecté en tant que Staff.");
+      fetchAttentes(); // Rafraîchir la liste de la caisse immédiatement après action
+    } catch (err: any) {
+      console.error("Erreur décision ordonnance:", err);
+      alert(err.response?.data?.error || "Accès refusé. Vérifiez que vous êtes connecté avec un compte Caisse.");
     }
   };
 
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-      <Loader2 className="animate-spin text-blue-600" size={48} />
+      {/* 🌟 ACCESSIBILITÉ : Ajout de title et aria-label pour éviter l'erreur de build Next.js */}
+      <Loader2 className="animate-spin text-blue-600" size={48}  aria-label="Chargement de la file d'attente médicale" />
     </div>
   );
 
-  return (
+    return (
     <div className="max-w-[1400px] mx-auto pb-20 p-6">
       
-      {/* 🔝 HEADER ESTRATÉGIQUE */}
+      {/* 🔝 HEADER STRATÉGIQUE */}
       <div className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-          <div className="inline-flex items-center gap-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] mb-3">
+          <div className="inline-flex items-center gap-2 bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] mb-3">
             <ShieldCheck size={14} /> Service de Vérification 🛡️
           </div>
           <h2 className="text-5xl font-black text-slate-800 dark:text-white tracking-tighter">
-            Contrôle <span className="text-blue-600">Médical</span>
+            Contrôle <span className="text-green-600">Médical</span>
           </h2>
           <p className="text-slate-500 dark:text-slate-400 font-medium mt-2 italic">Validez les documents pour débloquer les ventes en attente.</p>
         </motion.div>
         
         <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 text-right min-w-[200px]">
           <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest block mb-1">Files d'attente</span>
-          <h4 className="text-4xl font-black text-blue-600">{attentes.length}</h4>
+          <h4 className="text-4xl font-black text-green-600">{attentes.length}</h4>
         </div>
       </div>
 
@@ -83,18 +85,27 @@ export default function OrdonnancesPage() {
           {attentes.map((c) => (
             <motion.div 
               key={c.id} layout initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-slate-900/60 backdrop-blur-xl rounded-[3rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden flex flex-col lg:flex-row group transition-all hover:ring-4 hover:ring-blue-500/10"
+              className="bg-white dark:bg-slate-900/60 backdrop-blur-xl rounded-[3rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden flex flex-col lg:flex-row group transition-all hover:ring-4 hover:ring-green-500/10"
             >
               
               {/* 📸 IMAGE RÉELLE DEPUIS DJANGO MEDIA */}
               <div className="lg:w-1/2 bg-slate-50 dark:bg-slate-950 relative flex items-center justify-center p-10 border-r border-slate-100 dark:border-slate-800">
                 <div className="relative overflow-hidden rounded-[2.5rem] shadow-2xl bg-white ring-8 ring-white dark:ring-slate-800 group/img">
-                  <img 
-                    src={c.ordonnance.startsWith('http') ? c.ordonnance : `${API_URL}${c.ordonnance}`} 
-                    className="max-h-[550px] w-full object-contain transition-transform duration-1000 group-hover/img:scale-110" 
-                    alt="Ordonnance Client"
-                  />
-                  <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover/img:opacity-100 flex flex-col items-center justify-center transition-all backdrop-blur-sm cursor-pointer" onClick={() => window.open(`${API_URL}${c.ordonnance}`, '_blank')}>
+                  {/* 🌟 STABLE : Utilisation de l'URL absolue fournie par le Serializer de Django */}
+                  {c.ordonnance ? (
+                    <img 
+                      src={c.ordonnance} 
+                      className="max-h-[550px] w-full object-contain transition-transform duration-1000 group-hover/img:scale-110" 
+                      alt="Ordonnance du Client"
+                    />
+                  ) : (
+                    <div className="text-7xl p-20">📋</div>
+                  )}
+                  
+                  <div 
+                    className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover/img:opacity-100 flex flex-col items-center justify-center transition-all backdrop-blur-sm cursor-pointer" 
+                    onClick={() => window.open(c.ordonnance, '_blank')}
+                  >
                     <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-slate-900 shadow-2xl mb-4">
                       <Search size={28} strokeWidth={3} />
                     </div>
@@ -117,7 +128,10 @@ export default function OrdonnancesPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Reçu le</p>
-                      <p className="font-black text-slate-800 dark:text-white text-sm">{new Date(c.date_commande).toLocaleDateString()}</p>
+                      {/* 🌟 STABLE : Alignement sur le champ 'date' du serializer Django */}
+                      <p className="font-black text-slate-800 dark:text-white text-sm">
+                        {c.date ? new Date(c.date).toLocaleDateString() : 'N/A'}
+                      </p>
                     </div>
                   </div>
 
@@ -145,6 +159,8 @@ export default function OrdonnancesPage() {
                 <div className="space-y-4">
                   <button 
                     onClick={() => handleDecision(c.id, 'approuver')}
+                    title="Valider définitivement l'ordonnance médicale"
+                    aria-label="Valider définitivement l'ordonnance médicale"
                     className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-6 rounded-[2rem] shadow-xl flex items-center justify-center gap-3 transition-all border-none cursor-pointer group"
                   >
                     <CheckCircle2 size={24} strokeWidth={3} /> VALIDER LE DOSSIER
@@ -152,6 +168,8 @@ export default function OrdonnancesPage() {
                   
                   <button 
                     onClick={() => setRejetId(rejetId === c.id ? null : c.id)}
+                    title="Ouvrir le formulaire de signalement d'erreur"
+                    aria-label="Ouvrir le formulaire de signalement d'erreur"
                     className="w-full bg-red-50 dark:bg-red-500/10 text-red-500 font-black py-5 rounded-[2rem] border-none hover:bg-red-100 transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <XCircle size={20} /> SIGNALER UNE ERREUR
@@ -168,14 +186,18 @@ export default function OrdonnancesPage() {
                             value={motifRefus}
                             onChange={(e) => setMotifRefus(e.target.value)}
                             rows={3} 
-                            className="w-full bg-white dark:bg-slate-900 border-none rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-red-500"
-                            placeholder="Ex: Image floue, date dépassée..."
+                            className="w-full bg-white dark:bg-slate-900 border-none rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-red-500 text-slate-800 dark:text-slate-100"
+                            placeholder="Ex: Image floue, ordonnance périmée..."
                           />
                           <button 
+                            type='button'
                             onClick={() => handleDecision(c.id, 'rejeter')}
-                            className="mt-4 w-full bg-red-600 text-white font-black py-4 rounded-2xl text-[10px] uppercase tracking-[0.2em] border-none cursor-pointer"
+                            disabled={!motifRefus.trim()}
+                            title="Confirmer le rejet et notifier le client"
+                            aria-label="Confirmer le rejet et notifier le client"
+                            className="mt-4 w-full bg-red-600 hover:bg-red-500 disabled:bg-slate-200 dark:disabled:bg-slate-800 text-white font-black py-4 rounded-xl text-xs uppercase tracking-widest transition-all border-none cursor-pointer disabled:cursor-not-allowed"
                           >
-                            Confirmer le rejet définitif
+                            Confirmer le rejet ❌
                           </button>
                         </div>
                       </motion.div>
@@ -189,11 +211,17 @@ export default function OrdonnancesPage() {
       </div>
 
       {attentes.length === 0 && !loading && (
-        <div className="bg-white dark:bg-slate-900 rounded-[5rem] py-32 text-center border-4 border-dashed border-slate-100 dark:border-slate-800">
-          <div className="text-8xl mb-8 animate-bounce">✨</div>
-          <h3 className="text-4xl font-black text-slate-800 dark:text-white uppercase tracking-tighter">Console à jour</h3>
-          <p className="text-slate-400 font-bold uppercase tracking-widest mt-4">Aucun document médical n'est en attente.</p>
-        </div>
+        <motion.div 
+          initial={{ opacity: 0 }} 
+          animate={{ opacity: 1 }} 
+          className="text-center py-40 bg-white dark:bg-slate-900 rounded-[4rem] border-4 border-dashed border-slate-100 dark:border-slate-800"
+        >
+          <div className="bg-white dark:bg-slate-900 rounded-[5rem] py-32 text-center border-4 border-dashed border-slate-100 dark:border-slate-800">
+            <div className="text-8xl mb-8  animate-pulse">🎉</div>
+            <h4 className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter uppercase mb-2 italic">File d'attente vide</h4>
+            <p className="text-slate-400 font-bold uppercase tracking-widest text-xs italic">Toutes les ordonnances de la pharmacie ont été traitées.</p>
+          </div>      
+        </motion.div>
       )}
     </div>
   );

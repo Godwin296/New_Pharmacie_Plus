@@ -5,34 +5,27 @@ import {
   Search, FileDown, Eye, Calendar, 
   Receipt, Wallet, Filter, Loader2, Printer 
 } from 'lucide-react';
-import axios from 'axios';
 
-// Utilisation de l'URL brute pour éviter les soucis de variables d'environnement sur mobile
-const API_URL = 'https://mw69zhwz-8000.uks1.devtunnels.ms';
+// 🌟 CONFIGURATION : Importation de l'apiClient unifié (Gère l'URL brute et injecte le JWT pour le Staff)
+import apiClient from '../../../lib/apiClient'; // Ajustez le chemin selon l'arborescence app/admin/historique
+import router, { useRouter } from 'next/navigation';
 
 export default function HistoriqueVentes() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [ventes, setVentes] = useState<any[]>([]);
   const [query, setQuery] = useState("");
   const [filterOrdonnance, setFilterOrdonnance] = useState<'all' | 'valid' | 'none'>('all');
 
-  // 🔄 Chargement des données (Correction du 403 et synchronisation)
-    useEffect(() => {
+  // 🌟 ÉTAPE 1 : Récupération des archives sécurisée (Correction définitive du 403)
+  useEffect(() => {
     const fetchArchives = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/archives/`, {
-          method: 'GET',
-          // On ne met aucun header, rien du tout, pour un GET brut
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setVentes(data);
-        } else {
-          console.error("Le serveur refuse toujours (403).");
-        }
+        // apiClient ajoute automatiquement l'adresse de votre tunnel et injecte le Token JWT de la caisse/admin
+        const response = await apiClient.get('/api/archives/');
+        setVentes(response.data);
       } catch (err) {
-        console.error("Problème de réseau.");
+        console.error("Problème d'authentification ou de réseau sur les archives :", err);
       } finally {
         setLoading(false);
       }
@@ -48,7 +41,7 @@ export default function HistoriqueVentes() {
   const filteredVentes = ventes.filter(v => {
     const searchLower = query.toLowerCase();
     const matchesSearch = v.id.toString().includes(searchLower) || 
-                         (v.client_nom && v.client_nom.toLowerCase().includes(searchLower));
+      (v.client_nom && v.client_nom.toLowerCase().includes(searchLower));
     
     const matchesFilter = filterOrdonnance === 'all' 
       ? true 
@@ -57,14 +50,14 @@ export default function HistoriqueVentes() {
     return matchesSearch && matchesFilter;
   });
 
-  // 🖨️ Fonctions d'action
+  // 🖨️ ÉTAPE 2 : Alignement précis de l'URL du ticket de caisse selon core/urls.py
   const handleViewDetails = (id: string) => {
-     // Utilisation de l'URL Backend pour la facture
-     window.open(`${API_URL}/api/ticket-caisse/${id}/`, '_blank');
+     // Utilise l'URL de base dynamique du client pour ouvrir le ticket au guichet avec son slash final
+     router.push(`/facture?id=${id}`);
   };
 
-  return (
-    <div className="max-w-[1400px] mx-auto space-y-8 p-4">
+    return (
+    <div className="max-w-350 mx-auto space-y-8 p-4">
       
       {/* 🔝 TITRE */}
       <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
@@ -81,7 +74,7 @@ export default function HistoriqueVentes() {
           { label: "Chiffre d'Affaires Global", val: caGlobal.toLocaleString(), unit: "FCFA", icon: <Wallet />, color: "emerald" },
         ].map((kpi, i) => (
           <motion.div key={i} whileHover={{ y: -5 }}
-            className={`bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border-l-[12px] ${kpi.color === 'blue' ? 'border-blue-500' : 'border-emerald-500'} flex justify-between items-center`}
+            className={`bg-white dark:bg-slate-900 p-8 rounded-4xl shadow-sm border-l-12 ${kpi.color === 'blue' ? 'border-blue-500' : 'border-emerald-500'} flex justify-between items-center`}
           >
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">{kpi.label}</p>
@@ -95,8 +88,8 @@ export default function HistoriqueVentes() {
       </div>
 
       {/* 🔎 RECHERCHE & FILTRES */}
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row gap-4 items-center">
-        <div className="flex-grow relative w-full">
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-4xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row gap-4 items-center">
+        <div className="grow relative w-full">
           <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input 
             type="text" placeholder="Rechercher par ID ou nom client..."
@@ -118,7 +111,7 @@ export default function HistoriqueVentes() {
       </div>
 
       {/* 🧾 TABLEAU */}
-      <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-2xl">
+      <div className="bg-white dark:bg-slate-900 rounded-4xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-separate border-spacing-0">
             <thead className="bg-slate-50/50 dark:bg-slate-800/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -160,12 +153,15 @@ export default function HistoriqueVentes() {
                     </td>
                     <td className="px-8 py-6 text-right">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => handleViewDetails(v.id)} className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all cursor-pointer border-none">
+                        {/* 🌟 ACCESSIBILITÉ & STABLE : Redirection vers la facture universelle .tsx avec attribut title */}
+                        <button 
+                          title="Consulter les détails de la facture"
+                          aria-label="Voir les détails" 
+                          onClick={() => handleViewDetails(v.id)} 
+                          className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all cursor-pointer border-none"
+                        >
                           <Eye size={18} />
-                        </button>
-                        <button onClick={() => window.open(`${API_URL}/api/ticket-caisse/${v.id}/`, '_blank')} className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-900/30 text-red-600 flex items-center justify-center hover:bg-red-600 hover:text-white transition-all cursor-pointer border-none">
-                          <Printer size={18} />
-                        </button>
+                        </button>                     
                       </div>
                     </td>
                   </motion.tr>

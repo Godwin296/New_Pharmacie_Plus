@@ -4,9 +4,9 @@ import {
   TrendingUp, ShoppingBag, Scale, 
   ShieldCheck, Loader2, Printer 
 } from 'lucide-react';
-import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mw69zhwz-8000.uks1.devtunnels.ms';
+// 🌟 CONFIGURATION : Importation de l'apiClient unifié (Gère l'URL et injecte le JWT de l'Admin)
+import apiClient from '../../../../lib/apiClient'; // Ajustez le nombre de '../' selon l'arborescence exacte admin/rapports/print
 
 export default function FinancialReport() {
   const [loading, setLoading] = useState(true);
@@ -22,20 +22,28 @@ export default function FinancialReport() {
     return amount.toLocaleString();
   };
 
+  // 🌟 ÉTAPE 1 : Récupération parallèle et sécurisée des rapports et de la configuration de l'officine
   useEffect(() => {
     const loadAllData = async () => {
       try {
         setCurrency(localStorage.getItem('app_currency') || 'FCFA');
-        // Récupère les stats et les infos de la pharmacie en parallèle
-        // Correction de l'URL pour correspondre à ton core/urls.py
+        
+        // apiClient injecte de lui-même l'access_token JWT et ajoute les slashs requis par Django
         const [resStats, resConfig] = await Promise.all([
-          axios.get(`${API_URL}/api/boss-dashboard/`, { withCredentials: true }),
-          axios.get(`${API_URL}/api/infos-pharmacie/`)
+          apiClient.get('/api/boss-dashboard/'),
+          apiClient.get('/api/infos-pharmacie/')
         ]);
+        
         setData(resStats.data);
         setConfig(resConfig.data);
+        if (resStats.data && resConfig.data) {
+          setTimeout(() => {
+            window.print();
+          }, 300);
+        }
+
       } catch (err) {
-        console.error("Erreur impression:", err);
+        console.error("Erreur lors de la génération réseau de l'impression financière:", err);
       } finally {
         setLoading(false);
       }
@@ -45,7 +53,8 @@ export default function FinancialReport() {
 
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center text-emerald-600 bg-white">
-      <Loader2 className="animate-spin mb-4" size={48} />
+      {/* 🌟 ACCESSIBILITÉ : Intégration préventive des attributs d'accessibilité exigés par Next.js */}
+      <Loader2 className="animate-spin mb-4" size={48}  aria-label="Génération du rapport financier imprimable" />
       <span className="font-black uppercase text-[10px] tracking-widest">Préparation du document certifié...</span>
     </div>
   );
@@ -96,7 +105,7 @@ export default function FinancialReport() {
             { label: "VOLUME VENTES", val: data?.ventes_recentes?.length || 0, icon: <ShoppingBag size={16}/> },
             { label: "PANIER MOYEN", val: convert(data?.ca_total / (data?.ventes_recentes?.length || 1)), icon: <Scale size={16}/> },
           ].map((kpi, i) => (
-            <div key={i} className="bg-slate-50 p-6 rounded-[2rem] text-center flex flex-col items-center">
+            <div key={i} className="bg-slate-50 p-6 rounded-4xl text-center flex flex-col items-center">
               <span className="text-emerald-600 mb-2">{kpi.icon}</span>
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{kpi.label}</span>
               <b className="text-xl font-black text-slate-800">{kpi.val} <small className="text-[10px] opacity-50">{currency}</small></b>
@@ -105,7 +114,7 @@ export default function FinancialReport() {
         </div>
 
         {/* 🏆 PERFORMANCE TABLE DYNAMIQUE */}
-        <div className="flex-grow">
+        <div className="grow">
           <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-3 italic">
             <span className="w-1.5 h-6 bg-emerald-600 rounded-full"></span>
             Performance des Stocks & Produits
@@ -113,7 +122,7 @@ export default function FinancialReport() {
           
           <table className="w-full text-left border-collapse overflow-hidden rounded-2xl">
             <thead>
-              <tr className="bg-slate-900 text-[10px] font-black text-white uppercase tracking-[0.1em]">
+              <tr className="bg-slate-900 text-[10px] font-black text-white uppercase tracking-widest">
                 <th className="p-5">Rang</th>
                 <th className="p-5">Médicament</th>
                 <th className="p-5">Laboratoire</th>
