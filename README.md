@@ -1,75 +1,132 @@
-💊 Pharmacie + (Online Pharmacy & Management)
+# 💊 Pharmacie+ 
 
-Plate-forme
-Une solution Django moderne et complète pour la duplication numérique d'une pharmacie physique, permettant la vente en ligne et la gestion back-office.
+Une **plateforme complète de gestion de pharmacie de ville** conçue pour les pharmaciens modernes.
 
-🎯 Aperçu
-Pharmacie + transforme la gestion complexe d'une officine en une interface web intuitive. Développée avec Django, cette application offre une expérience fluide tant pour le patient que pour le personnel de santé, automatisant le flux de travail depuis l'ordonnance jusqu'à la facture finale.
+**[🌐 Voir la Démo en Ligne](https://demo.pharmacieplus.com)** | **[📖 Documentation](https://docs.pharmacieplus.com)**
 
-Qu'est-ce que Pharmacie + ?
-C'est un ERP pharmaceutique léger qui combine une boutique en ligne pour les patients et un terminal de gestion pour les pharmaciens (POS & Stocks).
+---
 
-Qu'apporte Pharmacie + ?
+## ✨ Pourquoi Pharmacie+ ?
 
-.📦 Gestion Multi-Stocks : Suivi des quantités, alertes de péremption et réapprovisionnement.
+❌ **Avant:** Fiches papier, calculs manuels, risque d'erreurs  
+✅ **Après:** Automatisation complète, rapports en 1 clic, gestion en temps réel
 
-.📄 Traitement des Ordonnances : Système d'analyse et de validation des prescriptions uploadées.
+---
 
-.💰 Point de Vente (POS) : Interface caisse optimisée pour des ventes rapides au comptoir.
+## 🎯 Fonctionnalités
 
-.📊 Rapports Financiers : Génération de bilans de ventes et exports PDF automatisés.
+- 📦 **Gestion Multi-Stocks** - Suivi en temps réel + alertes expiration
+- 🧾 **POS Rapide** - Vente au comptoir en 30 secondes
+- 📄 **Traitement Ordonnances** - Upload/validation automatique
+- 💰 **Rapports Financiers** - Bilans PDF exportables
+- 📊 **Analytics** - Voir ce qui se vend, qui gagne le plus
+- 🔐 **Rôles d'Accès** - Admin, Caissier, Client (sécurisé)
+- 📱 **Interface Mobile-Ready** - Fonctionne sur téléphone/tablette
 
-.🔐 Contrôle d'Accès : Rôles distincts pour l'Administrateur, le Caissier et le Client.
+---
 
-🚀 Démarrage rapide
+## 🛠️ Tech Stack
 
-Prérequis
-.Python 3.10+
-.Django 4.2+
-.Pillow (pour la gestion des images produits/ordonnances)
+| Partie | Technologie |
+|--------|-----------|
+| **Backend** | Django 4.2 + DRF (API REST) |
+| **Frontend** | Next.js 16 + React 19 + Tailwind |
+| **Base de données** | PostgreSQL |
+| **Déploiement** | Docker + Kubernetes ready |
+| **Sécurité** | JWT + SSL/HTTPS |
 
-Installation
-  Cloner le dépôt :
-git clone https://github.com
+---
 
-  Installer les dépendances :
+## 🚀 Installation Rapide
+
+### Option 1: Docker (Recommandé)
+```bash
+git clone https://github.com/Godwin296/Pharmacie-Plus.git
+cd Pharmacie-Plus
+docker-compose up -d
+# Accède à http://localhost:3000
+
+Option 2: Installation Manuelle
+Backend:
+
+cd pharmacie-backend
+python -m venv venv
+source venv/bin/activate  # ou venv\Scripts\activate sur Windows
 pip install -r requirements.txt
-
-  Appliquer les migrations :
 python manage.py migrate
-
-  Lancer l'application :
 python manage.py runserver
 
-✨ Fonctionnalités clés
+Frontend:
 
-🎨 Interface Client
-.Catalogue dynamique avec filtres par catégories/laboratoires.
-.Panier d'achat persistant et historique des commandes.
-.Portail sécurisé pour l'envoi de documents médicaux (PDF/Images).
-
-📱 Module Caisse (POS)
-.Recherche instantanée de médicaments.
-.Validation en un clic des commandes passées en ligne.
-.Génération de factures formatées.
-
-🛡️ Gestion Administrative
-.Tableau de bord : Visualisation des performances quotidiennes.
-.Stocks : Gestion des fournisseurs et seuils de sécurité pour les produits critiques.
-.Rapports : Exportation de données pour la comptabilité.
-
-🔄 Workflow de Commande
-.Le client dépose son ordonnance ou choisit ses produits.
-.La caisse valide la conformité depuis son interface.
-.La commande est marquée "Payee" et le stock est décrémenté automatiquement.
-
-📖 Documentation
-.Dépannage : Solutions pour les erreurs de migrations ou de stockage média.
-.Feuille de Route : Intégration prochaine du paiement mobile et notifications SMS.
+cd pharmacie-frontend
+npm install
+npm run dev
+# Ouvre http://localhost:3000
 
 
+📸 Screenshots
+[Ajoute des images ici]
+┌─────────────────────────────────────────┐
+│  INTERFACE CLIENT (Achat en ligne)     │
+│  - Catalogue médicaments               │
+│  - Panier persistant                   │
+│  - Upload ordonnance                   │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│  INTERFACE PHARMACIEN (POS)            │
+│  - Recherche rapide                    │
+│  - Facture instantanée                 │
+│  - Gestion stock                       │
+│  - Rapports ventes                     │
+└─────────────────────────────────────────┘
+
+📊 Comparaison avec la Concurrence
+Fonctionnalité	     Pharmacie+	         Medivault	      MediSure-360
+POS Rapide	            ✅	                 ✅	              ✅
+Ordonnances	            ✅	                 ✅	              ✅
+Analytics Avancée	      ✅	                 ⚠️	               ✅
+Stack Moderne	          ✅ Django+Next	     ⚠️ Laravel	       ✅ React+Node
+Mobile Native	          🔄 En cours	        ❌	               ❌
+Open Source	            ✅	                 ✅	              ✅
+Support Professionnel	  Roadmap	             ⚠️	              ⚠️
 
 
+🗺️ Roadmap 2024-2025
+ ✅POS de base
+ ✅Gestion stocks
+ ✅Traitement ordonnances
+    App Mobile Native (React Native)
+    Paiement Intégré (Stripe, systèmes locaux)
+    SMS/Email Notifications
+    Multi-succursales
+    Intégration Données Gouvernementales
+    IA pour Prédiction Stocks
 
-  
 
+🤝 Comment Contribuer
+Nous accueillons les contributions!
+
+bash
+git clone https://github.com/Godwin296/Pharmacie-Plus.git
+git checkout -b feature/ma-fonctionnalite
+# ... fais tes changements
+git push origin feature/ma-fonctionnalite
+# Crée une Pull Request
+Lire CONTRIBUTING.md pour les détails.
+
+
+📜 License
+MIT License - Libre d'usage commercial et personnel. Voir LICENSE
+
+
+💬 Support & Contact
+Email: godwin@pharmacieplus.com
+GitHub Issues: Signale un bug
+Discussions: Pose une question
+
+
+📈 Statistiques
+![Stars](https://img.shields.io/badge/stars-0-blue) ![Forks](https://img.shields.io/badge/forks-0-green) ![License](https://img.shields.io/badge/license-MIT-bleu) ![Python](https://img.shields.io/badge/Python-3.10+-green)
+
+Fait avec ❤️ par Godwin296
