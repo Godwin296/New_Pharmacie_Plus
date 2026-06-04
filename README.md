@@ -255,7 +255,7 @@ git push origin feature/ma-fonctionnalite
 <h2>💬 Support & Contact</h2>
 
 <ul>
-  <li><strong>Email professionnel :</strong> <a href="mailto:godwin@pharmacieplus.com">godwin@pharmacieplus.com</a></li>
+  <li><strong>Email professionnel :</strong> <a href="mailto:marcgodwinsigningdongmo@gmail.com">godwin@pharmacieplus.com</a></li>
   <li><strong>Bugs & Anomalies :</strong> <a href="https://github.com/Godwin296/Pharmacie-Plus/issues" target="_blank">Ouvrir un ticket GitHub Issues</a></li>
   <li><strong>Discussions & Questions :</strong> Rejoindre l'espace de discussion de la communauté.</li>
 </ul>
