@@ -83,6 +83,17 @@ class Produit(models.Model):
     lot = models.CharField(max_length=100, blank=True, null=True)
     seuil_alerte = models.IntegerField(default=10)
 
+    # 🔐 CORRECTION : ce champ était référencé par ItemCommandeSerializer
+    # (source='produit.ordonnance_obligatoire') mais n'existait jamais réellement sur ce modèle
+    # -> en pratique, AUCUN produit ne déclenchait jamais l'exigence d'ordonnance côté client,
+    # quel que soit le médicament. Sans ce champ, le système ne pouvait pas distinguer un
+    # antalgique en vente libre d'un antibiotique normalement soumis à prescription.
+    ordonnance_obligatoire = models.BooleanField(
+        default=False,
+        verbose_name="Ordonnance obligatoire 📋",
+        help_text="Si activé, le client devra obligatoirement charger une ordonnance valide avant de pouvoir payer ce produit."
+    )
+
     class Meta:
         # 🔐 SÉCURITÉ : Contrainte physique empêchant le stock de descendre sous 0 en cas de requêtes simultanées
         constraints = [
@@ -147,17 +158,39 @@ class Mouvement_stock(models.Model):
 
 class Commande(models.Model):
     TYPES_VENTE = [('en_ligne', 'En ligne'), ('guichet', 'Guichet')]
+
+    # 🔄 CYCLE DE VIE COMPLET D'UNE COMMANDE EN LIGNE :
+    # en_cours -> [attente_validation si ordonnance requise] -> paiement_a_verifier
+    #   -> payee_a_retirer (stock décrémenté, en attente de passage au guichet)
+    #   -> retiree (le client est passé chercher -> statut final, comptabilisé pour l'audit)
+    # ou bien -> annulee (commande jamais payée après 48h -> stock recrédité automatiquement)
+    #
+    # 🔐 IMPORTANT : une fois "payee_a_retirer" ou "retiree", une commande n'est JAMAIS annulée
+    # automatiquement par la tâche des 48h (cf. est_perimee ci-dessous) -- contrairement à l'ancien
+    # comportement où une commande payée mais pas encore récupérée physiquement risquait de se
+    # retrouver mélangée avec les commandes simplement abandonnées, ce qui aurait faussé l'audit
+    # financier (une vente réelle ne doit jamais disparaître des statistiques).
     STATUTS = [
         ("en_cours", "En cours"),
         ("attente_validation", "Attente Ordonnance"),
-        ("payee", "Payée"),
+        ("paiement_a_verifier", "Paiement à vérifier 💰"),
+        ("payee_a_retirer", "Payée - à retirer au guichet 🏥"),
+        ("retiree", "Retirée par le client ✅"),
+        ("payee", "Payée (vente directe guichet)"),
         ("annulee", "Annulée"),
-    ] 
+    ]
     # Pour les clients en ligne (smartphone) - Reste permanent
     client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name="commandes")
     
     # 🌟 NOUVEAU : Pour les clients physiques encaissés au guichet
     client_guichet = models.ForeignKey(ClientGuichet, on_delete=models.SET_NULL, null=True, blank=True, related_name="commandes")
+
+    # 🔖 RÉFÉRENCE LISIBLE ET RECHERCHABLE : générée une seule fois à la création, jamais modifiée.
+    # Format : PHC-AAAA-NNNNN (ex: PHC-2026-00042). C'est CE numéro que le client communique au
+    # support / colle comme référence, et que la caisse recherche dans son tableau de bord -- un
+    # id auto-increment brut (ex: "42") n'est ni mémorable, ni assez explicite pour être communiqué
+    # sans ambiguïté entre deux pharmacies différentes (chacune ayant ses propres id à partir de 1).
+    reference = models.CharField(max_length=20, unique=True, db_index=True, blank=True)
 
     date = models.DateTimeField(auto_now_add=True)
     payee = models.BooleanField(default=False)
@@ -165,25 +198,78 @@ class Commande(models.Model):
     
     # 🔐 SÉCURITÉ IDENTIFICATION : Vraie relation vers l'User pour tracer l'agent de caisse
     agent_validateur = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="commandes_validees")
+    # 🆕 Agent ayant constaté le retrait physique au guichet (peut être différent de agent_validateur)
+    agent_retrait = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="commandes_retirees")
     
     statut = models.CharField(max_length=50, choices=STATUTS, default="en_cours")
     ordonnance = models.FileField(upload_to='ordonnances/%Y/%m/', null=True, blank=True)
     ordonnance_valide = models.BooleanField(default=False)
     motif_refus = models.TextField(blank=True, null=True, verbose_name="Motif du refus d'ordonnance ❌")
-    date_limite = models.DateTimeField(null=True, blank=True, verbose_name="Expire le ⏳") 
+    date_limite = models.DateTimeField(null=True, blank=True, verbose_name="Expire le ⏳")
+    date_retrait = models.DateTimeField(null=True, blank=True, verbose_name="Récupérée le 📦")
+
+    # 🏥 VENTE AU GUICHET : pour les ventes physiques au comptoir, il n'y a pas d'upload
+    # numérique d'ordonnance (le client a le document physique en main devant la caissière).
+    # Ce champ trace explicitement que l'agent a confirmé avoir vu et vérifié l'ordonnance
+    # papier avant d'autoriser la vente d'un médicament qui l'exige -- protection juridique
+    # pour la pharmacie ET preuve d'audit en cas de contrôle, sans bloquer le flux par un
+    # upload qui n'a pas de sens dans ce contexte physique.
+    ordonnance_verifiee_visuellement = models.BooleanField(
+        default=False,
+        verbose_name="Ordonnance papier vérifiée visuellement par l'agent 👁️"
+    )
+
+    # 💰 PAIEMENT MANUEL : le client indique lui-même quel moyen il a utilisé et colle la
+    # référence de transaction reçue par SMS après son transfert Orange Money / MTN MoMo.
+    MOYENS_PAIEMENT = [('orange_money', 'Orange Money 🟠'), ('mtn_momo', 'MTN MoMo 🟡')]
+    moyen_paiement = models.CharField(max_length=20, choices=MOYENS_PAIEMENT, blank=True, null=True)
+    reference_paiement_client = models.CharField(
+        max_length=100, blank=True, null=True,
+        verbose_name="Référence de transaction fournie par le client"
+    )
     
     def save(self, *args, **kwargs):
         if not self.id and not self.date_limite:
             self.date_limite = timezone.now() + timedelta(hours=48)
+        if not self.reference:
+            self.reference = self._generer_reference()
         super().save(*args, **kwargs)
+
+    def _generer_reference(self):
+        """
+        Génère une référence lisible unique : PHC-2026-00042.
+        On boucle sur un compteur jusqu'à trouver un numéro réellement libre DANS CE SCHÉMA
+        de tenant (chaque pharmacie a sa propre séquence, ce qui est cohérent avec l'isolation
+        déjà en place -- pas besoin d'unicité globale inter-tenants).
+        """
+        annee = timezone.now().year
+        dernier = (
+            Commande.objects.filter(reference__startswith=f"PHC-{annee}-")
+            .order_by("-id").first()
+        )
+        if dernier and dernier.reference:
+            try:
+                dernier_numero = int(dernier.reference.split("-")[-1])
+            except (ValueError, IndexError):
+                dernier_numero = 0
+        else:
+            dernier_numero = 0
+        return f"PHC-{annee}-{dernier_numero + 1:05d}"
 
     @property
     def est_perimee(self):
-        if self.statut != "payee" and self.date_limite:
+        # 🔐 Une commande payée (sous QUELQUE forme que ce soit) ou déjà retirée n'est JAMAIS
+        # considérée comme périmée -- seules les commandes jamais payées peuvent expirer après 48h.
+        statuts_jamais_perimes = ("payee_a_retirer", "retiree", "payee")
+        if self.statut not in statuts_jamais_perimes and self.date_limite:
             return timezone.now() > self.date_limite
         return False
 
     def annuler_commande(self):
+        # 🔐 Garde-fou supplémentaire : on ne recrédite/n'annule jamais une commande déjà payée,
+        # même si cette méthode était appelée par erreur depuis ailleurs dans le code.
+        if self.statut in ("payee_a_retirer", "retiree", "payee"):
+            return
         with transaction.atomic():
             for item in self.items.all():
                 p = Produit.objects.select_for_update().get(id=item.produit.id)
@@ -197,7 +283,14 @@ class Commande(models.Model):
         return sum(item.total() for item in self.items.all())
     
     def valider(self, user_operateur=None):
-        if self.payee:
+        """
+        Finalise le paiement d'une commande EN LIGNE (passe en 'payee_a_retirer') : décrémente
+        le stock de façon sécurisée (verrou + vérification), comme pour une vente directe.
+        Appelée soit manuellement (admin/caisse vérifie la référence mobile money), soit plus
+        tard automatiquement par un futur webhook de passerelle de paiement -- la logique métier
+        reste strictement identique, seul le déclencheur changera.
+        """
+        if self.payee or self.statut in ("payee_a_retirer", "retiree", "payee"):
             raise ValidationError("Cette commande est déjà payée.")
         with transaction.atomic():
             for item in self.items.all():
@@ -209,9 +302,23 @@ class Commande(models.Model):
                 Mouvement_stock.objects.create(produit=p, quantite=item.quantite, type="sortie", auteur=user_operateur)
                 
             self.payee = True
-            self.statut = "payee"
+            self.statut = "payee_a_retirer"
             self.agent_validateur = user_operateur
             self.save()
+
+    def marquer_retiree(self, user_operateur=None):
+        """
+        🏥 La caisse constate que le client est passé récupérer sa commande au guichet.
+        Statut final pour l'audit : cette vente compte définitivement, plus jamais soumise
+        à expiration automatique.
+        """
+        if self.statut != "payee_a_retirer":
+            raise ValidationError("Seule une commande payée et en attente de retrait peut être marquée comme récupérée.")
+        self.statut = "retiree"
+        self.agent_retrait = user_operateur
+        self.date_retrait = timezone.now()
+        self.save()
+
 
 class ItemCommande(models.Model):
     commande = models.ForeignKey(Commande, related_name="items", on_delete=models.CASCADE)
@@ -258,6 +365,15 @@ class PharmacieConfig(models.Model):
     
     langue_preferee = models.CharField(max_length=5, choices=LANGUES, default='fr')
     devise_preferee = models.CharField(max_length=10, choices=DEVISES, default='FCFA')
+
+    # 💰 PAIEMENT MANUEL (en attendant l'intégration d'une vraie passerelle type Campay) :
+    # chaque pharmacie (tenant) configure ICI ses propres numéros mobile money. Le client voit
+    # ces numéros sur la page de paiement et y effectue lui-même son transfert, puis colle la
+    # référence de transaction reçue par SMS -> la caisse vérifie manuellement avant de valider.
+    numero_orange_money = models.CharField(max_length=20, blank=True, verbose_name="Numéro Orange Money 🟠")
+    nom_titulaire_orange_money = models.CharField(max_length=100, blank=True, verbose_name="Nom du titulaire (Orange Money)")
+    numero_mtn_momo = models.CharField(max_length=20, blank=True, verbose_name="Numéro MTN MoMo 🟡")
+    nom_titulaire_mtn_momo = models.CharField(max_length=100, blank=True, verbose_name="Nom du titulaire (MTN MoMo)")
 
     def __str__(self): 
         return f"Config {self.nom}"

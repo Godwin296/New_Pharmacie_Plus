@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, FileText, History, Power, X, Menu, ArrowLeft, Home, LayoutGrid } from 'lucide-react';
+import { ShoppingCart, FileText, History, Power, X, Menu, ArrowLeft, Home, LayoutGrid, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -85,6 +85,9 @@ export default function CaisseLayout({ children }: { children: React.ReactNode }
                     </Link>
                     <Link href="/caisse/ordonnances" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-600 hover:bg-emerald-50 no-underline transition-all">
                         <FileText size={20} /> Gestion Ordonnances
+                    </Link>
+                    <Link href="/caisse/paiements" onClick={() => setIsMenuOpen(false)} className={`flex items-center gap-4 p-4 rounded-2xl font-black text-xs uppercase tracking-widest no-underline transition-all ${pathname === '/caisse/paiements' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/30' : 'text-slate-600 hover:bg-emerald-50'}`}>
+                        <Wallet size={20} /> Paiements &amp; Retraits
                     </Link>
                     <Link href="/caisse/archives" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-600 hover:bg-emerald-50 no-underline transition-all">
                         <History size={20} /> Historique Ventes

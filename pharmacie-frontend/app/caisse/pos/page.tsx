@@ -10,7 +10,7 @@ import {
 // 🌟 CONFIGURATION : Importation de l'apiClient unifié (Gère le tunnel et injecte le JWT Caisse)
 import apiClient from '../../../lib/apiClient'; // Ajuste le chemin selon l'arborescence (app/caisse/pos)
 
-interface Produit { id: number; nom: string; prix: number; quantite: number; identifiant?: string; }
+interface Produit { id: number; nom: string; prix: number; quantite: number; identifiant?: string; ordonnance_obligatoire?: boolean; }
 interface ItemPanier extends Produit { qte: number; }
 
 export default function POSPage() {
@@ -21,6 +21,7 @@ export default function POSPage() {
   const [showClientModal, setShowClientModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [clientInfos, setClientInfos] = useState({ nom: "", telephone: "", email: "", region: "", ville: "", quartier: "", });
+  const [ordonnanceVerifiee, setOrdonnanceVerifiee] = useState(false);
   const [step, setStep] = useState<'cart' | 'success'>('cart');
   const [loading, setLoading] = useState(true);
   const [finalizing, setFinalizing] = useState(false);
@@ -93,14 +94,22 @@ export default function POSPage() {
 
   const total = panier.reduce((sum, item) => sum + (item.prix * item.qte), 0);
 
+  // 🔐 Liste des produits du panier exigeant une ordonnance -- utilisée à la fois pour afficher
+  // la case de confirmation et pour bloquer côté UI avant même d'appeler le backend (le backend
+  // revérifie de toute façon, c'est juste un confort UX qui évite un aller-retour réseau inutile).
+  const produitsNecessitantOrdonnance = panier.filter(item => item.ordonnance_obligatoire);
+  const ordonnanceRequise = produitsNecessitantOrdonnance.length > 0;
+
   // 🌟 ÉTAPE 2 : Encaissement de la Vente Directe Sécurisé par Jeton JWT
   const handleFinalize = async () => {
     if (panier.length === 0) return;
+    if (ordonnanceRequise && !ordonnanceVerifiee) return; // Garde-fou supplémentaire côté UI
     setFinalizing(true);
     try {
       const payload = {
         client_infos: clientInfos,
         items: panier.map(i => ({ produit_id: i.id, quantite: i.qte })),
+        ordonnance_verifiee_visuellement: ordonnanceVerifiee,
       };
     
       // apiClient injecte automatiquement l'access_token JWT exigé par le guichet Django
@@ -111,6 +120,7 @@ export default function POSPage() {
     
       setStep('success');
       setShowConfirmModal(false);
+      setOrdonnanceVerifiee(false);
       fetchProduits(); // Rafraîchir les stocks réels sur l'écran d'encaissement
       // Ouverture de la page de facture Next.js locale
       router.push(`/facture?id=${res.data.id}`);
@@ -311,6 +321,27 @@ export default function POSPage() {
                     Le montant total s'élève à <span className="text-emerald-400 font-black">{total.toLocaleString()} CFA</span>. Voulez-vous valider et imprimer le ticket ?
                   </p>
 
+                  {/* 🔐 Confirmation explicite de vérification visuelle d'ordonnance papier,
+                      affichée UNIQUEMENT si le panier contient au moins un produit qui l'exige. */}
+                  {ordonnanceRequise && (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-6 text-left">
+                      <p className="text-amber-400 text-[11px] font-bold mb-3">
+                        ⚠️ Ordonnance requise pour : {produitsNecessitantOrdonnance.map(p => p.nom).join(', ')}
+                      </p>
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={ordonnanceVerifiee}
+                          onChange={(e) => setOrdonnanceVerifiee(e.target.checked)}
+                          className="w-5 h-5 accent-emerald-500 cursor-pointer"
+                        />
+                        <span className="text-white text-[11px] font-bold">
+                          J'ai vérifié l'ordonnance papier du client 👁️
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
                     <button 
                       onClick={() => setShowConfirmModal(false)}
@@ -321,11 +352,11 @@ export default function POSPage() {
                       Retour
                     </button>
                     <button 
-                      disabled={finalizing}
+                      disabled={finalizing || (ordonnanceRequise && !ordonnanceVerifiee)}
                       onClick={handleFinalize}
                       title="Valider l'encaissement de la vente"
                       aria-label="Valider l'encaissement de la vente"
-                      className="bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 text-black font-black py-4 rounded-xl cursor-pointer border-none text-xs uppercase tracking-widest transition-all shadow-lg"
+                      className="bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:cursor-not-allowed text-black font-black py-4 rounded-xl cursor-pointer border-none text-xs uppercase tracking-widest transition-all shadow-lg"
                     >
                       {finalizing ? "Validation..." : "Confirmer"}
                     </button>

@@ -15,12 +15,18 @@ urlpatterns = [
     path("catalogue/", api.api_catalogue, name="api_catalogue"), # Résolu : Plus de doublon
     path("panier/", api.api_panier, name="api_panier"),
     path("commandes/", api.api_mes_commandes, name="api_mes_commandes"),
-    
+    path("infos-paiement/", api.api_infos_paiement, name="api_infos_paiement"),
+    path("commandes/<int:commande_id>/soumettre-paiement/", api.api_soumettre_paiement, name="api_soumettre_paiement"),
+
     # --- 🏥 OPÉRATIONS DE CAISSE ET DE VENTE (NEXT.JS) ---
     path('vente-directe/', api.api_vente_directe, name='api_vente_directe'),
     path("ordonnances/", api.api_gestion_ordonnance, name="api_liste_ordonnances"),
     path("ordonnances/<int:commande_id>/", api.api_gestion_ordonnance, name="api_action_ordonnance"),
     path("archives/", api.api_archives_caissiere, name="api_archives"),
+    path("commandes/<int:commande_id>/confirmer-paiement/", api.api_confirmer_paiement, name="api_confirmer_paiement"),
+    path("paiements-a-verifier/", api.api_paiements_a_verifier, name="api_paiements_a_verifier"),
+    path("commandes/<int:commande_id>/marquer-retiree/", api.api_marquer_retiree, name="api_marquer_retiree"),
+    path("commandes-a-retirer/", api.api_commandes_a_retirer, name="api_commandes_a_retirer"),
     
     # --- 📉 GESTION ET ADMINISTRATION STRICTE (NEXT.JS) ---
     path("boss-dashboard/", api.api_boss_dashboard, name="api_boss_dashboard"),

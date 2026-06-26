@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   TrendingUp, Loader2, Package, AlertTriangle, Users, 
   CheckCircle2, Clock, Menu, X, LogOut, ShoppingBag, Store, 
-  Home, LayoutDashboard, Database, History, Truck, BarChart3, Settings
+  Home, LayoutDashboard, Database, History, Truck, BarChart3, Settings, Wallet
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, 
@@ -19,6 +19,8 @@ import apiClient from '../../../lib/apiClient'; // Ajustez le chemin selon l'arb
 interface DashboardData {
   nb_produits: number;
   ca_total: number;
+  // 💵 Ventilation cash (guichet) vs en ligne -- voir core/api.py:api_boss_dashboard
+  ca_ventilation?: { guichet_cash: number; en_ligne: number };
   nb_produits_critiques: number;
   nb_fournisseurs: number;
   graphique_ventes: { name: string; ventes: number }[];
@@ -69,10 +71,15 @@ export default function DashboardBoss() {
   // Classes Tailwind configurées en dur pour contourner les limitations de la compilation statique
   const statsConfig = [
     { title: "Total Produits", val: data?.nb_produits || 0, unit: "", icon: <Package />, iconStyle: "bg-blue-50 text-blue-600 dark:bg-blue-900/30", tag: "Inventaire", path: "/admin/stocks" },
-    { title: "Revenu Global", val: data?.ca_total?.toLocaleString() || 0, unit: "FCFA", icon: <TrendingUp />, iconStyle: "bg-green-50 text-green-600 dark:bg-green-900/30 border-l-4 border-green-500", tag: "Finance", path: "/admin/historique" },
     { title: "Stock Faible", val: data?.nb_produits_critiques || 0, unit: "", icon: <AlertTriangle />, iconStyle: "bg-orange-50 text-orange-600 dark:bg-orange-900/30", tag: "Risques", path: "/admin/stocks" },
     { title: "Fournisseurs", val: data?.nb_fournisseurs || 0, unit: "", icon: <Users />, iconStyle: "bg-purple-50 text-purple-600 dark:bg-purple-900/30", tag: "Réseau", path: "/admin/fournisseurs" },
   ];
+
+  const caGuichet = data?.ca_ventilation?.guichet_cash || 0;
+  const caEnLigne = data?.ca_ventilation?.en_ligne || 0;
+  const caTotalVentilation = caGuichet + caEnLigne;
+  const pourcentGuichet = caTotalVentilation > 0 ? Math.round((caGuichet / caTotalVentilation) * 100) : 0;
+  const pourcentEnLigne = 100 - pourcentGuichet;
 
   if (loading) {
     return (
@@ -108,8 +115,64 @@ export default function DashboardBoss() {
         </div>
       </div>
 
+      {/* 💰 REVENU GLOBAL AVEC VENTILATION CASH (GUICHET) vs EN LIGNE */}
+      <motion.div
+        onClick={() => router.push('/admin/historique')}
+        className="bg-white dark:bg-slate-800 p-6 rounded-4xl shadow-sm border border-gray-100 dark:border-slate-700 border-l-4 border-l-green-500 cursor-pointer transition-transform hover:scale-[1.005]"
+      >
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl bg-green-50 text-green-600 dark:bg-green-900/30 shrink-0">
+              <TrendingUp />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Finance</span>
+              <h6 className="text-gray-400 dark:text-slate-400 text-sm font-semibold">Revenu Global</h6>
+              <h3 className="text-3xl font-bold mt-1 text-green-600">
+                {data?.ca_total?.toLocaleString() || 0} <span className="text-xs font-medium">FCFA</span>
+              </h3>
+            </div>
+          </div>
+
+          {/* 💵 Ventilation : ce total mélange du cash physique (en main des caissières) et de
+              l'argent déjà transféré électroniquement -- les deux comptent pour l'activité
+              réelle, mais ils ne sont PAS disponibles de la même façon pour l'admin. */}
+          <div className="flex gap-4 md:gap-6 md:border-l md:border-slate-100 dark:md:border-slate-700 md:pl-6">
+            <div className="flex-1 md:flex-none">
+              <div className="flex items-center gap-1.5 text-purple-500 mb-1">
+                <Store size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Cash Guichet</span>
+              </div>
+              <p className="font-bold text-slate-800 dark:text-white">
+                {caGuichet.toLocaleString()} <span className="text-[10px] text-slate-400">FCFA</span>
+              </p>
+              <p className="text-[10px] text-slate-400 font-medium">{pourcentGuichet}% du total</p>
+            </div>
+            <div className="flex-1 md:flex-none">
+              <div className="flex items-center gap-1.5 text-blue-500 mb-1">
+                <ShoppingBag size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">En ligne</span>
+              </div>
+              <p className="font-bold text-slate-800 dark:text-white">
+                {caEnLigne.toLocaleString()} <span className="text-[10px] text-slate-400">FCFA</span>
+              </p>
+              <p className="text-[10px] text-slate-400 font-medium">{pourcentEnLigne}% du total</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Barre de répartition visuelle */}
+        {caTotalVentilation > 0 && (
+          <div className="mt-5 h-2 w-full rounded-full overflow-hidden flex bg-slate-100 dark:bg-slate-700">
+            <div className="bg-purple-500 h-full" style={{ width: `${pourcentGuichet}%` }} />
+            <div className="bg-blue-500 h-full" style={{ width: `${pourcentEnLigne}%` }} />
+          </div>
+        )}
+        <p className="text-[10px] text-slate-400 italic mt-3 flex items-center gap-1.5">
+          <Wallet size={12} /> Le cash guichet représente l'argent physique actuellement entre les mains de vos caissières, pas encore déposé.
+        </p>
+      </motion.div>
+
       {/* 🚀 STATS CARDS SÉCURISÉES */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {statsConfig.map((item, i) => (
           <div key={i} onClick={() => router.push(item.path)} className="bg-white dark:bg-slate-800 p-6 rounded-4xl shadow-sm border border-gray-100 dark:border-slate-700 cursor-pointer transition-transform hover:scale-[1.01]">
             <div className="flex justify-between items-start mb-4">
@@ -117,7 +180,7 @@ export default function DashboardBoss() {
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{item.tag}</span>
             </div>
             <h6 className="text-gray-400 dark:text-slate-400 text-sm font-semibold">{item.title}</h6>
-            <h3 className={`text-3xl font-bold mt-1 ${item.title === 'Revenu Global' ? 'text-green-600' : 'text-slate-800 dark:text-white'}`}>
+            <h3 className="text-3xl font-bold mt-1 text-slate-800 dark:text-white">
               {item.val} <span className="text-xs font-medium">{item.unit}</span>
             </h3>
           </div>

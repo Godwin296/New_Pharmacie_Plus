@@ -1,5 +1,5 @@
 import uuid
-from rest_framework.decorators import api_view, permission_classes, parser_classes, authentication_classes
+from rest_framework.decorators import api_view, permission_classes, parser_classes, authentication_classes, throttle_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
@@ -19,9 +19,39 @@ from django.utils import timezone
 
 from .models import Produit, Commande, ItemCommande, Client, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock
 from .serializers import (
-    ProduitSerializer, CommandeSerializer, ClientRegisterSerializer, 
+    ProduitSerializer, CommandeSerializer, CommandeClientSerializer, ClientRegisterSerializer, 
     PharmacieConfigSerializer, FournisseurSerializer
 )
+from .validators import valider_et_desinfecter_ordonnance
+from .throttles import LoginRateThrottle, SoumettrePaiementRateThrottle
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+
+
+def _notifier_caisse(tenant_schema_name, type_event, **payload):
+    """
+    🔴 Diffuse un événement temps réel à TOUS les écrans de caisse connectés pour CE tenant
+    précis (jamais aux autres pharmacies). Utilisable depuis du code Django synchrone classique
+    (les vues DRF ne sont pas async) grâce à async_to_sync.
+    """
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return  # Pas de channel layer configuré (ne devrait pas arriver, mais on ne casse jamais l'action métier pour ça)
+    async_to_sync(channel_layer.group_send)(
+        f"caisse_{tenant_schema_name}",
+        {"type": type_event, **payload},
+    )
+
+
+def _notifier_client(commande_id, **payload):
+    """🔴 Diffuse un événement temps réel au client qui suit SA commande précise."""
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    async_to_sync(channel_layer.group_send)(
+        f"commande_{commande_id}",
+        {"type": "statut_mis_a_jour", **payload},
+    )
 
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
@@ -66,11 +96,37 @@ def api_update_config(request):
         config.langue_preferee = request.data.get('langue_preferee', config.langue_preferee)
         config.devise_preferee = request.data.get('devise_preferee', config.devise_preferee)
 
+        # 💰 Coordonnées de paiement mobile money propres à CETTE pharmacie (tenant)
+        config.numero_orange_money = request.data.get('numero_orange_money', config.numero_orange_money)
+        config.nom_titulaire_orange_money = request.data.get('nom_titulaire_orange_money', config.nom_titulaire_orange_money)
+        config.numero_mtn_momo = request.data.get('numero_mtn_momo', config.numero_mtn_momo)
+        config.nom_titulaire_mtn_momo = request.data.get('nom_titulaire_mtn_momo', config.nom_titulaire_mtn_momo)
+
         config.save()
         return Response({"message": "Paramètres mis à jour avec succès !"}, status=200)
     except Exception as e:
         # Parfait pour le développement : vous voyez exactement pourquoi ça plante
         return Response({"error": str(e)}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_infos_paiement(request):
+    """
+    💰 Expose UNIQUEMENT les coordonnées de paiement mobile money de la pharmacie courante
+    (jamais le PharmacieConfig complet, qui peut contenir d'autres informations internes).
+    Accessible à tout utilisateur connecté (client comme staff) -- nécessaire pour afficher
+    les instructions de paiement sur la page panier.
+    """
+    config = PharmacieConfig.objects.first()
+    if not config:
+        return Response({"error": "Configuration de paiement non disponible pour cette pharmacie."}, status=404)
+    return Response({
+        "numero_orange_money": config.numero_orange_money,
+        "nom_titulaire_orange_money": config.nom_titulaire_orange_money,
+        "numero_mtn_momo": config.numero_mtn_momo,
+        "nom_titulaire_mtn_momo": config.nom_titulaire_mtn_momo,
+    })
 
 # --- 🛂 SYSTÈME DE SÉCURITÉ (Permissions personnalisées) ---
 def check_role(user, role_requested):
@@ -100,6 +156,7 @@ def api_register(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([LoginRateThrottle])
 def api_login(request):
     """Connexion Next.js avec génération de jetons JWT 🎭"""
     u_name = request.data.get('username')
@@ -182,15 +239,26 @@ def api_panier(request):
     if facture_id:
         if request.user.is_staff:
             commande_detail = get_object_or_404(Commande, id=facture_id)
+            # Le staff voit le serializer complet (avec le nom de l'agent validateur, pour l'audit)
+            return Response(CommandeSerializer(commande_detail).data)
         else:
             commande_detail = get_object_or_404(Commande, id=facture_id, client=client_profile)
-        
-        # Ce return s'exécute UNIQUEMENT si facture_id est présent
-        return Response(CommandeSerializer(commande_detail).data)
+            # 🔐 Le client ne voit jamais quel agent a traité sa commande
+            return Response(CommandeClientSerializer(commande_detail).data)
 
     # 3. CAS B : Gestion du Panier Courant (Uniquement pour les clients connectés)
-    # Récupération ou création sécurisée du panier en cours
-    commande, created = Commande.objects.get_or_create(client=client_profile, payee=False)
+    # 🔐 Le "panier en cours" est une commande non encore soumise en paiement. Une fois que le
+    # client a cliqué "Payer" (statut paiement_a_verifier) ou que la caisse a confirmé
+    # (payee_a_retirer/retiree), ce n'est plus un panier modifiable -> on en ouvre un nouveau.
+    STATUTS_PANIER_MODIFIABLE = ("en_cours", "attente_validation")
+    commande = (
+        Commande.objects.filter(client=client_profile, statut__in=STATUTS_PANIER_MODIFIABLE)
+        .order_by("-date").first()
+    )
+    created = False
+    if commande is None:
+        commande = Commande.objects.create(client=client_profile, statut="en_cours")
+        created = True
     
     if not created and getattr(commande, 'est_perimee', False):
         commande.annuler_commande()
@@ -222,7 +290,157 @@ def api_panier(request):
         item.refresh_from_db()
         
     # Renvoie le panier courant mis à jour si aucun paramètre ?id n'a été fourni
-    return Response(CommandeSerializer(commande).data)
+    # 🔐 On arrive ici uniquement côté client (le staff est bloqué en ligne 177) -> serializer public
+    return Response(CommandeClientSerializer(commande).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@throttle_classes([SoumettrePaiementRateThrottle])
+def api_soumettre_paiement(request, commande_id):
+    """
+    💰 Le client indique avoir effectué son transfert Orange Money / MTN MoMo et fournit la
+    référence de transaction reçue par SMS. La commande passe en "paiement_a_verifier" : le
+    STOCK N'EST PAS ENCORE DÉCRÉMENTÉ à ce stade (seule la confirmation par la caisse via
+    api_confirmer_paiement déclenche réellement Commande.valider()) -- on ne fait jamais
+    confiance à une simple déclaration du client pour engager le stock réel.
+    """
+    if request.user.is_staff:
+        return Response({"error": "Action réservée aux clients"}, status=403)
+
+    client_profile = get_object_or_404(Client, user=request.user)
+    commande = get_object_or_404(Commande, id=commande_id, client=client_profile)
+
+    if commande.statut not in ("en_cours",):
+        return Response({"error": "Cette commande ne peut pas être soumise au paiement dans son état actuel."}, status=409)
+
+    # Une ordonnance est exigée et n'a pas encore été validée -> on ne laisse pas passer au paiement
+    if commande.items.filter(produit__ordonnance_obligatoire=True).exists() and not commande.ordonnance_valide:
+        return Response({"error": "Une ordonnance valide est requise avant de pouvoir payer cette commande."}, status=409)
+
+    moyen = request.data.get('moyen_paiement')
+    reference_client = request.data.get('reference_paiement', '').strip()
+
+    if moyen not in dict(Commande.MOYENS_PAIEMENT):
+        return Response({"error": "Moyen de paiement invalide."}, status=400)
+    if not reference_client:
+        return Response({"error": "Merci de renseigner la référence de transaction reçue par SMS."}, status=400)
+
+    commande.moyen_paiement = moyen
+    commande.reference_paiement_client = reference_client
+    commande.statut = "paiement_a_verifier"
+    commande.save()
+
+    # 🔴 TEMPS RÉEL : la caisse voit immédiatement apparaître cette demande de vérification
+    _notifier_caisse(request.tenant.schema_name, "nouvelle_demande_paiement",
+                      commande=CommandeSerializer(commande).data)
+
+    return Response({
+        "message": "Merci ! Votre paiement est en cours de vérification par la pharmacie.",
+        "reference": commande.reference,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_confirmer_paiement(request, commande_id):
+    """
+    🏥 La caisse (ou l'admin du tenant) a vérifié manuellement -- dans son application Orange
+    Money / MTN MoMo -- que le transfert correspondant à reference_paiement_client est bien
+    arrivé, et confirme. C'EST SEULEMENT À CE MOMENT que le stock est réellement décrémenté
+    (via Commande.valider(), qui contient déjà toutes les protections anti-concurrence et
+    anti-survente testées précédemment).
+    """
+    if not request.user.is_staff:
+        return Response({"error": "Action réservée au personnel de la pharmacie"}, status=403)
+
+    with transaction.atomic():
+        commande = get_object_or_404(Commande.objects.select_for_update(), id=commande_id)
+
+        if commande.statut != "paiement_a_verifier":
+            return Response({"error": "Cette commande n'est pas en attente de vérification de paiement."}, status=409)
+
+        try:
+            commande.valider(user_operateur=request.user)
+        except ValidationError as e:
+            return Response({"error": str(e)}, status=400)
+
+    # 🔴 TEMPS RÉEL : la caisse (autres guichets) et le client sont notifiés du paiement confirmé
+    _notifier_caisse(request.tenant.schema_name, "ordonnance_traitee",
+                      commande_id=commande.id, action="paiement_confirme")
+    _notifier_client(commande.id, statut=commande.statut, ordonnance_valide=commande.ordonnance_valide,
+                      motif_refus=None)
+
+    return Response({"message": f"Paiement confirmé. Commande {commande.reference} prête pour retrait au guichet. ✅"})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_paiements_a_verifier(request):
+    """
+    💰 Liste des commandes dont le client a soumis une référence de transaction mobile money,
+    en attente de vérification manuelle par la caisse (cf. api_confirmer_paiement). On ne peut
+    pas réutiliser api_archives_caissiere ici : son filtre (payee=True OR ordonnance_valide=True)
+    ne couvre pas le cas paiement_a_verifier (payee=False à ce stade -- le stock n'est décrémenté
+    qu'après confirmation), ce qui aurait laissé ces commandes invisibles pour la caisse.
+    """
+    if not request.user.is_staff:
+        return Response({"error": "Action réservée au personnel de la pharmacie"}, status=403)
+
+    commandes = Commande.objects.filter(statut="paiement_a_verifier").order_by('-date')
+    return Response(CommandeSerializer(commandes, many=True).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_commandes_a_retirer(request):
+    """
+    🏥 Liste des commandes payées en attente de retrait physique au guichet, pour CE tenant.
+    Supporte la recherche par référence (?q=PHC-2026-00042) ou par numéro de téléphone client
+    -- exactement le scénario où le client envoie sa référence et la caisse la recherche
+    rapidement parmi toutes les commandes en attente.
+    """
+    if not request.user.is_staff:
+        return Response({"error": "Action réservée au personnel de la pharmacie"}, status=403)
+
+    commandes = Commande.objects.filter(statut="payee_a_retirer").order_by('-date')
+
+    recherche = request.GET.get('q', '').strip()
+    if recherche:
+        commandes = commandes.filter(
+            Q(reference__icontains=recherche) |
+            Q(client__telephone__icontains=recherche) |
+            Q(client__nom__icontains=recherche) |
+            Q(client_guichet__telephone__icontains=recherche) |
+            Q(client_guichet__nom__icontains=recherche)
+        )
+
+    return Response(CommandeSerializer(commandes, many=True).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_marquer_retiree(request, commande_id):
+    """
+    🏥 La caisse constate que le client est physiquement venu récupérer sa commande payée.
+    Statut final pour l'audit financier -- cette vente ne sera plus jamais soumise à
+    expiration automatique (cf. Commande.marquer_retiree() et est_perimee).
+    """
+    if not request.user.is_staff:
+        return Response({"error": "Action réservée au personnel de la pharmacie"}, status=403)
+
+    with transaction.atomic():
+        commande = get_object_or_404(Commande.objects.select_for_update(), id=commande_id)
+        try:
+            commande.marquer_retiree(user_operateur=request.user)
+        except ValidationError as e:
+            return Response({"error": str(e)}, status=409)
+
+    _notifier_caisse(request.tenant.schema_name, "ordonnance_traitee",
+                      commande_id=commande.id, action="retrait_confirme")
+
+    return Response({"message": f"Commande {commande.reference} marquée comme retirée. ✅"})
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -230,7 +448,8 @@ def api_mes_commandes(request):
     """Récupère l'historique des commandes du client connecté"""
     client_profile = get_object_or_404(Client, user=request.user)
     commandes = Commande.objects.filter(client=client_profile).order_by('-date')
-    serializer = CommandeSerializer(commandes, many=True)
+    # 🔐 Le client ne doit jamais voir quel agent a validé/refusé ses ordonnances
+    serializer = CommandeClientSerializer(commandes, many=True)
     return Response(serializer.data)
 
 # --- 📋 GESTION DES ORDONNANCES SÉCURISÉE ---
@@ -245,14 +464,33 @@ def api_gestion_ordonnance(request, commande_id=None):
         if request.method == 'POST' and commande_id:
             commande = get_object_or_404(Commande, id=commande_id, client__user=request.user)
             if 'fichier_ordonnance' in request.FILES:
-                f = request.FILES['fichier_ordonnance']
-                ext = f.name.split('.')[-1].lower()
-                if ext not in ['jpg', 'jpeg', 'png', 'pdf']:
-                    return Response({"error": "Seuls les formats JPG, PNG et PDF sont acceptés"}, status=400)
-                
-                commande.ordonnance = f
+                fichier_brut = request.FILES['fichier_ordonnance']
+
+                # 🔐 SÉCURITÉ : validation de taille + détection du type réel par contenu binaire
+                # (pas par extension de nom, falsifiable) + désinfection complète par reconstruction
+                # du fichier (élimine tout payload caché par stéganographie ou JS embarqué dans un PDF).
+                try:
+                    fichier_propre = valider_et_desinfecter_ordonnance(fichier_brut)
+                except ValidationError as e:
+                    message = e.message if hasattr(e, 'message') else str(e)
+                    return Response({"error": message}, status=400)
+
+                # Si une ordonnance précédente existait déjà (ex: réupload après rejet), on la
+                # supprime physiquement du disque avant d'enregistrer la nouvelle.
+                if commande.ordonnance:
+                    commande.ordonnance.delete(save=False)
+
+                commande.ordonnance = fichier_propre
                 commande.statut = "attente_validation"
                 commande.save()
+
+                # 🔴 TEMPS RÉEL : notifie immédiatement tous les écrans de caisse connectés
+                # de CETTE pharmacie qu'une nouvelle ordonnance attend leur traitement.
+                _notifier_caisse(
+                    request.tenant.schema_name, "nouvelle_ordonnance",
+                    commande=CommandeSerializer(commande).data,
+                )
+
                 return Response({"message": "Ordonnance reçue. En attente de vérification. ⏳"})
         return Response({"error": "Action non autorisée pour un client"}, status=403)
 
@@ -263,24 +501,63 @@ def api_gestion_ordonnance(request, commande_id=None):
             return Response(CommandeSerializer(attentes, many=True).data)
         
         if request.method == 'POST' and commande_id:
-            commande = get_object_or_404(Commande, id=commande_id)
             action = request.data.get('action')
-            
-            if action == 'approuver':
-                commande.ordonnance_valide = True
-                commande.statut = "en_cours"
-                # Sécurité : On utilise l'utilisateur authentifié par le JWT, pas une chaîne texte du front
-                commande.agent_validateur = request.user.username 
-                commande.save()
-                return Response({"message": "Approuvée ✅"})
-            
-            elif action == 'rejeter':
-                commande.motif_refus = request.data.get('raison', 'Document invalide')
-                if commande.ordonnance:
-                    commande.ordonnance.delete(save=False)
-                commande.statut = "en_cours" # Permet au client de réuploader
-                commande.save()
-                return Response({"message": "Rejetée ❌"})
+
+            # 🔐 CONCURRENCE : deux agents de caisse pourraient cliquer "approuver"/"rejeter"
+            # sur la même ordonnance à quelques millisecondes d'écart. On verrouille la ligne
+            # en base (SELECT ... FOR UPDATE) pour la durée de la transaction : la deuxième
+            # requête attendra que la première soit terminée, puis verra le nouvel état
+            # ("en_cours" au lieu de "attente_validation") et sera proprement rejetée au lieu
+            # d'écraser le travail du premier agent ou de traiter deux fois la même ordonnance.
+            with transaction.atomic():
+                commande = get_object_or_404(
+                    Commande.objects.select_for_update(), id=commande_id
+                )
+
+                if commande.statut != "attente_validation":
+                    return Response(
+                        {"error": "Cette ordonnance a déjà été traitée par un autre agent."},
+                        status=409,  # 409 Conflict : un autre agent est arrivé en premier
+                    )
+
+                if action == 'approuver':
+                    commande.ordonnance_valide = True
+                    commande.statut = "en_cours"
+                    # Sécurité : On utilise l'utilisateur authentifié par le JWT (objet User), pas une chaîne texte
+                    commande.agent_validateur = request.user
+                    commande.save()
+
+                    # 🔴 TEMPS RÉEL : les autres écrans de caisse retirent cette ordonnance de
+                    # leur file d'attente sans avoir à rafraîchir la page (ta question initiale).
+                    _notifier_caisse(request.tenant.schema_name, "ordonnance_traitee",
+                                      commande_id=commande.id, action="approuver")
+                    # Le client voit son bouton "Payer" apparaître en direct.
+                    _notifier_client(commande.id, statut=commande.statut,
+                                      ordonnance_valide=True, motif_refus=None)
+
+                    return Response({"message": "Approuvée ✅"})
+
+                elif action == 'rejeter':
+                    commande.motif_refus = request.data.get('raison', 'Document invalide')
+                    if commande.ordonnance:
+                        commande.ordonnance.delete(save=False)
+                    # 🔐 Traçabilité interne : on garde quand même l'agent qui a refusé en base
+                    # (utile pour un futur audit interne), mais ce champ n'est JAMAIS exposé au
+                    # client dans le CommandeSerializer — il ne doit pas savoir qui a refusé.
+                    commande.agent_validateur = request.user
+                    commande.statut = "en_cours"  # Permet au client de réuploader
+                    commande.save()
+
+                    # 🔴 TEMPS RÉEL : disparition immédiate de la file d'attente des autres caisses
+                    _notifier_caisse(request.tenant.schema_name, "ordonnance_traitee",
+                                      commande_id=commande.id, action="rejeter")
+                    # Le client voit le motif de refus apparaître en direct (jamais le nom de l'agent)
+                    _notifier_client(commande.id, statut=commande.statut,
+                                      ordonnance_valide=False, motif_refus=commande.motif_refus)
+
+                    return Response({"message": "Rejetée ❌"})
+
+                return Response({"error": "Action invalide"}, status=400)
 
     return Response({"error": "Requête invalide"}, status=400)
 
@@ -299,6 +576,21 @@ def api_boss_dashboard(request):
     
         # 💰 🔐 RECALCUL SÉCURISÉ : On utilise le prix figé de la transaction (prix_facture)
         ca_total = Commande.objects.filter(payee=True).aggregate(
+            total=Sum(F('items__quantite') * F('items__prix_facture'))
+        )['total'] or 0
+
+        # 💵 VENTILATION CASH (GUICHET) vs EN LIGNE : le total ci-dessus représente bien
+        # l'activité réelle de la pharmacie, mais un admin qui ne voit QUE ce total pourrait
+        # croire que cette somme est intégralement disponible sur son compte mobile money --
+        # alors qu'une partie a été encaissée en cash physique par les caissières au comptoir
+        # et n'a pas encore été déposée/remise. On détaille donc explicitement les deux canaux,
+        # pour que l'admin sache combien représente du cash actuellement entre les mains de
+        # son personnel de caisse (tous guichets confondus pour cette pharmacie) par opposition
+        # à de l'argent déjà transféré électroniquement par les clients en ligne.
+        ca_guichet_cash = Commande.objects.filter(payee=True, type_vente='guichet').aggregate(
+            total=Sum(F('items__quantite') * F('items__prix_facture'))
+        )['total'] or 0
+        ca_en_ligne = Commande.objects.filter(payee=True, type_vente='en_ligne').aggregate(
             total=Sum(F('items__quantite') * F('items__prix_facture'))
         )['total'] or 0
 
@@ -346,6 +638,11 @@ def api_boss_dashboard(request):
         return Response({
             "nb_produits": produits.count(),
             "ca_total": ca_total,
+            # 💵 Ventilation explicite pour l'audit financier (cf. commentaire ci-dessus)
+            "ca_ventilation": {
+                "guichet_cash": ca_guichet_cash,
+                "en_ligne": ca_en_ligne,
+            },
             "nb_produits_critiques": stock_faible.count(),
             "nb_fournisseurs": Fournisseur.objects.count(),
             "graphique_ventes": graphique_data,
@@ -492,32 +789,58 @@ def api_vente_directe(request):
         
     data = request.data
     items_data = data.get('items', [])
-    client_infos = data.get('client_infos', {})
+    client_infos = data.get('client_infos', {}) or {}
+    ordonnance_verifiee = bool(data.get('ordonnance_verifiee_visuellement', False))
     
     if not items_data:
         return Response({"error": "Le panier est vide"}, status=400)
 
     try:
         with transaction.atomic():
-            # 1. 🌟 Création systématique et propre dans la table dédiée ClientGuichet
-            # Pas de création de User Django, pas de pollution de la table Client mobile
-            client_pos = ClientGuichet.objects.create(
-                nom=client_infos.get('nom', 'Client Passage'),
-                telephone=client_infos.get('telephone', ''),
-                email=client_infos.get('email', ''),
-                region=client_infos.get('region', ''),
-                ville=client_infos.get('ville', ''),
-                quartier=client_infos.get('quartier', '')
-            )
+            # 🔐 Vérification AVANT toute écriture en base : si au moins un produit du panier
+            # exige une ordonnance, la caissière doit avoir explicitement confirmé l'avoir
+            # vérifiée physiquement. On vérifie ça en premier pour ne rien créer (ni
+            # ClientGuichet, ni Commande) si la vente doit être bloquée.
+            produit_ids = [it['produit_id'] for it in items_data]
+            produits_necessitant_ordonnance = Produit.objects.filter(
+                id__in=produit_ids, ordonnance_obligatoire=True
+            ).values_list('nom', flat=True)
 
-            # 2. Création de la commande liée au ClientGuichet
+            if produits_necessitant_ordonnance and not ordonnance_verifiee:
+                noms = ", ".join(produits_necessitant_ordonnance)
+                return Response({
+                    "error": f"Ordonnance requise pour : {noms}. "
+                             f"Merci de confirmer l'avoir vérifiée avant de valider la vente."
+                }, status=400)
+
+            # 1. 🌟 Coordonnées client OPTIONNELLES : une vente rapide au comptoir n'a pas
+            # forcément besoin d'identifier le client (ex: un achat ponctuel de paracétamol).
+            # On ne crée un ClientGuichet QUE si au moins une coordonnée a été renseignée --
+            # sinon on remplit la base de centaines de "Client Passage" vides et sans valeur
+            # statistique ou de contact réelle.
+            a_des_coordonnees = any([
+                client_infos.get('nom'), client_infos.get('telephone'), client_infos.get('email')
+            ])
+            client_pos = None
+            if a_des_coordonnees:
+                client_pos = ClientGuichet.objects.create(
+                    nom=client_infos.get('nom', 'Client Passage'),
+                    telephone=client_infos.get('telephone', ''),
+                    email=client_infos.get('email', ''),
+                    region=client_infos.get('region', ''),
+                    ville=client_infos.get('ville', ''),
+                    quartier=client_infos.get('quartier', '')
+                )
+
+            # 2. Création de la commande liée au ClientGuichet (ou totalement anonyme)
             commande = Commande.objects.create(
                 client=None, # Laissé vide car c'est une vente physique comptoir
-                client_guichet=client_pos, # 🌟 Lié à notre nouvelle table
+                client_guichet=client_pos, # 🌟 None si vente anonyme sans coordonnées
                 type_vente='guichet',
                 payee=True,
                 statut='payee',
-                agent_validateur=request.user
+                agent_validateur=request.user,
+                ordonnance_verifiee_visuellement=ordonnance_verifiee,
             )
 
             # 3. Décrémentation et figeage des prix

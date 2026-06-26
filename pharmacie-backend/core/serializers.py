@@ -25,6 +25,12 @@ class ItemCommandeSerializer(serializers.ModelSerializer):
 
 
 class CommandeSerializer(serializers.ModelSerializer):
+    """
+    🔐 Serializer COMPLET, réservé au personnel (caisse/admin).
+    Expose agent_validateur_nom à des fins d'audit interne (traçabilité : quel agent a traité
+    quelle commande). NE JAMAIS utiliser ce serializer pour répondre à une requête initiée
+    par un client final -> utiliser CommandeClientSerializer à la place.
+    """
     qr_code = serializers.SerializerMethodField()
     items = ItemCommandeSerializer(many=True, read_only=True)
     total_general = serializers.SerializerMethodField() 
@@ -103,8 +109,19 @@ class CommandeSerializer(serializers.ModelSerializer):
         except Exception as e:
             print(f"❌ Erreur QR détaillé pour commande {obj.id}: {e}")
             return None
-        
-        
+
+
+class CommandeClientSerializer(CommandeSerializer):
+    """
+    🔐 Serializer PUBLIC, destiné aux réponses envoyées au client final (mobile/web client).
+    Hérite de CommandeSerializer pour réutiliser toute la logique (qr_code, total, items...)
+    mais EXCLUT explicitement agent_validateur_nom : le client ne doit jamais savoir quel agent
+    de la pharmacie a validé ou refusé son ordonnance — seul le motif de refus lui est montré.
+    """
+    class Meta(CommandeSerializer.Meta):
+        fields = [f for f in CommandeSerializer.Meta.fields if f != 'agent_validateur_nom']
+
+
 class ProduitSerializer(serializers.ModelSerializer):
     statut_stock_label = serializers.SerializerMethodField()
     jours_restants = serializers.ReadOnlyField()

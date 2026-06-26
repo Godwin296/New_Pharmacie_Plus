@@ -1,20 +1,24 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShieldCheck, Eye, CheckCircle2, XCircle, 
   Phone, Calendar, Hash, FileWarning, Search,
-  MessageSquare, Loader2
+  MessageSquare, Loader2, Wifi, WifiOff
 } from 'lucide-react';
 
 // 🌟 CONFIGURATION : Importation de l'apiClient unifié (Gère le tunnel et le JWT pour la caisse)
 import apiClient from '../../../lib/apiClient'; // Ajuste le chemin selon l'arborescence (app/caisse/ordonnances)
+import { ReconnectingSocket } from '../../../lib/wsClient';
 
 export default function OrdonnancesPage() {
   const [attentes, setAttentes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [rejetId, setRejetId] = useState<number | null>(null);
   const [motifRefus, setMotifRefus] = useState("");
+  const [enLigne, setEnLigne] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
+  const socketRef = useRef<ReconnectingSocket | null>(null);
 
   // 🌟 ÉTAPE 1 : Chargement des ordonnances en attente via apiClient
   const fetchAttentes = async () => {
@@ -31,7 +35,49 @@ export default function OrdonnancesPage() {
 
   useEffect(() => {
     fetchAttentes();
+
+    // 🔴 TEMPS RÉEL : connexion WebSocket au canal "caisse" de la pharmacie courante.
+    // Le backend route automatiquement vers le bon tenant via le domaine de la requête.
+    const socket = new ReconnectingSocket('/ws/ordonnances/');
+    socketRef.current = socket;
+
+    socket.onOpen(() => setEnLigne(true));
+    socket.onClose(() => setEnLigne(false));
+
+    socket.onMessage((data) => {
+      if (data.type === 'nouvelle_ordonnance') {
+        // Une nouvelle ordonnance vient d'arriver -> on l'ajoute en tête de liste, sans recharger toute la page
+        setAttentes((prev) => {
+          // Évite les doublons si l'événement arrive alors qu'un fetch manuel vient juste de tourner
+          if (prev.some((c) => c.id === data.commande.id)) return prev;
+          return [data.commande, ...prev];
+        });
+        setNotification("📋 Nouvelle ordonnance reçue");
+      }
+
+      if (data.type === 'ordonnance_traitee') {
+        // 🔴 Ta question initiale : une AUTRE caisse a traité cette ordonnance -> elle disparaît
+        // immédiatement de cet écran, sans qu'on ait besoin de cliquer "rafraîchir".
+        setAttentes((prev) => prev.filter((c) => c.id !== data.commande_id));
+        setNotification(
+          data.action === 'approuver'
+            ? "✅ Ordonnance traitée par un autre agent"
+            : "❌ Ordonnance refusée par un autre agent"
+        );
+      }
+    });
+
+    socket.connect();
+
+    return () => socket.disconnect();
   }, []);
+
+  // Notification discrète auto-masquée après 3 secondes
+  useEffect(() => {
+    if (!notification) return;
+    const timer = setTimeout(() => setNotification(null), 3000);
+    return () => clearTimeout(timer);
+  }, [notification]);
 
   // 🌟 ÉTAPE 2 : Actions de Validation ou de Rejet sécurisées par JWT
   const handleDecision = async (commandeId: number, action: 'approuver' | 'rejeter') => {
@@ -44,10 +90,21 @@ export default function OrdonnancesPage() {
       
       setRejetId(null);
       setMotifRefus("");
-      fetchAttentes(); // Rafraîchir la liste de la caisse immédiatement après action
+      // 🔴 Plus besoin de fetchAttentes() ici : le backend a déjà diffusé un événement
+      // ordonnance_traitee qui retire cette carte de la liste localement (cf. socket.onMessage).
+      // On retire quand même immédiatement côté local pour une réactivité parfaite, sans
+      // attendre l'aller-retour réseau du WebSocket (qui arrivera dans la même fraction de seconde).
+      setAttentes((prev) => prev.filter((c) => c.id !== commandeId));
     } catch (err: any) {
-      console.error("Erreur décision ordonnance:", err);
-      alert(err.response?.data?.error || "Accès refusé. Vérifiez que vous êtes connecté avec un compte Caisse.");
+      if (err.response?.status === 409) {
+        // 🔐 Conflit : un autre agent a traité cette ordonnance entre temps (verrou côté serveur).
+        // On retire la carte localement plutôt que d'afficher une alerte bloquante.
+        setAttentes((prev) => prev.filter((c) => c.id !== commandeId));
+        setNotification("⚠️ Cette ordonnance vient d'être traitée par un collègue");
+      } else {
+        console.error("Erreur décision ordonnance:", err);
+        alert(err.response?.data?.error || "Accès refusé. Vérifiez que vous êtes connecté avec un compte Caisse.");
+      }
     }
   };
 
@@ -60,6 +117,18 @@ export default function OrdonnancesPage() {
 
     return (
     <div className="max-w-[1400px] mx-auto pb-20 p-6">
+
+      {/* 🔴 NOTIFICATION TEMPS RÉEL DISCRÈTE */}
+      <AnimatePresence>
+        {notification && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+            className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold"
+          >
+            {notification}
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* 🔝 HEADER STRATÉGIQUE */}
       <div className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
@@ -70,7 +139,12 @@ export default function OrdonnancesPage() {
           <h2 className="text-5xl font-black text-slate-800 dark:text-white tracking-tighter">
             Contrôle <span className="text-green-600">Médical</span>
           </h2>
-          <p className="text-slate-500 dark:text-slate-400 font-medium mt-2 italic">Validez les documents pour débloquer les ventes en attente.</p>
+          <p className="text-slate-500 dark:text-slate-400 font-medium mt-2 italic flex items-center gap-2">
+            Validez les documents pour débloquer les ventes en attente.
+            <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest ${enLigne ? 'text-emerald-500' : 'text-red-400'}`}>
+              {enLigne ? <Wifi size={12} /> : <WifiOff size={12} />} {enLigne ? 'Temps réel actif' : 'Reconnexion...'}
+            </span>
+          </p>
         </motion.div>
         
         <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 text-right min-w-[200px]">

@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { 
   Settings, Image as ImageIcon, MapPin, 
   Globe, Building2, Phone, Mail,
-  MessageSquare, Save, Loader2 
+  MessageSquare, Save, Loader2, Wallet 
 } from 'lucide-react';
 
 // 🌟 ÉTAPE 1 : Importation de l'apiClient
@@ -24,7 +24,13 @@ export default function SettingsPage() {
     adresse: '',
     message_remerciement: '',
     devise_preferee: 'FCFA',
-    langue_preferee: 'fr'
+    langue_preferee: 'fr',
+    // 💰 PAIEMENT MANUEL : numéros propres à CETTE pharmacie (tenant), affichés au client
+    // sur la page de paiement -- jamais codés en dur dans l'application.
+    numero_orange_money: '',
+    nom_titulaire_orange_money: '',
+    numero_mtn_momo: '',
+    nom_titulaire_mtn_momo: '',
   });
 
   // 🌟 ÉTAPE 2 : Récupération de la configuration avec apiClient
@@ -42,7 +48,11 @@ export default function SettingsPage() {
           adresse: data.adresse || '',
           message_remerciement: data.message_remerciement || '',
           devise_preferee: data.devise_preferee || 'FCFA',
-          langue_preferee: data.langue_preferee || 'fr'
+          langue_preferee: data.langue_preferee || 'fr',
+          numero_orange_money: data.numero_orange_money || '',
+          nom_titulaire_orange_money: data.nom_titulaire_orange_money || '',
+          numero_mtn_momo: data.numero_mtn_momo || '',
+          nom_titulaire_mtn_momo: data.nom_titulaire_mtn_momo || '',
         });
         
         if (data.logo) setLogoPreview(data.logo);
@@ -68,6 +78,10 @@ export default function SettingsPage() {
     formData.append('message_remerciement', config.message_remerciement);
     formData.append('langue_preferee', config.langue_preferee);
     formData.append('devise_preferee', config.devise_preferee);
+    formData.append('numero_orange_money', config.numero_orange_money);
+    formData.append('nom_titulaire_orange_money', config.nom_titulaire_orange_money);
+    formData.append('numero_mtn_momo', config.numero_mtn_momo);
+    formData.append('nom_titulaire_mtn_momo', config.nom_titulaire_mtn_momo);
     
     if (logoFile) {
       formData.append('logo', logoFile);
@@ -179,6 +193,63 @@ export default function SettingsPage() {
                   <option value="EUR">Euro (€)</option>
                   <option value="USD">Dollar ($)</option>
                 </select>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* 💰 PAIEMENT MANUEL : numéros mobile money propres à CETTE pharmacie */}
+          <motion.div whileHover={{ y: -5 }} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
+            <h5 className="font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2 text-sm uppercase tracking-widest">
+              <Wallet size={18} className="text-orange-500" /> Paiement Mobile Money
+            </h5>
+            <p className="text-[10px] text-slate-400 font-medium mb-6 italic">
+              Ces numéros seront affichés aux clients sur la page de paiement.
+            </p>
+            <div className="space-y-5">
+              <div>
+                <label className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-2 block">🟠 Numéro Orange Money</label>
+                <input
+                  type="text"
+                  value={config.numero_orange_money}
+                  onChange={(e) => setConfig({...config, numero_orange_money: e.target.value})}
+                  placeholder="+237 6XX XXX XXX"
+                  className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none font-bold text-sm dark:text-white"
+                  aria-label="Numéro Orange Money"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Nom du titulaire (Orange Money)</label>
+                <input
+                  type="text"
+                  value={config.nom_titulaire_orange_money}
+                  onChange={(e) => setConfig({...config, nom_titulaire_orange_money: e.target.value})}
+                  placeholder="Nom affiché lors du transfert"
+                  className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none font-bold text-sm dark:text-white"
+                  aria-label="Nom du titulaire Orange Money"
+                />
+              </div>
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800" />
+              <div>
+                <label className="text-[10px] font-black text-yellow-500 uppercase tracking-widest mb-2 block">🟡 Numéro MTN MoMo</label>
+                <input
+                  type="text"
+                  value={config.numero_mtn_momo}
+                  onChange={(e) => setConfig({...config, numero_mtn_momo: e.target.value})}
+                  placeholder="+237 6XX XXX XXX"
+                  className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none font-bold text-sm dark:text-white"
+                  aria-label="Numéro MTN MoMo"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Nom du titulaire (MTN MoMo)</label>
+                <input
+                  type="text"
+                  value={config.nom_titulaire_mtn_momo}
+                  onChange={(e) => setConfig({...config, nom_titulaire_mtn_momo: e.target.value})}
+                  placeholder="Nom affiché lors du transfert"
+                  className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none font-bold text-sm dark:text-white"
+                  aria-label="Nom du titulaire MTN MoMo"
+                />
               </div>
             </div>
           </motion.div>

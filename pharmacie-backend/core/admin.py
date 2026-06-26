@@ -20,8 +20,8 @@ class ClientGuichetAdmin(admin.ModelAdmin):
 # --- 💊 GESTION DES PRODUITS (MÉDICAMENTS) ---
 @admin.register(Produit)
 class ProduitAdmin(admin.ModelAdmin):
-    list_display = ('nom', 'laboratoire', 'categorie', 'quantite', 'prix', 'statut_peremption', 'seuil_alerte')
-    list_filter = ('categorie', 'laboratoire')
+    list_display = ('nom', 'laboratoire', 'categorie', 'quantite', 'prix', 'ordonnance_obligatoire', 'statut_peremption', 'seuil_alerte')
+    list_filter = ('categorie', 'laboratoire', 'ordonnance_obligatoire')
     search_fields = ('nom', 'laboratoire')
     
     def get_form(self, request, obj=None, **kwargs):

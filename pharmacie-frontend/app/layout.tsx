@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import { SerwistProvider } from '@serwist/turbopack/react';
 
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -75,10 +76,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="description" content="Portail d'Accès Sécurisé 🛰️" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/favicon.ico" />
+        {/* 🔐 PWA : icône Apple dédiée (PNG carré 180x180 sans transparence) -- un .ico ne
+            fonctionne pas comme icône d'écran d'accueil iOS, contrairement à ce qui était
+            configuré avant (apple-touch-icon pointait par erreur vers favicon.ico). */}
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
         <meta name="theme-color" content="#059669" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Pharmacie +" />
+        <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300">
+        <SerwistProvider swUrl="/serwist/sw.js">
         
         {/* SPLASH SCREEN */}
         <AnimatePresence>
@@ -219,6 +228,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </footer>
         )}
+        </SerwistProvider>
       </body>
     </html>
   );

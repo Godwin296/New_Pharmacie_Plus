@@ -13,6 +13,7 @@ from io import BytesIO
 
 # Imports de tes modèles locaux requis pour les requêtes d'impression
 from .models import Commande, Client, Produit, PharmacieConfig
+from .utils import generate_qr_base64
 
 # --- 🛡️ SYSTÈME DE VÉRIFICATION DES RÔLES ---
 def is_staff_member(user):
@@ -328,8 +329,7 @@ def ticket_caisse_guichet(request, commande_id):
         f"TOTAL: {total_prix}"
     )
     
-    # 🔐 SÉCURITÉ & PROPRETÉ : On importe et on utilise TA fonction globale
-    from .api import generate_qr_base64
+    # 🔐 SÉCURITÉ & PROPRETÉ : Fonction utilitaire partagée (core/utils.py)
     qr_base64 = generate_qr_base64(contenu_qr)
 
     return render(request, 'core/Caisse/ticket_thermique.html', {
