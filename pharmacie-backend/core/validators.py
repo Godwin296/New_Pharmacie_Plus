@@ -107,6 +107,18 @@ def _desinfecter_image(fichier) -> io.BytesIO:
     if image.mode not in ("RGB", "L"):
         image = image.convert("RGB")
 
+    # 📉 REDIMENSIONNEMENT (façon WhatsApp) : une photo de smartphone moderne peut dépasser
+    # 3000-4000px de large, ce qui pèse plusieurs Mo même bien compressée en JPEG. On limite
+    # la largeur à 1600px, largement suffisant pour la lecture d'une ordonnance à l'écran ou
+    # à l'impression, ce qui réduit drastiquement le poids final (utile sur connexion 3G/4G).
+    # On ne redimensionne QUE si l'image dépasse la limite : jamais d'upscale d'une image
+    # déjà plus petite (ça l'agrandirait artificiellement sans gagner en qualité réelle).
+    LARGEUR_MAX_PX = 1600
+    if image.width > LARGEUR_MAX_PX:
+        ratio = LARGEUR_MAX_PX / image.width
+        nouvelle_taille = (LARGEUR_MAX_PX, round(image.height * ratio))
+        image = image.resize(nouvelle_taille, Image.LANCZOS)
+
     tampon_propre = io.BytesIO()
     image.save(tampon_propre, format="JPEG", quality=88, optimize=True)
     tampon_propre.seek(0)
