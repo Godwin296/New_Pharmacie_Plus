@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Pill, ShoppingCart, Info, Loader2, Filter, Plus, Minus, AlertCircle, X, Check, Camera } from 'lucide-react';
 
@@ -27,13 +27,49 @@ export default function CataloguePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [quantites, setQuantites] = useState<Record<number, number>>({});
 
-  // 1. RÉCUPÉRATION DU CATALOGUE SYNCHRONISÉ
+  // 📄 PAGINATION SERVEUR : avant, le catalogue entier était chargé une seule fois puis
+  // filtré côté client (useMemo). Sur un catalogue qui grossit (centaines de produits),
+  // ça devenait lourd sur 3G/4G. Désormais, page/recherche/catégorie sont envoyés au
+  // backend (qui applique CataloguePagination, voir core/pagination.py) et seule la
+  // page demandée (20 produits par défaut) est chargée à chaque fois.
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
+  const PAGE_SIZE = 20;
+
+  // 🔎 DEBOUNCE DE LA RECHERCHE : on ne veut pas interroger le serveur à chaque frappe
+  // (ça spammerait l'API). On attend 400ms d'inactivité avant d'appliquer la recherche
+  // tapée par l'utilisateur. searchInput = ce que l'utilisateur tape en direct (instantané
+  // à l'écran), search = la valeur "validée" après le délai, qui déclenche le vrai appel API.
+  const [searchInput, setSearchInput] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1); // toute nouvelle recherche repart de la page 1
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // 1. RÉCUPÉRATION DU CATALOGUE SYNCHRONISÉ (re-déclenchée à chaque changement de
+  // page, de recherche validée, ou de catégorie active)
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
-        const res = await apiClient.get('/api/catalogue/');
-        setProduits(res.data.produits);
-        setCategories(res.data.categories);
+        const res = await apiClient.get('/api/catalogue/', {
+          params: {
+            page,
+            page_size: PAGE_SIZE,
+            ...(activeCat !== 'all' ? { cat: activeCat } : {}),
+            ...(search.trim() ? { q: search.trim() } : {}),
+          },
+        });
+        setProduits(res.data.results.produits);
+        setCategories(res.data.results.categories);
+        setTotalCount(res.data.count);
+        setHasNext(Boolean(res.data.next));
+        setHasPrevious(Boolean(res.data.previous));
       } catch (err) {
         console.error("Erreur Catalogue:", err);
       } finally {
@@ -41,7 +77,17 @@ export default function CataloguePage() {
       }
     };
     fetchData();
-  }, []);
+  }, [page, search, activeCat]);
+
+  // Changer de catégorie repart toujours de la page 1 (sinon on pourrait se retrouver
+  // sur une page 3 qui n'existe plus dans la nouvelle catégorie filtrée)
+  const changerCategorie = (cat: string) => {
+    setActiveCat(cat);
+    setPage(1);
+    setIsModalOpen(false);
+  };
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   // 2. MODIFICATION DE LA PHOTO PAR L'ADMINISTRATEUR (Via le bon endpoint core/urls.py)
   const handleUpdatePhoto = async (produitId: number, file: File) => {
@@ -84,16 +130,7 @@ export default function CataloguePage() {
     setQuantites({ ...quantites, [id]: next });
   };
 
-  const filteredProduits = useMemo(() => {
-    return produits.filter(p => {
-      const nom = (p.nom || "").toLowerCase();
-      const labo = (p.laboratoire || "").toLowerCase();
-      const recherche = search.toLowerCase();
-      const matchSearch = nom.includes(recherche) || labo.includes(recherche);
-      const matchCat = activeCat === "all" || p.categorie === activeCat;
-      return matchSearch && matchCat;
-    });
-  }, [search, activeCat, produits]);
+  const filteredProduits = produits; // le filtrage (recherche + catégorie) est désormais fait côté serveur
 
   if (loading) {
     return (
@@ -120,8 +157,8 @@ export default function CataloguePage() {
               type="text" 
               placeholder="Nom, Laboratoire, Symptôme..." 
               className="w-full pl-16 pr-8 py-5 rounded-full border-2 border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-lg font-bold focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all shadow-xl"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
           </div>
           
@@ -138,7 +175,7 @@ export default function CataloguePage() {
         {activeCat !== 'all' && (
           <div className="mt-4 text-[10px] font-black uppercase text-emerald-500 tracking-widest">
             Filtre : {categories[activeCat]} 
-            <button onClick={() => setActiveCat('all')} className="ml-2 underline cursor-pointer bg-transparent border-none text-slate-400">Réinitialiser</button>
+            <button onClick={() => changerCategorie('all')} className="ml-2 underline cursor-pointer bg-transparent border-none text-slate-400">Réinitialiser</button>
           </div>
         )}
       </motion.div>
@@ -240,7 +277,7 @@ export default function CataloguePage() {
 
               <div className="p-8 max-h-[60vh] overflow-y-auto space-y-3 custom-scrollbar">
                 <button 
-                  onClick={() => { setActiveCat("all"); setIsModalOpen(false); }}
+                  onClick={() => changerCategorie("all")}
                   className={`w-full p-5 rounded-2xl text-left font-black text-[10px] uppercase tracking-widest transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === 'all' ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100'}`}
                 >
                   Tous les soins ✨ {activeCat === 'all' && <Check size={16}/>}
@@ -248,7 +285,7 @@ export default function CataloguePage() {
                 {Object.entries(categories).map(([code, nom]) => (
                   <button 
                     key={code}
-                    onClick={() => { setActiveCat(code); setIsModalOpen(false); }}
+                    onClick={() => changerCategorie(code)}
                     className={`w-full p-5 rounded-2xl text-left font-black text-[10px] uppercase tracking-widest transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === code ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100'}`}
                   >
                     {nom} {activeCat === code && <Check size={16}/>}
@@ -259,6 +296,33 @@ export default function CataloguePage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* 📄 NAVIGATION PAGINATION : volontairement neutre visuellement (boutons simples).
+          Le style définitif viendra avec la refonte UI/UX mobile-first (maquettes fournies),
+          pour ne pas coder un composant qu'on jetterait juste après. */}
+      {!loading && totalCount > 0 && (
+        <div className="flex items-center justify-center gap-4 mt-16 mb-8">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={!hasPrevious}
+            className="px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest border-none cursor-pointer bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+          >
+            ← Précédent
+          </button>
+
+          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+            Page {page} / {totalPages} · {totalCount} produit{totalCount > 1 ? 's' : ''}
+          </span>
+
+          <button
+            onClick={() => setPage(p => p + 1)}
+            disabled={!hasNext}
+            className="px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest border-none cursor-pointer bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+          >
+            Suivant →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

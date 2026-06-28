@@ -23,6 +23,7 @@ from .serializers import (
     PharmacieConfigSerializer, FournisseurSerializer
 )
 from .validators import valider_et_desinfecter_ordonnance
+from .pagination import CataloguePagination
 from .throttles import LoginRateThrottle, SoumettrePaiementRateThrottle
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -201,7 +202,13 @@ def api_get_current_user(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def api_catalogue(request):
-    """Catalogue réactif pour Next.js 🚀"""
+    """Catalogue réactif pour Next.js 🚀
+
+    🔧 PAGINATION (avant : tout le catalogue était renvoyé en une seule réponse,
+    ce qui devenait lourd sur 3G/4G à mesure que le catalogue grossit). On utilise
+    désormais CataloguePagination (20 produits/page par défaut, voir core/pagination.py).
+    Le frontend doit envoyer ?page=N et peut envoyer ?page_size=N pour ajuster.
+    """
     produits = Produit.objects.all().order_by('nom')
     query_cat = request.GET.get('cat')
     search_query = request.GET.get('q')
@@ -215,9 +222,12 @@ def api_catalogue(request):
             Q(laboratoire__icontains=search_query)
         ).distinct()
 
-    serializer = ProduitSerializer(produits, many=True)
+    paginator = CataloguePagination()
+    page = paginator.paginate_queryset(produits, request)
+    serializer = ProduitSerializer(page, many=True)
     categories_dict = dict(getattr(Produit, 'CATEGORIES', {}))
-    return Response({
+
+    return paginator.get_paginated_response({
         "produits": serializer.data,
         "categories": categories_dict # Envoie les labels pour les menus Next.js
     })

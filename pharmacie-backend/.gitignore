@@ -10,3 +10,4 @@ staticfiles/
 # Environnement
 .env
 venv/
+venv_test/
