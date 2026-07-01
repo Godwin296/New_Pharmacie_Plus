@@ -9,22 +9,22 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation'; 
 import StockPrintPage from './print/page'; 
 import apiClient from '../../../lib/apiClient';
+import Prix from '../../../lib/components/Prix';
 
 export default function InventoryPage() {
   const router = useRouter(); 
   const [produits, setProduits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [currency, setCurrency] = useState('FCFA');
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
   const fetchInventory = async () => {
     try {
-      if (typeof window !== 'undefined') {
-        setCurrency(localStorage.getItem('app_currency') || 'FCFA');
-      }
-      const res = await apiClient.get('/api/catalogue/');
-      setProduits(res.data.produits || []);
+      // TODO (refonte) : api_catalogue est désormais paginée (core/pagination.py).
+      // Cette page charge encore tout via ?page_size=100 pour l'inventaire complet.
+      // À repenser lors de la refonte (pagination ou export côté serveur).
+      const res = await apiClient.get('/api/catalogue/', { params: { page_size: 100 } });
+      setProduits(res.data.results?.produits || []);
     } catch (err) {
       console.error("Erreur inventaire:", err);
     } finally {
@@ -74,13 +74,6 @@ export default function InventoryPage() {
 
 
 
-  const convert = (amount: number) => {
-    if (!amount) return "0";
-    if (currency === 'EUR') return (amount / 655.957).toLocaleString(undefined, {minimumFractionDigits: 2});
-    if (currency === 'USD') return (amount / 600).toLocaleString(undefined, {minimumFractionDigits: 2});
-    return amount.toLocaleString();
-  };
-
   const filteredProduits = produits.filter(p => 
     p.nom.toLowerCase().includes(searchTerm.toLowerCase()) || 
     p.categorie?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -108,9 +101,9 @@ export default function InventoryPage() {
 
           <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-6">
             <div className="text-right border-r pr-6 border-slate-100 dark:border-slate-800">
-              <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest block mb-1 italic">Valeur en {currency}</span>
+              <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest block mb-1 italic">Valeur totale du stock</span>
               <h4 className="text-3xl font-black text-emerald-600">
-                {convert(valeurTotale)} <small className="text-xs">{currency}</small>
+                <Prix montant={valeurTotale} />
               </h4>
             </div>
             <div className="flex flex-col items-center">
@@ -163,7 +156,7 @@ export default function InventoryPage() {
                       </div>
                     </td>
                     <td className="px-8 py-6 text-center font-black text-emerald-600">
-                      {convert(p.prix * p.quantite)} <small className="text-[9px] opacity-60">{currency}</small>
+                      <Prix montant={p.prix * p.quantite} />
                     </td>
                     <td className="px-8 py-6 text-right">
                       <button onClick={() => setSelectedProduct(p)} className="p-3 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition-all border-none cursor-pointer shadow-lg shadow-emerald-500/20" aria-label="Mettre à jour le stock">

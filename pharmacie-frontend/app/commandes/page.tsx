@@ -8,7 +8,8 @@ import {
 import Link from 'next/link';
 
 // 🌟 ÉTAPE 1 : Importation de l'apiClient
-import apiClient from '../../lib/apiClient'; // Ajustez le chemin selon la structure du dossier app/commandes
+import apiClient from '../../lib/apiClient';
+import Prix from '../../lib/components/Prix';
 
 export default function MesCommandes() {
   const [commandes, setCommandes] = useState<any[]>([]);
@@ -103,7 +104,7 @@ export default function MesCommandes() {
 
                     <div className="md:col-span-3">
                       <div className="text-2xl font-black text-emerald-600 tracking-tighter mb-1">
-                        {cmd.total_general?.toLocaleString()} <small className="text-[10px]">FCFA</small>
+                        <Prix montant={cmd.total_general} className="text-[10px]" />
                       </div>
                       <div className="flex items-center gap-2 text-[9px] font-black text-emerald-500/60 uppercase">
                         <CheckCircle2 size={12} strokeWidth={3} /> {cmd.payee ? "Facture Payée" : "En attente"}

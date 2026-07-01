@@ -6,29 +6,18 @@ import {
 } from 'lucide-react';
 
 // 🌟 CONFIGURATION : Importation de l'apiClient unifié (Gère l'URL et injecte le JWT de l'Admin)
-import apiClient from '../../../../lib/apiClient'; // Ajustez le nombre de '../' selon l'arborescence exacte admin/rapports/print
+import apiClient from '../../../../lib/apiClient';
+import Prix from '../../../../lib/components/Prix';
 
 export default function FinancialReport() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [config, setConfig] = useState<any>(null);
-  const [currency, setCurrency] = useState('FCFA');
-
-  // Logique de Conversion 💱
-  const convert = (amount: number) => {
-    if (!amount) return "0";
-    if (currency === 'EUR') return (amount / 655.957).toLocaleString(undefined, {minimumFractionDigits: 2});
-    if (currency === 'USD') return (amount / 600).toLocaleString(undefined, {minimumFractionDigits: 2});
-    return amount.toLocaleString();
-  };
 
   // 🌟 ÉTAPE 1 : Récupération parallèle et sécurisée des rapports et de la configuration de l'officine
   useEffect(() => {
     const loadAllData = async () => {
       try {
-        setCurrency(localStorage.getItem('app_currency') || 'FCFA');
-        
-        // apiClient injecte de lui-même l'access_token JWT et ajoute les slashs requis par Django
         const [resStats, resConfig] = await Promise.all([
           apiClient.get('/api/boss-dashboard/'),
           apiClient.get('/api/infos-pharmacie/')
@@ -101,14 +90,16 @@ export default function FinancialReport() {
         {/* 📊 KPI GRID DYNAMIQUE */}
         <div className="grid grid-cols-3 gap-6 mb-12">
           {[
-            { label: "RECETTES TOTALES", val: convert(data?.ca_total), icon: <TrendingUp size={16}/> },
-            { label: "VOLUME VENTES", val: data?.ventes_recentes?.length || 0, icon: <ShoppingBag size={16}/> },
-            { label: "PANIER MOYEN", val: convert(data?.ca_total / (data?.ventes_recentes?.length || 1)), icon: <Scale size={16}/> },
+            { label: "RECETTES TOTALES", estPrix: true, valRaw: data?.ca_total, valTxt: null, icon: <TrendingUp size={16}/> },
+            { label: "VOLUME VENTES", estPrix: false, valRaw: null, valTxt: String(data?.ventes_recentes?.length || 0), icon: <ShoppingBag size={16}/> },
+            { label: "PANIER MOYEN", estPrix: true, valRaw: data?.ca_total / (data?.ventes_recentes?.length || 1), valTxt: null, icon: <Scale size={16}/> },
           ].map((kpi, i) => (
             <div key={i} className="bg-slate-50 p-6 rounded-4xl text-center flex flex-col items-center">
               <span className="text-emerald-600 mb-2">{kpi.icon}</span>
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{kpi.label}</span>
-              <b className="text-xl font-black text-slate-800">{kpi.val} <small className="text-[10px] opacity-50">{currency}</small></b>
+              <b className="text-xl font-black text-slate-800">
+                {kpi.estPrix ? <Prix montant={kpi.valRaw} /> : kpi.valTxt}
+              </b>
             </div>
           ))}
         </div>

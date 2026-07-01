@@ -11,8 +11,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 // 🌟 CONFIGURATION : Importation de l'apiClient unifié
-import apiClient from '../../lib/apiClient'; // Ajustez le chemin selon votre dossier app/panier
+import apiClient from '../../lib/apiClient';
 import { ReconnectingSocket } from '../../lib/wsClient';
+import Prix from '../../lib/components/Prix';
 
 export default function PanierPage() {
   const router = useRouter();
@@ -163,13 +164,13 @@ export default function PanierPage() {
                 >
                   <div className="flex-1 text-center md:text-left mb-4 md:mb-0">
                     <h6 className="font-black text-slate-800 dark:text-white text-xl tracking-tight uppercase italic group-hover:text-emerald-500 transition-colors">{item.produit_nom}</h6>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{item.prix_unitaire?.toLocaleString()} FCFA / UNITÉ</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]"><Prix montant={item.prix_unitaire} /> / UNITÉ</span>
                   </div>
                   <div className="bg-slate-100 dark:bg-slate-800 px-6 py-2 rounded-xl font-black text-[10px] text-slate-500 uppercase tracking-widest border border-slate-200 dark:border-slate-700">
                     Qté : {item.quantite}
                   </div>
                   <div className="md:ml-12 text-2xl font-black text-slate-800 dark:text-white tracking-tighter">
-                    {item.total_item?.toLocaleString()} <small className="text-[10px]">CFA</small>
+                    <Prix montant={item.total_item} />
                   </div>
                 </motion.div>
               ))}
@@ -181,7 +182,7 @@ export default function PanierPage() {
                 <div className="space-y-2">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] italic underline underline-offset-8 decoration-emerald-500">Total de votre commande</p>
                   <div className="text-5xl font-black text-emerald-500 tracking-tighter">
-                    {commande?.total_general?.toLocaleString()} <small className="text-sm font-bold text-slate-400">FCFA</small>
+                    <Prix montant={commande?.total_general} className="text-5xl font-black text-emerald-500 tracking-tighter" />
                   </div>
                 </div>
 

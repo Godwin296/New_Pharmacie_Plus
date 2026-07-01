@@ -13,7 +13,8 @@ import {
 import { useRouter } from 'next/navigation';
 
 // 🌟 CONFIGURATION : Importation de l'apiClient unifié (qui gère l'URL et le Token à votre place !)
-import apiClient from '../../../lib/apiClient'; // Ajustez le chemin selon l'arborescence app/admin/dashboard
+import apiClient from '../../../lib/apiClient';
+import Prix from '../../../lib/components/Prix';
 
 // --- INTERFACES ---
 interface DashboardData {
@@ -129,7 +130,7 @@ export default function DashboardBoss() {
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Finance</span>
               <h6 className="text-gray-400 dark:text-slate-400 text-sm font-semibold">Revenu Global</h6>
               <h3 className="text-3xl font-bold mt-1 text-green-600">
-                {data?.ca_total?.toLocaleString() || 0} <span className="text-xs font-medium">FCFA</span>
+                <Prix montant={data?.ca_total ?? 0} />
               </h3>
             </div>
           </div>
@@ -143,7 +144,7 @@ export default function DashboardBoss() {
                 <Store size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Cash Guichet</span>
               </div>
               <p className="font-bold text-slate-800 dark:text-white">
-                {caGuichet.toLocaleString()} <span className="text-[10px] text-slate-400">FCFA</span>
+                <Prix montant={caGuichet} />
               </p>
               <p className="text-[10px] text-slate-400 font-medium">{pourcentGuichet}% du total</p>
             </div>
@@ -152,7 +153,7 @@ export default function DashboardBoss() {
                 <ShoppingBag size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">En ligne</span>
               </div>
               <p className="font-bold text-slate-800 dark:text-white">
-                {caEnLigne.toLocaleString()} <span className="text-[10px] text-slate-400">FCFA</span>
+                <Prix montant={caEnLigne} />
               </p>
               <p className="text-[10px] text-slate-400 font-medium">{pourcentEnLigne}% du total</p>
             </div>

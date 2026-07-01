@@ -1,0 +1,214 @@
+# Prompt de reprise — Pharmacie+
+
+Je reprends le développement de mon SaaS de gestion de pharmacie multi-tenant pour la zone CEMAC (Cameroun), avec toi comme associé technique. Le projet s'appelle **Pharmacie+**.
+
+**Stack :** Django REST Framework (multi-tenant via django-tenants, isolation par schéma PostgreSQL) + Next.js 16/Turbopack + Django Channels (WebSocket temps réel) + Redis.
+
+**Dépôt GitHub :** `https://github.com/Godwin296/New_Pharmacie_Plus` (branche `main`)
+
+> ⚠️ Mon dépôt est **privé par défaut**. Je l'ouvre uniquement quand j'ai besoin que tu pousses du travail. Si tu n'arrives pas à cloner, dis-le-moi clairement et j'ouvrirai l'accès.
+
+Clone ce dépôt et lis le code réel (pas juste le README) pour retrouver le contexte exact.
+
+**Mon objectif :** vendre ce SaaS à des pharmacies clientes en zone CEMAC. Je suis étudiant en informatique à l'Université de Dschang, je communique en français, et je préfère un guidage pas à pas avec des tests réels.
+
+---
+
+## 🛠️ ENVIRONNEMENT TECHNIQUE — À INSTALLER AVANT TOUT TEST
+
+Ces outils NE SONT PAS dans requirements.txt ni package.json — ce sont des dépendances système.
+
+```bash
+# 1. PostgreSQL 16 (obligatoire)
+apt-get update && apt-get install -y postgresql postgresql-contrib
+service postgresql start
+su postgres -c "psql -c \"ALTER USER postgres PASSWORD 'postgres';\""
+
+# 2. Redis (obligatoire pour Channels/WebSocket et rate limiting)
+apt-get install -y redis-server
+service redis-server start
+redis-cli ping   # doit répondre PONG
+
+# 3. libmagic (obligatoire pour core/validators.py)
+dpkg -l | grep libmagic1t64   # vérifier si présent
+# si absent : apt-get install -y libmagic1
+
+# 4. DNS local multi-tenant
+echo "127.0.0.1 dupont.localhost martin.localhost" >> /etc/hosts
+
+# 5. Backend Python
+cd pharmacie-backend
+python3 -m venv venv_test
+venv_test/bin/pip install -r requirements.txt
+
+# 6. Frontend Node
+cd pharmacie-frontend
+npm install
+
+# 7. Lancer le backend (ASGI obligatoire, pas runserver)
+cd pharmacie-backend
+venv_test/bin/daphne -b 0.0.0.0 -p 8000 config.asgi:application
+```
+
+> ⚠️ **Problème récurrent :** PostgreSQL, Redis et les process Daphne/Next.js NE SURVIVENT PAS entre deux appels d'outils séparés. Toujours relancer les services ET lancer le test dans la MÊME invocation de commande.
+
+---
+
+## 💾 STRATÉGIE DE SAUVEGARDE GIT
+
+L'environnement de fichiers NE SURVIT PAS entre deux conversations. Seul un push GitHub effectif garantit que le travail n'est pas perdu.
+
+**Procédure de push (token temporaire fourni par moi à chaque session) :**
+
+```bash
+git remote set-url origin https://Godwin296:LE_TOKEN@github.com/Godwin296/New_Pharmacie_Plus.git
+git add -A && git commit -m "message clair"
+git push origin main
+git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  # retirer le token
+```
+
+---
+
+## ✅ CE QUI EST FAIT ET TESTÉ (ne pas refaire)
+
+### Architecture & Sécurité
+- Multi-tenant par schéma PostgreSQL (django-tenants) — isolation testée et prouvée
+- WebSocket temps réel (Django Channels + Redis) — middleware tenant-aware + auth JWT custom
+- Rate limiting DRF (login 5/min, paiement 10/min) — `core/throttles.py`
+- Compression GZip activée
+- Upload ordonnance sécurisé (`core/validators.py`) : magic bytes, anti-stéganographie (Pillow), JS strippé (pikepdf), **resize max 1600px avant compression JPEG** (ajouté session 1)
+- SECRET_KEY depuis variables d'environnement (.env)
+
+### Cycle métier complet
+- Modèle Commande avec référence lisible (format PHC-AAAA-NNNNN)
+- Cycle de vie complet : `en_cours → attente_validation → paiement_a_verifier → payee_a_retirer → retiree` (ou `annulee`)
+- Paiement manuel mobile money (Orange Money/MTN MoMo) — vérification caissière avant décrémentation stock
+- Numéros mobile money configurables par tenant (PharmacieConfig)
+- Page caisse `/caisse/paiements` avec recherche et confirmation de retrait
+- Vente au guichet (`api_vente_directe`) avec case ordonnance vérifiée visuellement
+- Anti race-condition : `select_for_update()` sur toutes les opérations critiques
+- Dashboard admin : ventilation CA cash/en ligne
+
+### Performance
+- **Pagination du catalogue** (ajouté session 2) : `CataloguePagination` DRF, 20 produits/page, filtre `?cat=` et recherche `?q=` côté serveur — `core/pagination.py` + frontend adapté avec debounce 400ms
+- **Composant `<Prix>` centralisé** (ajouté session 3) : `lib/components/Prix.tsx` + `ConfigPharmacieProvider` dans `layout.tsx` — plus aucun "FCFA" codé en dur dans les 12 fichiers frontend, devise lue depuis `PharmacieConfig.devise_preferee`
+
+### PWA
+- Migré de `@ducanh2912/next-pwa` (incompatible Turbopack) vers `@serwist/turbopack`
+- Service worker réellement généré et servi
+- Icônes PNG générées (192/512 standard + maskable + apple-touch-icon 180px)
+
+### Bugs corrigés (historique)
+- `generate_qr_base64` importé depuis le mauvais module
+- `agent_validateur` recevait un username au lieu d'un objet User
+- `requirements.txt` encodé en UTF-16 + `djangorestframework-simplejwt` manquant
+- `Produit.ordonnance_obligatoire` absent en base (faille réglementaire)
+- `CommandeSerializer` exposait le nom de l'agent au client final
+- `get_or_create()` dans le panier pouvait provoquer `MultipleObjectsReturned`
+
+---
+
+## 🏗️ DÉCISIONS D'ARCHITECTURE (à respecter)
+
+| Décision | Statut |
+|---|---|
+| Isolation multi-tenant PAR SCHÉMA (pas tenant_id) | ✅ Implémenté |
+| Compte client global (`CompteClient` dans schéma public) | 🔜 À faire |
+| Marketplace de sélection de pharmacie | 🔜 À faire (lié à CompteClient) |
+| Paiement manuel (option A) comme fallback permanent | ✅ Implémenté |
+| OCR uniquement aide visuelle, jamais automatisé | Décision ferme |
+| Africa's Talking pour SMS (pas Twilio) | Décision ferme |
+| Prédiction stock = statistiques classiques, PAS LLM | Décision ferme |
+
+---
+
+## 📋 TODO-LIST COMPLÈTE (par difficulté croissante)
+
+### 🟢 Facile (quelques heures, périmètre limité)
+- [ ] **Lazy loading images catalogue** — `loading="lazy"` sur les `<img>`, quasi gratuit
+- [ ] **Toggle thème clair/sombre** dans les paramètres — `next-themes` déjà installé, juste exposer dans une page settings
+- [ ] **Logs centralisés Sentry** — intégration SDK, plan gratuit, pas de logique métier
+- [ ] **Email transactionnel basique** — `PharmacieConfig.email_contact` existe, brancher l'envoi sur confirmation commande
+- [ ] **Retrait de `app/page.tsx`** — l'actuelle landing page "ringard" sera refaite en toute dernière session comme vraie landing page marketing SaaS
+
+### 🟡 Effort moyen (plusieurs sessions)
+- [ ] **Backups automatiques PostgreSQL** — cron + pg_dump ou Railway/Render managé, critique (actuellement zéro backup)
+- [ ] **Toggle vérification ordonnance par tenant** — champ booléen sur `PharmacieConfig` + clause CGU
+- [ ] **Dashboard analytics avancé** — comparaison période/période, marge réelle (ajouter `prix_achat` sur `Produit`), export multi-format
+- [ ] **Chiffrement au repos des ordonnances** — stockage chiffré applicatif ou niveau filesystem
+- [ ] **Internationalisation (next-intl)** — extraction de tout le texte FR en dur, gros volume mécanique
+- [ ] **Détection d'interactions médicamenteuses** — table de règles métier statiques, pas d'IA
+
+### 🔴 Effort élevé / risque architectural
+- [ ] **Gestion des lots (`LotProduit`) + FEFO** — nouveau modèle, migration données existantes (`Produit.lot`/`date_expiration` → lots individuels), décrémentation FEFO dans tout le cycle de vente sans casser `select_for_update()`
+- [ ] **Compte client global (`CompteClient`) + marketplace** — modèle dans schéma public, nouveau JWT clients (distinct personnel), migration clients existants, page marketplace
+- [ ] **Mode offline réel (Service Worker + IndexedDB)** — synchronisation bidirectionnelle catalogue/panier
+- [ ] **Refonte UI/UX mobile-first complète** — maquettes disponibles (6 images, style vert émeraude, cartes arrondies, bottom nav avec bouton central flottant, splash screen avec halo radial). À attaquer APRÈS le compte client global.
+
+---
+
+## 🎨 DIRECTION STYLISTIQUE (maquettes reçues)
+
+Des maquettes ont été fournies et analysées. Points clés à respecter lors de la refonte :
+- Vert émeraude dominant (`emerald-500/600`), fond blanc/gris-vert très pâle
+- Cartes très arrondies (`rounded-2xl`/`3xl`), ombres douces, beaucoup d'espace blanc
+- Bannières dégradées vert foncé→clair avec icônes flottantes décoratives
+- Bottom nav mobile avec bouton central flottant rond (panier/+) qui dépasse de la barre
+- Écran connexion avec sélection de rôle par cartes (Client/Caisse/Admin) avant le formulaire
+- Splash screen avec halo radial + icônes flottantes en orbite
+- Dashboard admin : sidebar sombre verte sur desktop, clair sur mobile
+
+---
+
+## ⚙️ COMMENT JE PRÉFÈRE TRAVAILLER
+
+- Toujours tester réellement (PostgreSQL/Redis/Daphne réels, pas de simulation)
+- Expliquer les concepts techniques que je ne connais pas (j'apprends en construisant)
+- Ne jamais me restituer le code dans le chat — travailler dans l'environnement de fichiers
+- Me prévenir clairement quand il est temps de pousser vers GitHub
+- Ne pas remettre en question les décisions d'architecture sans bonne raison documentée
+
+---
+
+## 💻 TESTER EN LOCAL SUR TON PC
+
+Pour tester le projet sur ta machine personnelle :
+
+### Prérequis minimum
+- Python 3.11+, Node.js 20+, PostgreSQL (déjà installé selon toi), Git
+
+### Ce qui manque sur ton PC
+- **Redis** — obligatoire pour les WebSockets. Installation : [https://redis.io/docs/install/](https://redis.io/docs/install/) ou via Docker : `docker run -d -p 6379:6379 redis`
+- **Daphne** — installé automatiquement via `pip install -r requirements.txt`
+- **libmagic** — `brew install libmagic` sur Mac, `apt install libmagic1` sur Linux
+
+### Commandes
+```bash
+git clone https://github.com/Godwin296/New_Pharmacie_Plus.git
+cd New_Pharmacie_Plus
+
+# Backend
+cd pharmacie-backend
+python3 -m venv venv && venv/bin/pip install -r requirements.txt
+cp .env.example .env   # remplir DB_NAME, DB_USER, DB_PASSWORD
+venv/bin/python manage.py migrate_schemas --shared
+venv/bin/daphne -b 127.0.0.1 -p 8000 config.asgi:application
+
+# Frontend (autre terminal)
+cd pharmacie-frontend
+npm install && npm run dev
+# → ouvre http://localhost:3000
+```
+
+### DNS local (multi-tenant obligatoire)
+```bash
+# Sur Mac/Linux :
+sudo echo "127.0.0.1 dupont.localhost" >> /etc/hosts
+# Sur Windows : éditer C:\Windows\System32\drivers\etc\hosts
+```
+
+Ensuite accède à `http://dupont.localhost:3000` (pas `localhost:3000` — le sous-domaine détermine quel tenant est servi).
+
+---
+
+**Par où veux-tu commencer ?**

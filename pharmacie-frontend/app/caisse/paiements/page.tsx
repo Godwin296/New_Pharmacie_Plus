@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 
 import apiClient from '../../../lib/apiClient';
+import Prix from '../../../lib/components/Prix';
 import { ReconnectingSocket } from '../../../lib/wsClient';
 
 interface Commande {
@@ -187,7 +188,7 @@ export default function PaiementsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="font-black text-emerald-600">{c.total_general?.toLocaleString()} FCFA</span>
+                  <Prix montant={c.total_general} className="font-black text-emerald-600" />
                   <button
                     disabled={traitementEnCours === c.id}
                     onClick={() => handleConfirmerPaiement(c.id)}
@@ -240,7 +241,7 @@ export default function PaiementsPage() {
                   <span className="flex items-center gap-1 text-[11px] text-slate-400"><Phone size={12} /> {c.client_telephone}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="font-black text-emerald-600">{c.total_general?.toLocaleString()} FCFA</span>
+                  <Prix montant={c.total_general} className="font-black text-emerald-600" />
                   <button
                     disabled={traitementEnCours === c.id}
                     onClick={() => handleMarquerRetiree(c.id)}

@@ -10,35 +10,24 @@ import StockAlertReport from '../stocks/alertes/page';
 import FinancialReport from './print/page'; 
 
 // 🌟 CONFIGURATION : Importation de l'apiClient unifié
-import apiClient from '../../../lib/apiClient'; 
+import apiClient from '../../../lib/apiClient';
+import Prix from '../../../lib/components/Prix';
 
 export default function ReportsDashboard() {
   const [loading, setLoading] = useState(true);
   const [periode, setPeriode] = useState('mensuelle');
   const [data, setData] = useState<any>(null);
-  const [currency, setCurrency] = useState('FCFA');
   const [searchTerm, setSearchTerm] = useState('');
 
   // States pour les menus et le déclenchement de l'impression
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [printType, setPrintType] = useState<'financier' | 'stock' | null>(null);
 
-  const convert = (amount: number) => {
-    if (!amount) return "0";
-    if (currency === 'EUR') return (amount / 655.957).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    if (currency === 'USD') return (amount / 600).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    return amount.toLocaleString();
-  };
-
   // 🌟 ÉTAPE 1 : Récupération des KPI du Boss sécurisée
   useEffect(() => {
     const fetchStats = async () => {
       setLoading(true);
       try {
-        const savedCurrency = localStorage.getItem('app_currency') || 'FCFA';
-        setCurrency(savedCurrency);
-        
-        // apiClient injecte automatiquement l'access_token de l'administrateur
         const res = await apiClient.get('/api/boss-dashboard/');
         setData(res.data);
       } catch (err) {
@@ -103,7 +92,7 @@ export default function ReportsDashboard() {
           <h2 className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter mb-2">
             📈 Audit de <span className="text-emerald-500">l'Empire</span>
           </h2>
-          <p className="text-slate-500 dark:text-slate-400 font-medium italic">Données consolidées en {currency}.</p>
+          <p className="text-slate-500 dark:text-slate-400 font-medium italic">Données consolidées · devise configurée dans les paramètres.</p>
         </motion.div>
         
         <div className="flex flex-wrap gap-3">
@@ -181,9 +170,9 @@ export default function ReportsDashboard() {
       {/* 💰 STATS FINANCIÈRES DYNAMIQUES */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 no-print">
         {[
-          { label: "Chiffre d'Affaires", val: convert(data?.ca_total), unit: currency, icon: <TrendingUp />, color: "emerald", emoji: "💰" },
-          { label: "Alertes Stocks", val: data?.nb_produits_critiques, unit: "Produits", icon: <AlertCircle />, color: "red", emoji: "🚨" },
-          { label: "Moyenne / Vente", val: convert(data?.ca_total / (data?.ventes_recentes?.length || 1)), unit: currency, icon: <Scale />, color: "purple", emoji: "⚖️" },
+          { label: "Chiffre d'Affaires", estPrix: true, valRaw: data?.ca_total, valTxt: null, unit: "", icon: <TrendingUp />, color: "emerald", emoji: "💰" },
+          { label: "Alertes Stocks", estPrix: false, valRaw: null, valTxt: String(data?.nb_produits_critiques ?? 0), unit: "Produits", icon: <AlertCircle />, color: "red", emoji: "🚨" },
+          { label: "Moyenne / Vente", estPrix: true, valRaw: data?.ca_total / (data?.ventes_recentes?.length || 1), valTxt: null, unit: "", icon: <Scale />, color: "purple", emoji: "⚖️" },
         ].map((card, i) => (
           <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
             className={`bg-white dark:bg-slate-900 p-8 rounded-[3rem] shadow-sm border-b-8 ${card.color === 'emerald' ? 'border-emerald-500' : card.color === 'red' ? 'border-red-500' : 'border-purple-500'} group hover:-translate-y-2 transition-all`}
@@ -191,7 +180,10 @@ export default function ReportsDashboard() {
             <div className="text-4xl mb-4">{card.emoji}</div>
             <h6 className="text-[10px] font-black text-slate-400 tracking-widest mb-2 uppercase">{card.label}</h6>
             <h2 className="text-3xl font-black text-slate-800 dark:text-white flex items-baseline gap-2 tracking-tighter">
-              {card.val} <span className="text-xs text-slate-400 font-bold uppercase">{card.unit}</span>
+              {card.estPrix
+                ? <Prix montant={card.valRaw} />
+                : <>{card.valTxt} <span className="text-xs text-slate-400 font-bold uppercase">{card.unit}</span></>
+              }
             </h2>
           </motion.div>
         ))}

@@ -5,6 +5,7 @@ import { Search, Pill, ShoppingCart, Info, Loader2, Filter, Plus, Minus, AlertCi
 
 // 🌟 CONFIGURATION : Utilisation de l'instance unifiée apiClient (Gère l'URL de base et le JWT)
 import apiClient from '../../lib/apiClient';
+import Prix from '../../lib/components/Prix';
 
 interface Produit {
   id: number;
@@ -243,7 +244,7 @@ export default function CataloguePage() {
 
                 <div className="flex justify-between items-center">
                   <div className="text-3xl font-black text-slate-800 dark:text-white">
-                    {p.prix.toLocaleString()} <small className="text-xs text-slate-400 tracking-normal">FCFA</small>
+                    <Prix montant={p.prix} className="text-xs text-slate-400 tracking-normal" />
                   </div>
                   <button 
                     disabled={p.quantite <= 0}

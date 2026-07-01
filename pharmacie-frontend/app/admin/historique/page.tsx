@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 
 // 🌟 CONFIGURATION : Importation de l'apiClient unifié (Gère l'URL brute et injecte le JWT pour le Staff)
-import apiClient from '../../../lib/apiClient'; // Ajustez le chemin selon l'arborescence app/admin/historique
+import apiClient from '../../../lib/apiClient';
+import Prix from '../../../lib/components/Prix';
 import router, { useRouter } from 'next/navigation';
 
 export default function HistoriqueVentes() {
@@ -70,8 +71,8 @@ export default function HistoriqueVentes() {
       {/* 📊 KPI DYNAMIQUES */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {[
-          { label: "Volume de Ventes", val: ventes.length, icon: <Receipt />, color: "blue" },
-          { label: "Chiffre d'Affaires Global", val: caGlobal.toLocaleString(), unit: "FCFA", icon: <Wallet />, color: "emerald" },
+          { label: "Volume de Ventes", valRaw: ventes.length, estPrix: false, icon: <Receipt />, color: "blue" },
+          { label: "Chiffre d'Affaires Global", valRaw: caGlobal, estPrix: true, icon: <Wallet />, color: "emerald" },
         ].map((kpi, i) => (
           <motion.div key={i} whileHover={{ y: -5 }}
             className={`bg-white dark:bg-slate-900 p-8 rounded-4xl shadow-sm border-l-12 ${kpi.color === 'blue' ? 'border-blue-500' : 'border-emerald-500'} flex justify-between items-center`}
@@ -79,7 +80,7 @@ export default function HistoriqueVentes() {
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">{kpi.label}</p>
               <h2 className={`text-4xl font-black ${kpi.color === 'blue' ? 'text-blue-600' : 'text-emerald-600'}`}>
-                {kpi.val} <small className="text-xs text-slate-400 font-bold">{kpi.unit || ''}</small>
+                {kpi.estPrix ? <Prix montant={kpi.valRaw} /> : kpi.valRaw}
               </h2>
             </div>
             <div className="text-4xl opacity-20 dark:text-white">{kpi.icon}</div>
@@ -140,7 +141,7 @@ export default function HistoriqueVentes() {
                       {v.client_nom || "Client Guichet"}
                     </td>
                     <td className="px-8 py-6 font-black text-slate-800 dark:text-white text-base">
-                      {v.total_general ? parseFloat(v.total_general).toLocaleString() : '0'} <small className="text-[10px] text-slate-400">FCFA</small>
+                      <Prix montant={v.total_general ?? 0} />
                     </td>
                     <td className="px-8 py-6">
                       {v.ordonnance_valide ? (

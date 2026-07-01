@@ -9,6 +9,7 @@ import {
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { SerwistProvider } from '@serwist/turbopack/react';
+import { ConfigPharmacieProvider } from '../lib/context/ConfigPharmacieContext';
 
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -216,7 +217,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           )}
         </AnimatePresence>
 
-        <main className="flex-grow">{children}</main>
+        <ConfigPharmacieProvider>
+          <main className="flex-grow">{children}</main>
+        </ConfigPharmacieProvider>
 
         {!isSpecialRoute && (
           <footer className="bg-slate-950 text-white p-10 border-t-[5px] border-emerald-600 mt-20">

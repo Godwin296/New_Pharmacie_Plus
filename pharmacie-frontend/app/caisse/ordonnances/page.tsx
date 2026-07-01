@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 
 // 🌟 CONFIGURATION : Importation de l'apiClient unifié (Gère le tunnel et le JWT pour la caisse)
-import apiClient from '../../../lib/apiClient'; // Ajuste le chemin selon l'arborescence (app/caisse/ordonnances)
+import apiClient from '../../../lib/apiClient';
+import Prix from '../../../lib/components/Prix';
 import { ReconnectingSocket } from '../../../lib/wsClient';
 
 export default function OrdonnancesPage() {
@@ -224,7 +225,7 @@ export default function OrdonnancesPage() {
                     </div>
                     <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
                       <span className="text-[10px] font-black text-slate-400 uppercase">Total Net</span>
-                      <span className="text-3xl font-black text-emerald-600">{c.total_general?.toLocaleString()} <small className="text-xs">FCFA</small></span>
+                      <Prix montant={c.total_general} className="text-3xl font-black text-emerald-600" />
                     </div>
                   </div>
                 </div>

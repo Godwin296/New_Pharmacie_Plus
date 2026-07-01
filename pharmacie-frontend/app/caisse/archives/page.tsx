@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 
 // 🌟 CONFIGURATION : Utilisation de l'instance apiClient unifiée (Gère l'URL brute et le JWT)
-import apiClient from '../../../lib/apiClient'; // Ajustez le chemin selon l'arborescence app/caisse/archives
+import apiClient from '../../../lib/apiClient';
+import Prix from '../../../lib/components/Prix';
 import router from 'next/dist/shared/lib/router/router';
 
 export default function ArchivesPage() {
@@ -106,7 +107,7 @@ export default function ArchivesPage() {
                   <h4 className="font-black text-xl text-slate-800 dark:text-white mt-1 uppercase italic">{arc.client_nom || "Client Guichet"}</h4>
                   <div className="flex gap-6 mt-2">
                     <p className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-2"><Calendar size={12}/> {new Date(arc.date).toLocaleDateString()}</p>
-                    <p className="text-[10px] font-black text-emerald-600 uppercase">Total: {arc.total_general?.toLocaleString()} FCFA</p>
+                    <p className="text-[10px] font-black text-emerald-600 uppercase">Total: <Prix montant={arc.total_general} /></p>
                   </div>
                 </div>
 
