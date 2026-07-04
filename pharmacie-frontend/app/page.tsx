@@ -6,22 +6,23 @@ import {
   MessageCircle, Moon, Sun, MapPin, HeartPulse, Clock, ShieldCheck, FileText, Receipt, LayoutDashboard, ShoppingBag
 } from 'lucide-react';
 import Link from 'next/link';
-
-// 🌟 CONFIGURATION : Importation de l'apiClient unifié (Gère l'URL brute et le JWT de session)
-import apiClient from '../lib/apiClient'; // Ajustez le chemin selon l'arborescence (ici direct dans app/page.tsx)
+import apiClient from '../lib/apiClient';
+import { useConfigPharmacie } from '../lib/context/ConfigPharmacieContext';
 
 export default function HomePage() {
   const [isDark, setIsDark] = useState(false);
-  const [config, setConfig] = useState<any>(null);
   const [user, setUser] = useState<any>(null); 
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+
+  // Config pharmacie depuis le Context partagé — évite un double appel à /api/infos-pharmacie/
+  // (le layout.tsx l'appelle déjà une fois via ConfigPharmacieProvider)
+  const { config } = useConfigPharmacie();
 
     useEffect(() => {
     setMounted(true);
 
     const checkSessionAndConfig = async () => {
-      // 🌟 ÉTAPE 0 : Lecture synchrone immédiate du cache local pour éviter l'effet "Visiteur anonyme"
       const savedUser = localStorage.getItem('user');
       if (savedUser) {
         setUser(JSON.parse(savedUser));
@@ -31,7 +32,6 @@ export default function HomePage() {
 
       const token = localStorage.getItem('access_token');
 
-      // 🌟 ÉTAPE 1 : Interrogation et rafraîchissement en arrière-plan via apiClient
       if (token) {
         try {
           const resAuth = await apiClient.get('/api/current-user/');
@@ -40,31 +40,20 @@ export default function HomePage() {
             setUser(resAuth.data);
             localStorage.setItem('user', JSON.stringify(resAuth.data));
           } else {
-            // Nettoyage uniquement si le backend confirme explicitement l'invalidité
             setUser(null);
             localStorage.removeItem('user');
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
           }
         } catch (err) {
-          // 🛡️ BLINDAGE SESSION LONGUE : En cas de coupure de tunnel / réseau temporaire,
-          // on conserve les données locales ('user') pour ne pas déconnecter brutalement l'agent en plein écran
-          console.error("Vérification asynchrone de sécurité en attente...");
+          console.error("Vérification session en attente...");
         }
       } else {
         setUser(null);
         localStorage.removeItem('user');
       }
 
-      // 🌟 ÉTAPE 2 : Chargement de la configuration de l'identité visuelle de la pharmacie
-      try {
-        const resConfig = await apiClient.get('/api/infos-pharmacie/');
-        setConfig(resConfig.data);
-      } catch (err) {
-        console.error("Serveur injoignable pour la configuration de la pharmacie");
-      } finally {
-        setLoading(false);
-      }
+      setLoading(false);
     };
 
     checkSessionAndConfig();
