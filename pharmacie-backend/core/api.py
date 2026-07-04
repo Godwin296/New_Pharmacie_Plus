@@ -231,7 +231,8 @@ def api_catalogue(request):
     if search_query and search_query.strip():
         produits = produits.filter(
             Q(nom__icontains=search_query) | 
-            Q(laboratoire__icontains=search_query)
+            Q(laboratoire__icontains=search_query) |
+            Q(identifiant__iexact=search_query)
         ).distinct()
 
     paginator = CataloguePagination()

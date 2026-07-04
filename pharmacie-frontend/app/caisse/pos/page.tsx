@@ -17,6 +17,7 @@ export default function POSPage() {
   const router = useRouter();
   const [produitsDB, setProduitsDB] = useState<Produit[]>([]);
   const [search, setSearch] = useState("");
+  // (searchInput/searching : voir bloc debounce plus bas, valeur instantanée du champ)
   const [panier, setPanier] = useState<ItemPanier[]>([]);
   const [showClientModal, setShowClientModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -27,10 +28,21 @@ export default function POSPage() {
   const [finalizing, setFinalizing] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. CHARGEMENT INITIAL
+  // 🔎 DEBOUNCE DE LA RECHERCHE : même pattern que /catalogue (session pagination) -- on
+  // n'interroge le serveur que 400ms après la dernière frappe, pas à chaque caractère.
+  // searchInput = ce qui s'affiche instantanément dans le champ, search = valeur "validée"
+  // qui déclenche réellement l'appel API.
+  const [searchInput, setSearchInput] = useState("");
+  const [searching, setSearching] = useState(false);
   useEffect(() => {
-    fetchProduits();
-  }, []);
+    const timer = setTimeout(() => setSearch(searchInput), 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // 1. CHARGEMENT INITIAL + RECHERCHE (re-déclenché à chaque frappe validée par le debounce)
+  useEffect(() => {
+    fetchProduits(search);
+  }, [search]);
 
   // 2. LISTENER SCANNER BARCODE
   useEffect(() => {
@@ -52,24 +64,47 @@ export default function POSPage() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [produitsDB]);
 
-  // 🌟 ÉTAPE 1 : Récupération du catalogue via apiClient
-  const fetchProduits = async () => {
+  // 🌟 ÉTAPE 1 : Récupération du catalogue via apiClient, recherche déléguée au serveur
+  // (CataloguePagination, core/pagination.py). AVANT : ?page_size=100 chargeait TOUT en
+  // mémoire une seule fois puis filtrait côté client -- au-delà de 100 produits (le
+  // maximum autorisé par la pagination), la caisse ne pouvait plus vendre certains
+  // articles, invisibles car jamais chargés. Désormais, chaque frappe (après debounce)
+  // ou scan interroge le serveur avec ?q=, comme /catalogue.
+  const fetchProduits = async (q: string = "") => {
+    setSearching(true);
     try {
-      // 🌟 La caisse a besoin de TOUT le catalogue en mémoire (scan/recherche instantanés),
-      // pas d'un scroll paginé comme /catalogue. On demande donc une page_size large.
-      // La réponse est désormais enveloppée par CataloguePagination : { count, next, previous, results: { produits, categories } }
-      const res = await apiClient.get('/api/catalogue/?page_size=100');
+      const res = await apiClient.get('/api/catalogue/', {
+        params: { page_size: 30, ...(q.trim() ? { q: q.trim() } : {}) },
+      });
       setProduitsDB(res.data.results.produits);
     } catch (err) { 
       console.error("Erreur API Catalogue au comptoir:", err); 
     } finally { 
-      setLoading(false); 
+      setLoading(false);
+      setSearching(false);
     }
   };
 
-  const handleScan = (code: string) => {
-    const p = produitsDB.find(prod => prod.identifiant === code || prod.nom.toLowerCase() === code.toLowerCase());
-    if (p) addToCart(p);
+  // 🎯 Un scan doit trouver le produit peu importe ce qui est actuellement affiché à
+  // l'écran (l'ancien code cherchait dans produitsDB, limité aux ~100 premiers produits
+  // chargés en mémoire -- un code scanné hors de cette liste ne matchait jamais).
+  // On interroge donc le serveur en direct avec le code scanné.
+  const handleScan = async (code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    // Coup d'œil rapide dans la liste déjà affichée (évite un aller-retour réseau si le
+    // produit est déjà visible), sinon on interroge le serveur par code exact.
+    const local = produitsDB.find(prod => prod.identifiant === trimmed || prod.nom.toLowerCase() === trimmed.toLowerCase());
+    if (local) { addToCart(local); return; }
+    try {
+      const res = await apiClient.get('/api/catalogue/', { params: { q: trimmed, page_size: 5 } });
+      const resultats: Produit[] = res.data.results.produits;
+      const match = resultats.find(p => p.identifiant === trimmed) || resultats.find(p => p.nom.toLowerCase() === trimmed.toLowerCase());
+      if (match) addToCart(match);
+      else alert(`Aucun produit trouvé pour le code "${trimmed}"`);
+    } catch (err) {
+      console.error("Erreur recherche scan:", err);
+    }
   };
 
   const addToCart = (p: Produit) => {
@@ -124,7 +159,7 @@ export default function POSPage() {
       setStep('success');
       setShowConfirmModal(false);
       setOrdonnanceVerifiee(false);
-      fetchProduits(); // Rafraîchir les stocks réels sur l'écran d'encaissement
+      fetchProduits(search); // Rafraîchir les stocks réels, en gardant la recherche en cours
       // Ouverture de la page de facture Next.js locale
       router.push(`/facture?id=${res.data.id}`);
   
@@ -153,13 +188,23 @@ export default function POSPage() {
               ref={searchInputRef}
               type="text" placeholder="Scanner ou chercher..."
               className="w-full pl-14 pr-6 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none font-bold outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white"
-              value={search} onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleScan(search)}
+              value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleScan(searchInput)}
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 overflow-y-auto pr-2 scrollbar-hide">
-            {produitsDB.filter(p => p.nom.toLowerCase().includes(search.toLowerCase())).map((p) => (
+            {searching && (
+              <div className="col-span-full flex items-center justify-center py-6 text-slate-400 text-[10px] font-black uppercase tracking-widest gap-2">
+                <Loader2 size={14} className="animate-spin" /> Recherche...
+              </div>
+            )}
+            {!searching && produitsDB.length === 0 && (
+              <div className="col-span-full flex items-center justify-center py-6 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                Aucun produit trouvé
+              </div>
+            )}
+            {!searching && produitsDB.map((p) => (
               <motion.div key={p.id} whileTap={{ scale: 0.95 }} onClick={() => addToCart(p)} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border-2 border-transparent hover:border-emerald-500 cursor-pointer transition-all group">
                 <h4 className="font-bold text-slate-800 dark:text-white text-xs uppercase truncate italic">{p.nom}</h4>
                 <div className="flex justify-between items-end mt-2">
