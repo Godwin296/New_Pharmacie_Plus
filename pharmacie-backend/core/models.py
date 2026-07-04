@@ -306,6 +306,11 @@ class Commande(models.Model):
             self.agent_validateur = user_operateur
             self.save()
 
+        # 📧 Hors de la transaction atomic() : un échec d'envoi d'email ne doit jamais
+        # faire rollback le paiement déjà validé et le stock déjà décrémenté.
+        from .emails import envoyer_email_confirmation_commande
+        envoyer_email_confirmation_commande(self)
+
     def marquer_retiree(self, user_operateur=None):
         """
         🏥 La caisse constate que le client est passé récupérer sa commande au guichet.

@@ -3,13 +3,15 @@ import './globals.css';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Sun, Moon, Menu, X, House,  
+  Menu, X, House,  
   Power, ShoppingCart, LogIn, Pill, History, LayoutDashboard
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { SerwistProvider } from '@serwist/turbopack/react';
 import { ConfigPharmacieProvider } from '../lib/context/ConfigPharmacieContext';
+import { ThemeProvider } from '../lib/context/ThemeProvider';
+import { ThemeToggleButton } from '../components/ThemeToggleButton';
 
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -18,7 +20,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   
   const isSpecialRoute = pathname.startsWith('/admin') || pathname.startsWith('/caisse') || pathname === '/login' || pathname === '/register';
 
-  const [isDark, setIsDark] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -41,20 +42,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         name: savedName
       });
     }
-
-    if (localStorage.getItem('theme') === 'dark' || window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setIsDark(true);
-      document.documentElement.classList.add('dark');
-    }
     return () => clearTimeout(timer);
   }, []);
 
-  const toggleTheme = () => {
-    const newTheme = !isDark;
-    setIsDark(newTheme);
-    document.documentElement.classList.toggle('dark');
-    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
-  };
+  // 🌗 Le thème clair/sombre est désormais entièrement géré par next-themes
+  // (voir lib/context/ThemeProvider.tsx + components/ThemeToggleButton.tsx) :
+  // plus de classList.toggle manuel ni de clé localStorage gérée à la main ici.
 
   const confirmLogout = () => {
     localStorage.clear();
@@ -70,7 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   };
 
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning>
       <head>
         {/* 🌟 INTEGRATION PWA ET SÉCURITÉ CONFORME AUX COMPOSANTS CLIENTS */}
         <title>Pharmacie +</title>
@@ -88,6 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300">
+        <ThemeProvider>
         <SerwistProvider swUrl="/serwist/sw.js">
         
         {/* SPLASH SCREEN */}
@@ -100,7 +94,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center">
                 <div className="relative inline-block mb-6">
                   <div className="absolute inset-0 bg-emerald-500 rounded-full blur-3xl opacity-20 animate-pulse" />
-                  <div className="h-32 w-32 bg-emerald-500 rounded-3xl flex items-center justify-center text-white text-5xl font-black shadow-2xl relative border border-white/10 mx-auto">P+</div>
+                  <div className="h-32 w-32 bg-white rounded-3xl flex items-center justify-center shadow-2xl relative border border-white/10 mx-auto p-5">
+                    <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+                  </div>
                 </div>
                 <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter mb-4">
                   Salut, <span className="text-emerald-500">{user.name}</span> !
@@ -118,14 +114,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="sticky top-0 z-50 bg-emerald-600/90 dark:bg-emerald-900/80 backdrop-blur-md p-4 text-white shadow-lg border-b border-white/10">
               <div className="container mx-auto flex justify-between items-center">
                 <Link href="/" className="flex items-center gap-3 text-white no-underline group">
-                  <div className="h-10 w-10 bg-white rounded-lg shadow-md flex items-center justify-center text-emerald-600 font-black group-hover:rotate-12 transition-transform">P+</div>
+                  <div className="h-10 w-10 bg-white rounded-lg shadow-md flex items-center justify-center p-1.5 overflow-hidden group-hover:rotate-12 transition-transform">
+                    <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+                  </div>
                   <span className="font-bold text-xl tracking-tighter uppercase italic">PHARMACIE +</span>
                 </Link>
         
                 <div className="flex items-center gap-3">
-                  <button aria-label="Basculer le thème" onClick={toggleTheme} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all outline-none">
-                    {isDark ? <Sun size={20} /> : <Moon size={20} />}
-                  </button>
+                  <ThemeToggleButton />
                   <button aria-label="Ouvrir le menu" onClick={() => setIsMenuOpen(true)} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all shadow-inner outline-none">
                     <Menu size={20} />
                   </button>
@@ -232,6 +228,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </footer>
         )}
         </SerwistProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

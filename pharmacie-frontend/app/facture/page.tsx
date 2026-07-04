@@ -78,7 +78,9 @@ function FactureContent() {
               {config?.logo ? (
                 <img src={config.logo} alt="Logo" className="w-20 h-20 object-contain rounded-2xl" />
               ) : (
-                <div className="w-20 h-20 bg-emerald-500 rounded-2xl flex items-center justify-center text-white text-3xl font-black italic">P+</div>
+                <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center p-2.5">
+                  <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+                </div>
               )}
               <div>
                 <h1 className="text-3xl font-black tracking-tighter text-slate-800 dark:text-white uppercase italic leading-none print:text-xl">{config?.nom || "PHARMACIE +"}</h1>

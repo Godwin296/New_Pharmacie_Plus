@@ -68,7 +68,9 @@ export default function FinancialReport() {
             {config?.logo ? (
               <img src={config.logo} alt="Logo" className="w-20 h-20 rounded-2xl object-cover border border-slate-100" />
             ) : (
-              <div className="w-16 h-16 bg-emerald-600 rounded-xl flex items-center justify-center font-black text-2xl text-white">P+</div>
+              <div className="w-16 h-16 bg-white rounded-xl border border-slate-100 flex items-center justify-center p-2">
+                <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+              </div>
             )}
             <div>
               <div className="bg-slate-900 text-white px-3 py-1 rounded text-[8px] font-black uppercase tracking-widest mb-2 inline-block">

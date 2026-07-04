@@ -108,7 +108,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* HEADER */}
       <header className="fixed top-0 left-0 right-0 h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-8 z-50 no-print">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-500 rounded shadow-lg flex items-center justify-center font-bold text-white">P+</div>
+          <div className="w-10 h-10 bg-white rounded shadow-lg flex items-center justify-center p-1.5 border border-slate-100 dark:border-slate-800">
+            <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+          </div>
           <div>
             <span className="font-bold text-xl uppercase tracking-tighter block">PHARMACIE +</span>
             <span className="block text-[9px] font-black text-red-500 animate-pulse uppercase tracking-widest">🛰️ ACCÈS GESTION</span>

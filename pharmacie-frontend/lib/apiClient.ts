@@ -1,64 +1,46 @@
 import axios from 'axios';
 
 /**
- * 🌐 DÉTECTION DYNAMIQUE DE L'URL BACKEND
+ * 🌐 MULTI-TENANT : résout l'URL du backend à partir du contexte.
  *
- * Problème initial : API_URL était une constante (ancien tunnel de dev ou variable
- * d'environnement fixe), ce qui empêchait de tester plusieurs tenants simultanément
- * et causait une boucle infinie quand l'URL ne répondait pas.
+ * En local, chaque pharmacie a son propre sous-domaine (dupont.localhost,
+ * martin.localhost...) mais tous partagent le même backend Daphne sur le port 8000.
+ * Si NEXT_PUBLIC_API_URL n'est PAS défini, on déduit l'URL dynamiquement à partir du
+ * sous-domaine actuellement visité dans le navigateur : ouvrir dupont.localhost:3000
+ * appelle automatiquement dupont.localhost:8000, martin.localhost:3000 appelle
+ * martin.localhost:8000, etc. -- plus besoin de changer .env.local pour tester un
+ * autre tenant.
  *
- * Solution : on détecte le sous-domaine depuis window.location.hostname et on
- * construit l'URL backend dynamiquement.
- *
- * Exemples :
- *   dupont.localhost:3000  → backend sur http://dupont.localhost:8000
- *   martin.localhost:3000  → backend sur http://martin.localhost:8000
- *   pharmacie.mondomaine.cm:3000 → backend sur http://pharmacie.mondomaine.cm:8000
- *   (en prod, le port sera retiré via un reverse proxy Nginx)
- *
- * Côté serveur (SSR) : window n'existe pas, on utilise la variable d'environnement
- * NEXT_PUBLIC_API_URL comme fallback (utile pour le build et le rendu serveur).
+ * Si NEXT_PUBLIC_API_URL EST défini (prod, tunnel de dev distant...), il est
+ * prioritaire et fige l'URL peu importe le sous-domaine visité.
  */
-function getApiBaseUrl(): string {
-  // Côté serveur (SSR/build) : utilise la variable d'environnement
-  if (typeof window === 'undefined') {
-    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+function resolveApiUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
   }
-
-  const hostname = window.location.hostname; // ex: "dupont.localhost" ou "dupont.pharmacieplus.cm"
-  const port = process.env.NEXT_PUBLIC_API_PORT || '8000';
-
-  // En développement local : remplace le port 3000 par le port backend
-  // dupont.localhost → http://dupont.localhost:8000
-  if (hostname.endsWith('.localhost') || hostname === 'localhost') {
-    return `http://${hostname}:${port}`;
+  if (typeof window !== 'undefined') {
+    const port = process.env.NEXT_PUBLIC_API_PORT || '8000';
+    return `${window.location.protocol}//${window.location.hostname}:${port}`;
   }
-
-  // En production : même domaine, port standard (Nginx reverse proxy gère le routing)
-  // dupont.pharmacieplus.cm → https://dupont.pharmacieplus.cm/api/...
-  // (le /api prefix est géré par Nginx, pas ici)
-  const protocol = window.location.protocol; // https: en prod
-  return `${protocol}//${hostname}`;
+  // Rendu côté serveur (SSR) sans accès à window : repli raisonnable pour le dev local.
+  return 'http://localhost:8000';
 }
 
+const API_URL = resolveApiUrl();
+
 const apiClient = axios.create({
-  // baseURL calculé dynamiquement à chaque instanciation (côté client)
-  // ou depuis la variable d'environnement (côté serveur)
-  baseURL: getApiBaseUrl(),
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  // Timeout de 15s : évite les boucles infinies si le backend ne répond pas
+  baseURL: API_URL,
+  headers: { 'Content-Type': 'application/json' },
+  // Timeout 15s : évite les boucles infinies si le backend ne répond pas
   timeout: 15000,
 });
 
-// Intercepteur requête : injecte le token JWT si disponible
+// Intercepteur requête : recalcule l'URL dynamiquement + injecte le JWT
 apiClient.interceptors.request.use(
   (config) => {
-    // Recalcule l'URL à chaque requête côté client pour gérer les navigations
-    // entre tenants dans la même session (cas rare mais possible)
     if (typeof window !== 'undefined') {
-      config.baseURL = getApiBaseUrl();
+      // Recalcule à chaque requête pour gérer les navigations inter-tenants
+      config.baseURL = resolveApiUrl();
       const token = localStorage.getItem('access_token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
@@ -75,20 +57,26 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Si timeout ou réseau injoignable : ne pas boucler, rejeter immédiatement
+    // Réseau injoignable ou timeout : rejeter immédiatement sans boucler
     if (!error.response) {
       return Promise.reject(error);
     }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
+      const refreshToken = typeof window !== 'undefined'
+        ? localStorage.getItem('refresh_token')
+        : null;
+
+      // Pas de refresh_token = visiteur anonyme (catalogue, login...)
+      // Ce n'est PAS une session expirée : on rejette sans rediriger ni boucler.
+      if (!refreshToken) {
+        return Promise.reject(error);
+      }
+
       originalRequest._retry = true;
       try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (!refreshToken) throw new Error('Pas de refresh token');
-
-        const baseUrl = getApiBaseUrl();
         const res = await axios.post(
-          `${baseUrl}/api/token/refresh/`,
+          `${resolveApiUrl()}/api/token/refresh/`,
           { refresh: refreshToken },
           { timeout: 10000 }
         );
@@ -99,8 +87,9 @@ apiClient.interceptors.response.use(
           return apiClient(originalRequest);
         }
       } catch (refreshError) {
-        // Refresh échoué → déconnexion propre sans boucle
-        if (typeof window !== 'undefined') {
+        // Refresh token expiré : session vraiment terminée.
+        // On redirige sauf si on est déjà sur /login (évite la boucle).
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
           localStorage.clear();
           window.location.href = '/login';
         }
