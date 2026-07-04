@@ -55,8 +55,11 @@ export default function POSPage() {
   // 🌟 ÉTAPE 1 : Récupération du catalogue via apiClient
   const fetchProduits = async () => {
     try {
-      const res = await apiClient.get('/api/catalogue/');
-      setProduitsDB(res.data.produits);
+      // 🌟 La caisse a besoin de TOUT le catalogue en mémoire (scan/recherche instantanés),
+      // pas d'un scroll paginé comme /catalogue. On demande donc une page_size large.
+      // La réponse est désormais enveloppée par CataloguePagination : { count, next, previous, results: { produits, categories } }
+      const res = await apiClient.get('/api/catalogue/?page_size=100');
+      setProduitsDB(res.data.results.produits);
     } catch (err) { 
       console.error("Erreur API Catalogue au comptoir:", err); 
     } finally { 
