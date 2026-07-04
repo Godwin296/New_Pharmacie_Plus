@@ -358,3 +358,68 @@ REST_FRAMEWORK = {
         'soumettre_paiement': '10/minute',
     },
 }
+
+# ============================================================
+# 📊 SENTRY — Logs centralisés et suivi des erreurs
+# ============================================================
+# Sentry capte automatiquement toutes les exceptions non gérées,
+# les erreurs 500, les requêtes lentes, et les transactions Django.
+#
+# En développement (DEBUG=True) : Sentry est désactivé pour ne pas
+# polluer ton projet Sentry avec des erreurs de test/dev qui n'ont
+# pas de valeur opérationnelle. Les erreurs restent visibles dans
+# les logs terminal comme d'habitude.
+#
+# En production (DEBUG=False) : Sentry s'active automatiquement
+# si SENTRY_DSN est défini dans les variables d'environnement.
+# Sans SENTRY_DSN, le bloc est ignoré silencieusement (pas de crash
+# au démarrage si la var est absente).
+#
+# Pour obtenir ta DSN :
+#   1. Va sur https://sentry.io → crée un compte gratuit
+#   2. New Project → Django → copie la DSN affichée
+#   3. Ajoute dans ton .env (prod) : SENTRY_DSN=https://xxx@oyyy.ingest.sentry.io/zzz
+#
+SENTRY_DSN = config('SENTRY_DSN', default='')
+if not DEBUG and SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.redis import RedisIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+
+        # Intégrations activées :
+        # - DjangoIntegration : capture les requêtes HTTP, les erreurs de vues,
+        #   les erreurs de middleware, et les signaux Django.
+        # - RedisIntegration : capture les erreurs de connexion Redis
+        #   (canaux WebSocket qui tombent, rate limiting défaillant, etc.)
+        integrations=[
+            DjangoIntegration(
+                transaction_style='url',       # nomme les transactions par URL (/api/catalogue/)
+                middleware_spans=True,         # trace chaque middleware (utile pour repérer les lenteurs)
+                signals_spans=False,           # désactivé : trop verbeux pour peu de valeur
+                cache_spans=False,             # désactivé : Redis déjà couvert par RedisIntegration
+            ),
+            RedisIntegration(),
+        ],
+
+        # Taux d'échantillonnage des performances (0.0 à 1.0).
+        # 0.1 = 10% des requêtes sont tracées → suffisant pour détecter les lenteurs
+        # sans exploser le quota du plan gratuit Sentry (100k transactions/mois).
+        # À augmenter temporairement si tu investigues un problème de perf précis.
+        traces_sample_rate=0.1,
+
+        # Taux d'échantillonnage des erreurs : 1.0 = toutes les erreurs sont envoyées.
+        # On veut toujours 100% des erreurs (contrairement aux perfs).
+        sample_rate=1.0,
+
+        # Infos utiles ajoutées à chaque événement Sentry :
+        release=config('APP_VERSION', default='dev'),
+        environment='production' if not DEBUG else 'development',
+
+        # Sécurité : ne jamais envoyer les mots de passe, tokens JWT,
+        # ou données personnelles dans les payloads Sentry.
+        send_default_pii=False,
+    )
+
