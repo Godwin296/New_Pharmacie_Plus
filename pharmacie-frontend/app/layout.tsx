@@ -18,7 +18,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const pathname = usePathname();
   
-  const isSpecialRoute = pathname.startsWith('/admin') || pathname.startsWith('/caisse') || pathname === '/login' || pathname === '/register';
+  // 🔧 FIX DOUBLE BANDEAU : app/page.tsx (l'accueil) affiche déjà sa propre nav
+  // ET son propre footer, branchés sur useConfigPharmacie() (nom/logo dynamiques du
+  // tenant). Sans exclure "/" ici, ce nav générique (texte "PHARMACIE +" codé en dur)
+  // s'affichait EN PLUS de celui de la page d'accueil -- d'où les "2 bandeaux" visibles
+  // au scroll, et le nom de la pharmacie qui restait "Pharmacie +" sur l'un des deux.
+  const isSpecialRoute = pathname.startsWith('/admin') || pathname.startsWith('/caisse') || pathname === '/login' || pathname === '/register' || pathname === '/';
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);

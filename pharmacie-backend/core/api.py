@@ -69,7 +69,13 @@ def infos_pharmacie(request):
             adresse="Adresse à configurer",
             telephone="+237 ..."
         )
-    serializer = PharmacieConfigSerializer(config)
+    # 🔧 FIX LOGO CASSÉ : sans context={'request': request}, DRF sérialise un ImageField
+    # en chemin RELATIF (ex: "/media/config/logo.png"). Le frontend interprète alors ce
+    # chemin par rapport à SON PROPRE domaine (localhost:3000) et non celui du backend
+    # (localhost:8000/dupont.localhost:8000), donc l'image ne charge jamais -- même si
+    # `config.logo` est bien "truthy" côté React. Avec le contexte, DRF renvoie l'URL
+    # absolue correcte (http://dupont.localhost:8000/media/config/logo.png).
+    serializer = PharmacieConfigSerializer(config, context={'request': request})
     return Response(serializer.data)
 
 @api_view(['POST','PUT', 'PATCH'])

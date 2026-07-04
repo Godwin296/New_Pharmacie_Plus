@@ -113,7 +113,7 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 | Décision | Statut |
 |---|---|
 | Isolation multi-tenant PAR SCHÉMA (pas tenant_id) | ✅ Implémenté |
-| Compte client global (`CompteClient` dans schéma public) | 🔜 À faire |
+| Compte client global (`CompteClient` dans schéma public) | 🔜 À faire — confirmé absent du code (grep `CompteClient` : 0 résultat). Prochain chantier choisi (session du 05/07), avant le test de la vente en ligne. |
 | Marketplace de sélection de pharmacie | 🔜 À faire (lié à CompteClient) |
 | Paiement manuel (option A) comme fallback permanent | ✅ Implémenté |
 | OCR uniquement aide visuelle, jamais automatisé | Décision ferme |
@@ -125,11 +125,16 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 ## 📋 TODO-LIST COMPLÈTE (par difficulté croissante)
 
 ### 🟢 Facile (quelques heures, périmètre limité)
-- [ ] **Lazy loading images catalogue** — `loading="lazy"` sur les `<img>`, quasi gratuit
-- [ ] **Toggle thème clair/sombre** dans les paramètres — `next-themes` déjà installé, juste exposer dans une page settings
-- [ ] **Logs centralisés Sentry** — intégration SDK, plan gratuit, pas de logique métier
-- [ ] **Email transactionnel basique** — `PharmacieConfig.email_contact` existe, brancher l'envoi sur confirmation commande
-- [ ] **Retrait de `app/page.tsx`** — l'actuelle landing page "ringard" sera refaite en toute dernière session comme vraie landing page marketing SaaS
+- [x] **Lazy loading images catalogue** — vérifié : `loading="lazy"` bien présent dans `app/catalogue/page.tsx`
+- [x] **Toggle thème clair/sombre** — vérifié : `ThemeToggleButton.tsx` + `next-themes` + `.dark` sur `<html>`, fonctionnel
+- [x] **Email transactionnel basique** — vérifié : `core/emails.py`, déclenché depuis `Commande.valider()`, échec non bloquant
+- [ ] **Logs centralisés Sentry** — ⚠️ RETIRÉ le 04/07 (`@sentry/nextjs` 9.x incompatible Next.js 16). À noter : Sentry propose désormais une v10.x avec support officiel Next.js 16 (`instrumentation.ts` + `onRequestError`) — à réévaluer et RE-TESTER isolément avant réintégration, pas de suppositions sur la compatibilité actuelle sans un vrai `npm install` + build.
+- [ ] **Retrait de `app/page.tsx`** — toujours en attente (refonte prévue en toute dernière session). En attendant, `app/layout.tsx` exclut désormais `/` de son nav/footer générique (fix session du 05/07) pour éviter le double bandeau visible tant que cette page n'est pas refaite.
+
+### 🐞 Bugs trouvés lors de l'audit du 05/07 (corrigés cette session)
+- [x] **Double bandeau sur `/`** — `layout.tsx` affichait son propre nav+footer (texte "Pharmacie +" codé en dur) EN PLUS de celui, dynamique, de `page.tsx`. Fix : `/` exclu du nav générique.
+- [x] **Logo cassé dès qu'il est uploadé** — `infos_pharmacie` (core/api.py) sérialisait `PharmacieConfig` sans `context={'request': request}` → l'`ImageField` `logo` aurait renvoyé un chemin relatif (`/media/config/...`), inutilisable par le frontend qui tourne sur un autre port/domaine. Fix : contexte ajouté, l'API renvoie maintenant une URL absolue.
+- [ ] **Accès multi-tenant simultané (2 onglets)** — PAS un bug de code : `lib/apiClient.ts` déduit déjà dynamiquement le tenant depuis `window.location.hostname` si `NEXT_PUBLIC_API_URL` n'est pas défini. Ton `.env.local` local fige cette valeur sur `dupont.localhost:8000`, ce qui bloque tout autre tenant. Solution : retirer `NEXT_PUBLIC_API_URL` de `.env.local` et redémarrer `npm run dev` (voir message de chat pour le détail).
 
 ### 🟡 Effort moyen (plusieurs sessions)
 - [ ] **Backups automatiques PostgreSQL** — cron + pg_dump ou Railway/Render managé, critique (actuellement zéro backup)
