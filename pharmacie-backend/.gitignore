@@ -11,3 +11,4 @@ staticfiles/
 .env
 venv/
 venv_test/
+seed.py

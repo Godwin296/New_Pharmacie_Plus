@@ -136,9 +136,9 @@ def api_infos_paiement(request):
 # --- 🛂 SYSTÈME DE SÉCURITÉ (Permissions personnalisées) ---
 def check_role(user, role_requested):
     if not user or not user.is_authenticated: return False
-    if role_requested == 'admin' and user.is_superuser: return True
-    if role_requested == 'caissiere' and user.is_staff and not user.is_superuser: return True
-    if role_requested == 'client' and not user.is_staff: return True
+    if role_requested == 'admin': return user.groups.filter(name='administrateur').exists()
+    if role_requested == 'caissiere': return user.groups.filter(name='caissiere').exists()
+    if role_requested == 'client': return not user.is_staff
     return False
 
 @api_view(['POST'])

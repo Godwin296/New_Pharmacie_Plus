@@ -71,7 +71,8 @@ SHARED_APPS = [
 
 TENANT_APPS = [
     'django.contrib.contenttypes',  # nécessaire aussi côté tenant (relations génériques par schéma)
-    'django.contrib.auth',          # les Users (pharmaciens, caissières, clients) sont PAR pharmacie
+    'django.contrib.auth',# les Users (pharmaciens, caissières, clients) sont PAR pharmacie
+    'rest_framework_simplejwt.token_blacklist',
     'core',                         # 💊 toute la logique métier : Produit, Commande, Client, etc.
 ]
 
