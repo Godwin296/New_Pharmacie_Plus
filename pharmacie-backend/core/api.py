@@ -55,9 +55,13 @@ def _notifier_client(commande_id, **payload):
     )
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([AllowAny])
 @authentication_classes([JWTAuthentication])
 def infos_pharmacie(request):
+        # 🌍 Volontairement PUBLIC (AllowAny) : nom, logo, devise, adresse de la pharmacie
+        # doivent s'afficher pour n'importe quel visiteur (catalogue, page de connexion...),
+        # pas seulement pour un admin déjà authentifié. Aucune donnée sensible n'est exposée
+        # ici -- la modification de la config, elle, reste réservée aux admins (api_update_config).
     config = PharmacieConfig.objects.first()
     if not config:
         config = PharmacieConfig.objects.create(
@@ -132,9 +136,9 @@ def api_infos_paiement(request):
 # --- 🛂 SYSTÈME DE SÉCURITÉ (Permissions personnalisées) ---
 def check_role(user, role_requested):
     if not user or not user.is_authenticated: return False
-    if role_requested == 'admin' and user.is_superuser: return True
-    if role_requested == 'caissiere' and user.is_staff and not user.is_superuser: return True
-    if role_requested == 'client' and not user.is_staff: return True
+    if role_requested == 'admin': return user.groups.filter(name='administrateur').exists()
+    if role_requested == 'caissiere': return user.groups.filter(name='caissiere').exists()
+    if role_requested == 'client': return not user.is_staff
     return False
 
 @api_view(['POST'])
