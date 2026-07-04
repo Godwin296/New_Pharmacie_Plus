@@ -80,7 +80,9 @@ export default function StockPrintPage() {
               {config?.logo ? (
                 <img src={config.logo} alt="Logo de l'officine" className="w-14 h-14 rounded-xl object-cover border border-slate-100" />
               ) : (
-                <div className="w-14 h-14 bg-emerald-600 rounded-xl flex items-center justify-center font-black text-xl text-white shadow-md">P+</div>
+                <div className="w-14 h-14 bg-white rounded-xl border border-slate-100 shadow-md flex items-center justify-center p-1.5">
+                  <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+                </div>
               )}
               <div>
                 <h1 className="text-xl font-black uppercase tracking-tighter text-slate-900">{config?.nom || "PHARMACIE PLUS +"}</h1>

@@ -94,7 +94,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center">
                 <div className="relative inline-block mb-6">
                   <div className="absolute inset-0 bg-emerald-500 rounded-full blur-3xl opacity-20 animate-pulse" />
-                  <div className="h-32 w-32 bg-emerald-500 rounded-3xl flex items-center justify-center text-white text-5xl font-black shadow-2xl relative border border-white/10 mx-auto">P+</div>
+                  <div className="h-32 w-32 bg-white rounded-3xl flex items-center justify-center shadow-2xl relative border border-white/10 mx-auto p-5">
+                    <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+                  </div>
                 </div>
                 <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter mb-4">
                   Salut, <span className="text-emerald-500">{user.name}</span> !
@@ -112,7 +114,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="sticky top-0 z-50 bg-emerald-600/90 dark:bg-emerald-900/80 backdrop-blur-md p-4 text-white shadow-lg border-b border-white/10">
               <div className="container mx-auto flex justify-between items-center">
                 <Link href="/" className="flex items-center gap-3 text-white no-underline group">
-                  <div className="h-10 w-10 bg-white rounded-lg shadow-md flex items-center justify-center text-emerald-600 font-black group-hover:rotate-12 transition-transform">P+</div>
+                  <div className="h-10 w-10 bg-white rounded-lg shadow-md flex items-center justify-center p-1.5 overflow-hidden group-hover:rotate-12 transition-transform">
+                    <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+                  </div>
                   <span className="font-bold text-xl tracking-tighter uppercase italic">PHARMACIE +</span>
                 </Link>
         

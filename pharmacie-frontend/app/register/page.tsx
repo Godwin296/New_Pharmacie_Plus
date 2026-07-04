@@ -91,7 +91,9 @@ export default function RegisterPage() {
       <div className="relative z-10 w-full max-w-lg px-6 py-12">
         
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
-          <div className="h-24 w-24 bg-emerald-600 rounded-[2rem] flex items-center justify-center text-white text-4xl font-black shadow-2xl relative border-2 border-emerald-400 mx-auto">P+</div>
+          <div className="h-24 w-24 bg-white rounded-[2rem] flex items-center justify-center shadow-2xl relative border-2 border-emerald-400 mx-auto p-4">
+            <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+          </div>
           <h1 className="text-5xl font-black text-white tracking-tighter italic uppercase mt-4">Pharmacie +</h1>
           <p className="text-emerald-400 text-[10px] font-black uppercase tracking-[0.4em] mt-3">Ouverture de Dossier Client 🛰️</p>
         </motion.div>
