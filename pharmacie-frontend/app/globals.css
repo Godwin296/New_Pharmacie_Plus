@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* 🌗 THÈME : Tailwind v4 ne réagit par défaut qu'à prefers-color-scheme (OS).
+   Cette ligne active en plus le mode "classe" (.dark sur <html>), indispensable
+   pour que le toggle clair/sombre de l'app (piloté par next-themes) fonctionne
+   réellement -- sans elle, les classes dark: partout dans le code ne changent
+   jamais au clic, seulement quand l'OS change de thème. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

@@ -193,8 +193,16 @@ export default function CataloguePage() {
                 <div className="relative h-48 bg-slate-50 dark:bg-slate-950 rounded-[2rem] mb-6 overflow-hidden flex items-center justify-center group-hover:bg-emerald-50 transition-colors">
                   
                   {/* 🌟 IMAGE STABILISÉE : Utilise l'URL absolue renvoyée proprement par le backend Django */}
+                  {/* ⚡ PERF : loading="lazy" -- ne charge l'image que quand elle approche du viewport,
+                      essentiel ici car le catalogue peut afficher des dizaines de produits d'un coup. */}
                   {p.image ? (
-                    <img src={p.image} alt={p.nom} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                    <img
+                      src={p.image}
+                      alt={p.nom}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    />
                   ) : (
                     <div className="text-7xl group-hover:scale-110 transition-transform">💊</div>
                   )}

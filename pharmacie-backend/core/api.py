@@ -55,9 +55,13 @@ def _notifier_client(commande_id, **payload):
     )
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([AllowAny])
 @authentication_classes([JWTAuthentication])
 def infos_pharmacie(request):
+    # 🌍 Volontairement PUBLIC (AllowAny) : nom, logo, devise, adresse de la pharmacie
+    # doivent s'afficher pour n'importe quel visiteur (catalogue, page de connexion...),
+    # pas seulement pour un admin déjà authentifié. Aucune donnée sensible n'est exposée
+    # ici -- la modification de la config, elle, reste réservée aux admins (api_update_config).
     config = PharmacieConfig.objects.first()
     if not config:
         config = PharmacieConfig.objects.create(

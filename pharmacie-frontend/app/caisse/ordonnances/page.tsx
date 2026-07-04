@@ -167,9 +167,13 @@ export default function OrdonnancesPage() {
               <div className="lg:w-1/2 bg-slate-50 dark:bg-slate-950 relative flex items-center justify-center p-10 border-r border-slate-100 dark:border-slate-800">
                 <div className="relative overflow-hidden rounded-[2.5rem] shadow-2xl bg-white ring-8 ring-white dark:ring-slate-800 group/img">
                   {/* 🌟 STABLE : Utilisation de l'URL absolue fournie par le Serializer de Django */}
+                  {/* ⚡ PERF : loading="lazy" -- la liste d'attente peut contenir de nombreuses
+                      ordonnances, inutile de charger toutes les images d'un coup. */}
                   {c.ordonnance ? (
                     <img 
                       src={c.ordonnance} 
+                      loading="lazy"
+                      decoding="async"
                       className="max-h-[550px] w-full object-contain transition-transform duration-1000 group-hover/img:scale-110" 
                       alt="Ordonnance du Client"
                     />

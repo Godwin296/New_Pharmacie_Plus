@@ -1,16 +1,21 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useTheme } from 'next-themes';
 import { 
   Settings, Image as ImageIcon, MapPin, 
   Globe, Building2, Phone, Mail,
-  MessageSquare, Save, Loader2, Wallet 
+  MessageSquare, Save, Loader2, Wallet, Sun, Moon, Monitor
 } from 'lucide-react';
 
 // 🌟 ÉTAPE 1 : Importation de l'apiClient
 import apiClient from '../../../lib/apiClient'; // Ajustez le chemin selon la profondeur du dossier admin/settings
 
 export default function SettingsPage() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -194,6 +199,41 @@ export default function SettingsPage() {
                   <option value="USD">Dollar ($)</option>
                 </select>
               </div>
+            </div>
+          </motion.div>
+
+          {/* 🌗 APPARENCE : préférence de thème, stockée par next-themes (localStorage,
+              indépendante de PharmacieConfig -- c'est une préférence de l'appareil/navigateur,
+              pas une donnée de la pharmacie, donc pas de bouton "Sauvegarder" ici : le
+              changement est appliqué immédiatement au clic. */}
+          <motion.div whileHover={{ y: -5 }} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
+            <h5 className="font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2 text-sm uppercase tracking-widest">
+              <Sun size={18} className="text-amber-500" /> Apparence
+            </h5>
+            <div className="grid grid-cols-3 gap-3">
+              {([
+                { value: 'light', label: 'Clair', icon: Sun },
+                { value: 'dark', label: 'Sombre', icon: Moon },
+                { value: 'system', label: 'Système', icon: Monitor },
+              ] as const).map(({ value, label, icon: Icon }) => {
+                const isActive = mounted && theme === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTheme(value)}
+                    aria-pressed={isActive}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-none cursor-pointer transition-all font-bold text-[10px] uppercase tracking-wider ${
+                      isActive
+                        ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    <Icon size={20} />
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </motion.div>
 

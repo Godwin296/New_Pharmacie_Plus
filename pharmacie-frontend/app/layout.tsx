@@ -3,13 +3,15 @@ import './globals.css';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Sun, Moon, Menu, X, House,  
+  Menu, X, House,  
   Power, ShoppingCart, LogIn, Pill, History, LayoutDashboard
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { SerwistProvider } from '@serwist/turbopack/react';
 import { ConfigPharmacieProvider } from '../lib/context/ConfigPharmacieContext';
+import { ThemeProvider } from '../lib/context/ThemeProvider';
+import { ThemeToggleButton } from '../components/ThemeToggleButton';
 
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -18,7 +20,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   
   const isSpecialRoute = pathname.startsWith('/admin') || pathname.startsWith('/caisse') || pathname === '/login' || pathname === '/register';
 
-  const [isDark, setIsDark] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -41,20 +42,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         name: savedName
       });
     }
-
-    if (localStorage.getItem('theme') === 'dark' || window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setIsDark(true);
-      document.documentElement.classList.add('dark');
-    }
     return () => clearTimeout(timer);
   }, []);
 
-  const toggleTheme = () => {
-    const newTheme = !isDark;
-    setIsDark(newTheme);
-    document.documentElement.classList.toggle('dark');
-    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
-  };
+  // 🌗 Le thème clair/sombre est désormais entièrement géré par next-themes
+  // (voir lib/context/ThemeProvider.tsx + components/ThemeToggleButton.tsx) :
+  // plus de classList.toggle manuel ni de clé localStorage gérée à la main ici.
 
   const confirmLogout = () => {
     localStorage.clear();
@@ -70,7 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   };
 
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning>
       <head>
         {/* 🌟 INTEGRATION PWA ET SÉCURITÉ CONFORME AUX COMPOSANTS CLIENTS */}
         <title>Pharmacie +</title>
@@ -88,6 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300">
+        <ThemeProvider>
         <SerwistProvider swUrl="/serwist/sw.js">
         
         {/* SPLASH SCREEN */}
@@ -123,9 +117,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </Link>
         
                 <div className="flex items-center gap-3">
-                  <button aria-label="Basculer le thème" onClick={toggleTheme} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all outline-none">
-                    {isDark ? <Sun size={20} /> : <Moon size={20} />}
-                  </button>
+                  <ThemeToggleButton />
                   <button aria-label="Ouvrir le menu" onClick={() => setIsMenuOpen(true)} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all shadow-inner outline-none">
                     <Menu size={20} />
                   </button>
@@ -232,6 +224,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </footer>
         )}
         </SerwistProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
