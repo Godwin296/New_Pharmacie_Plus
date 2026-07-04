@@ -1,7 +1,15 @@
 import axios from 'axios';
 
-// 1. Mettez bien votre URL de tunnel complète par défaut
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mw69zhwz-8000.uks1.devtunnels.ms';
+function resolveApiUrl(): string {  
+  if (process.env.NEXT_PUBLIC_API_URL) 
+    { return process.env.NEXT_PUBLIC_API_URL; }  
+  if (typeof window !== 'undefined') { 
+    const port = process.env.NEXT_PUBLIC_API_PORT || '8000'; 
+    return `${window.location.protocol}//${window.location.hostname}:${port}`;  
+  } 
+  return 'http://localhost:8000'; 
+} 
+const API_URL = resolveApiUrl();
 
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -27,23 +35,25 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    
+
     if (error.response?.status === 401 && !originalRequest._retry) {
+      const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
+
+      if (!refreshToken) {
+        return Promise.reject(error);
+      }
+
       originalRequest._retry = true;
       try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        
-        // 2. STABLE : Vous utilisez l'extension SimpleJWT standard, l'URL par défaut de DRF est souvent '/api/token/refresh/'
-        // Si vous créez une vue personnalisée plus tard, vous l'ajusterez ici.
         const res = await axios.post(`${API_URL}/api/token/refresh/`, { refresh: refreshToken });
-        
+
         if (res.status === 200) {
           localStorage.setItem('access_token', res.data.access);
           originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
-          return apiClient(originalRequest); 
+          return apiClient(originalRequest);
         }
       } catch (refreshError) {
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
           localStorage.clear();
           window.location.href = '/login';
         }
