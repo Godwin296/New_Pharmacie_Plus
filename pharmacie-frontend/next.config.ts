@@ -5,23 +5,8 @@ const nextConfig: NextConfig = {
   turbopack: {},
 };
 
-const configAvecSerwist = withSerwist(nextConfig);
-
-// Sentry ne s'applique QU'EN PRODUCTION (build) pour éviter les panics Turbopack en dev.
-// En dev local (npm run dev), on exporte directement sans Sentry pour garder Turbopack stable.
-// En production (npm run build), withSentryConfig s'active si NEXT_PUBLIC_SENTRY_DSN est défini.
-const isProd = process.env.NODE_ENV === 'production';
-
-async function getConfig() {
-  if (isProd && process.env.NEXT_PUBLIC_SENTRY_DSN) {
-    const { withSentryConfig } = await import('@sentry/nextjs');
-    return withSentryConfig(configAvecSerwist, {
-      org: process.env.SENTRY_ORG || '',
-      project: process.env.SENTRY_PROJECT || 'pharmacie-plus',
-      silent: !process.env.CI,
-    });
-  }
-  return configAvecSerwist;
-}
-
-export default getConfig();
+// Sentry est géré uniquement via les fichiers sentry.*.config.ts (chargés
+// automatiquement par Next.js). Le paquet @sentry/nextjs n'est pas compatible
+// avec Next.js 16 pour l'instant — on l'intégrera quand une version compatible
+// sortira. Les fichiers de config restent en place pour ne pas perdre la config.
+export default withSerwist(nextConfig);

@@ -1,15 +1,26 @@
 @import "tailwindcss";
 
 /* 🌗 THÈME : Tailwind v4 ne réagit par défaut qu'à prefers-color-scheme (OS).
-   Cette ligne active en plus le mode "classe" (.dark sur <html>), indispensable
+   Cette ligne active le mode "classe" (.dark sur <html>), indispensable
    pour que le toggle clair/sombre de l'app (piloté par next-themes) fonctionne
    réellement -- sans elle, les classes dark: partout dans le code ne changent
    jamais au clic, seulement quand l'OS change de thème. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Variables de thème clair (défaut) */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+}
+
+/* Variables de thème sombre — activées par next-themes via la classe .dark sur <html>.
+   IMPORTANT : on ne se fie PAS à prefers-color-scheme pour le fond de page,
+   parce que next-themes gère le toggle manuellement via la classe .dark.
+   Sans cette règle, le fond de page restait blanc même après avoir cliqué
+   sur le toggle, car --background n'était mis à jour que par l'OS. */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 @theme inline {
@@ -19,22 +30,15 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 @media print {
   .no-print {
     display: none !important;
   }
 }
 
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }

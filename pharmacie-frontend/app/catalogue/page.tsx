@@ -142,12 +142,12 @@ export default function CataloguePage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12">
+    <div className="max-w-7xl mx-auto px-6 py-12 min-h-screen">
       
       {/* 🎯 HEADER & RECHERCHE */}
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-16">
         <h1 className="text-5xl font-black text-slate-800 dark:text-white tracking-tighter mb-4">
-          Catalogue <span className="text-emerald-500 italic">Médicaments</span> 💊
+          <span className="text-slate-800 dark:text-white">Catalogue </span><span className="text-emerald-500 italic">Médicaments</span> 💊
         </h1>
         <p className="text-slate-500 dark:text-slate-400 font-medium text-lg">Stock réel synchronisé avec la pharmacie.</p>
 
