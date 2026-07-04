@@ -136,8 +136,16 @@ def api_infos_paiement(request):
 # --- 🛂 SYSTÈME DE SÉCURITÉ (Permissions personnalisées) ---
 def check_role(user, role_requested):
     if not user or not user.is_authenticated: return False
-    if role_requested == 'admin': return user.groups.filter(name='administrateur').exists()
-    if role_requested == 'caissiere': return user.groups.filter(name='caissiere').exists()
+    # 🔐 CORRECTIF : cette fonction vérifiait l'appartenance à des groupes Django
+    # ('administrateur', 'caissiere') que RIEN dans le projet ne crée ni n'assigne jamais
+    # (aucun signal, migration, ou management command) -- résultat : plus personne ne
+    # pouvait se connecter comme admin/caissière sur un tenant fraîchement créé, alors que
+    # api_get_current_user() et TOUTES les vérifications de droits réelles sur les
+    # endpoints (fournisseurs, stocks...) se basent sur is_staff/is_superuser. On réaligne
+    # sur la même source de vérité partout : plus simple, et ça évite d'avoir à gérer des
+    # groupes en plus des flags Django standards.
+    if role_requested == 'admin': return user.is_superuser
+    if role_requested == 'caissiere': return user.is_staff and not user.is_superuser
     if role_requested == 'client': return not user.is_staff
     return False
 
