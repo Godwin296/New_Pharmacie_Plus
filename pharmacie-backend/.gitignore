@@ -11,5 +11,3 @@ staticfiles/
 .env
 venv/
 venv_test/
-seed.py
-mise_a_jour.py
