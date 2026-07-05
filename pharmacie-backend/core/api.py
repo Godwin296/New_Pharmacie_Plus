@@ -896,7 +896,13 @@ def api_vente_directe(request):
                 Mouvement_stock.objects.create(produit=produit, quantite=qte, type="sortie", auteur=request.user)
 
             serializer = CommandeSerializer(commande)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        # 📧 Hors du bloc transaction.atomic() : un échec d'envoi d'email ne doit jamais
+        # faire rollback une vente déjà encaissée et un stock déjà décrémenté.
+        from .emails import envoyer_email_confirmation_commande
+        envoyer_email_confirmation_commande(commande)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
             
     except ValidationError as e:
         error_message = e.messages[0] if hasattr(e, 'messages') else str(e)

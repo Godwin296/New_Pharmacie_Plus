@@ -12,6 +12,7 @@ import { SerwistProvider } from '@serwist/turbopack/react';
 import { ConfigPharmacieProvider } from '../lib/context/ConfigPharmacieContext';
 import { ThemeProvider } from '../lib/context/ThemeProvider';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
+import { PharmacyBrandName } from '../components/PharmacyBrandName';
 
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -114,6 +115,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           )}
         </AnimatePresence>
 
+        <ConfigPharmacieProvider>
         {!isSpecialRoute && (
           <>
             <nav className="sticky top-0 z-50 bg-emerald-600/90 dark:bg-emerald-900/80 backdrop-blur-md p-4 text-white shadow-lg border-b border-white/10">
@@ -122,7 +124,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <div className="h-10 w-10 bg-white rounded-lg shadow-md flex items-center justify-center p-1.5 overflow-hidden group-hover:rotate-12 transition-transform">
                     <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
                   </div>
-                  <span className="font-bold text-xl tracking-tighter uppercase italic">PHARMACIE +</span>
+                  <PharmacyBrandName className="font-bold text-xl tracking-tighter uppercase italic" />
                 </Link>
         
                 <div className="flex items-center gap-3">
@@ -218,20 +220,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           )}
         </AnimatePresence>
 
-        <ConfigPharmacieProvider>
-          <main className="flex-grow">{children}</main>
-        </ConfigPharmacieProvider>
+        <main className="flex-grow">{children}</main>
 
         {!isSpecialRoute && (
           <footer className="bg-slate-950 text-white p-10 border-t-[5px] border-emerald-600 mt-20">
             <div className="container mx-auto text-center">
-              <h3 className="text-xl font-black uppercase tracking-tighter italic text-emerald-500">Pharmacie +</h3>
+              <PharmacyBrandName className="text-xl font-black uppercase tracking-tighter italic text-emerald-500" />
               <p className="text-slate-500 text-[10px] mt-2 font-bold tracking-widest uppercase italic opacity-60">
-                &copy; {new Date().getFullYear()} PHARMACIE + . Tous droits réservés.
+                &copy; {new Date().getFullYear()} <PharmacyBrandName /> . Tous droits réservés.
               </p>
             </div>
           </footer>
         )}
+        </ConfigPharmacieProvider>
         </SerwistProvider>
         </ThemeProvider>
       </body>

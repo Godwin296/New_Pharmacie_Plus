@@ -181,6 +181,12 @@ def export_pdf_financier(request):
         'moyenne': moyenne,
         'top_produits': top_produits,
         'date_heure': timezone.now(),
+        # 🖼️ BUG CORRIGÉ : le template utilisait auparavant {{ config.logo.path }}, qui
+        # renvoie le chemin DISQUE du serveur (ex: D:\...\media\logo.png sous Windows) --
+        # WeasyPrint ne peut pas charger ça comme une image, d'où le logo systématiquement
+        # cassé dans le PDF. On construit ici une vraie URL HTTP absolue, exactement comme
+        # le fait déjà export_facture_pdf() plus haut dans ce même fichier.
+        'logo_url': request.build_absolute_uri(config.logo.url) if config and config.logo else None,
     }
 
     # 3. Rendu du gabarit HTML vers le moteur WeasyPrint
@@ -227,6 +233,8 @@ def export_rapport_stock(request):
             'total_med': total_med,
             'stock_faible': stock_faible,
             'date_heure': timezone.now(),
+            # 🖼️ BUG CORRIGÉ : voir commentaire identique dans export_pdf_financier().
+            'logo_url': request.build_absolute_uri(config.logo.url) if config and config.logo else None,
         }
         
         html_string = render_to_string('core/Admin/pdf_stock.html', context)
@@ -271,6 +279,9 @@ def export_alertes_pdf(request):
         'nb_produits_critiques': nb_produits_critiques,
         'produits_expirant_bientot': produits_en_alerte,
         'date_heure': timezone.now(),
+        # 🖼️ Harmonisé avec les autres exports PDF (voir export_pdf_financier) : URL
+        # absolue plutôt que config.logo.url relative, pour un seul pattern cohérent.
+        'logo_url': request.build_absolute_uri(config.logo.url) if config and config.logo else None,
     }
 
     html_string = render_to_string('core/Admin/alertes.html', context)
