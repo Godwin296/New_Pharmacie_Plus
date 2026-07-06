@@ -43,6 +43,4 @@ urlpatterns = [
     path('export-pdf/rapport-stock/', views.export_rapport_stock, name='export_rapport_stock'),
     path('export-pdf/stocks/', views.export_alertes_pdf, name='export_alertes_pdf'),
     path('export-pdf/financier/', views.export_pdf_financier, name='export_pdf_financier'),
-    path('ticket-caisse-guichet/<int:commande_id>/', views.ticket_caisse_guichet, name='ticket_caisse_guichet'),
-    path('telecharger-facture-pdf/<int:commande_id>/', views.telecharger_facture_pdf, name='telecharger_facture_pdf'),
 ]
