@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view, permission_classes, parser_class
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
@@ -27,6 +27,8 @@ from .pagination import CataloguePagination
 from .throttles import LoginRateThrottle, SoumettrePaiementRateThrottle
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+from clients_publics.models import CompteClient 
+from .authentication import ClientJWTAuthentication
 
 
 def _notifier_caisse(tenant_schema_name, type_event, **payload):
@@ -155,6 +157,76 @@ def check_role(user, role_requested):
     if role_requested == 'client': return not user.is_staff
     return False
 
+
+# ============================================================================
+# 🌍 COMPTE CLIENT GLOBAL (MARKETPLACE) -- schéma public, distinct du personnel
+# ============================================================================
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def api_client_register(request):
+    email = (request.data.get('email') or '').strip().lower()
+    password = request.data.get('password') or ''
+    nom = (request.data.get('nom') or '').strip()
+    telephone = (request.data.get('telephone') or '').strip()
+
+    if not email or not password or not nom:
+        return Response({"error": "email, password et nom sont obligatoires"}, status=400)
+    if len(password) < 8:
+        return Response({"error": "Le mot de passe doit contenir au moins 8 caractères"}, status=400)
+    if CompteClient.objects.filter(email=email).exists():
+        return Response({"error": "Un compte existe déjà avec cet email"}, status=400)
+
+    client = CompteClient.objects.create_user(
+        email=email, password=password, nom=nom, telephone=telephone or None
+    )
+    return Response({"message": "Compte créé avec succès ! 🎉", "email": client.email}, status=201)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([LoginRateThrottle])
+def api_client_login(request):
+    email = (request.data.get('email') or '').strip().lower()
+    password = request.data.get('password') or ''
+
+    try:
+        client = CompteClient.objects.get(email=email, is_active=True)
+    except CompteClient.DoesNotExist:
+        return Response({"error": "Identifiants invalides"}, status=401)
+
+    if not client.check_password(password):
+        return Response({"error": "Identifiants invalides"}, status=401)
+
+    # 🔴 PAS de RefreshToken.for_user() ici : ça crée un OutstandingToken lié par
+    # FK stricte à auth.User (personnel) -- planterait avec un CompteClient.
+    refresh = RefreshToken()
+    refresh['user_id'] = client.pk
+    refresh['type'] = 'client'
+    access = refresh.access_token
+    access['type'] = 'client'
+
+    return Response({
+        "message": "Connexion réussie",
+        "access": str(access),
+        "refresh": str(refresh),
+        "email": client.email,
+        "nom": client.nom,
+    }, status=200)
+
+
+@api_view(['GET'])
+@authentication_classes([ClientJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_client_whoami(request):
+    client = request.user
+    return Response({
+        "is_authenticated": True,
+        "email": client.email,
+        "nom": client.nom,
+        "telephone": client.telephone,
+    })
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def api_register(request):
@@ -269,7 +341,7 @@ def api_panier(request):
         if request.user.is_staff:
             commande_detail = get_object_or_404(Commande, id=facture_id)
             # Le staff voit le serializer complet (avec le nom de l'agent validateur, pour l'audit)
-            return Response(CommandeSerializer(commande_detail).data)
+            return Response(CommandeSerializer(commande_detail, context={'request': request}).data)
         else:
             commande_detail = get_object_or_404(Commande, id=facture_id, client=client_profile)
             # 🔐 Le client ne voit jamais quel agent a traité sa commande
@@ -362,7 +434,7 @@ def api_soumettre_paiement(request, commande_id):
 
     # 🔴 TEMPS RÉEL : la caisse voit immédiatement apparaître cette demande de vérification
     _notifier_caisse(request.tenant.schema_name, "nouvelle_demande_paiement",
-                      commande=CommandeSerializer(commande).data)
+                      CommandeSerializer(commande, context={'request': request}).data)
 
     return Response({
         "message": "Merci ! Votre paiement est en cours de vérification par la pharmacie.",
@@ -417,7 +489,7 @@ def api_paiements_a_verifier(request):
         return Response({"error": "Action réservée au personnel de la pharmacie"}, status=403)
 
     commandes = Commande.objects.filter(statut="paiement_a_verifier").order_by('-date')
-    return Response(CommandeSerializer(commandes, many=True).data)
+    return Response(CommandeSerializer(commandes, many=True, context={'request': request}).data)
 
 
 @api_view(['GET'])
@@ -444,7 +516,7 @@ def api_commandes_a_retirer(request):
             Q(client_guichet__nom__icontains=recherche)
         )
 
-    return Response(CommandeSerializer(commandes, many=True).data)
+    return Response(CommandeSerializer(commandes, many=True, context={'request': request}).data)
 
 
 @api_view(['POST'])
@@ -484,7 +556,7 @@ def api_mes_commandes(request):
 # --- 📋 GESTION DES ORDONNANCES SÉCURISÉE ---
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
-@parser_classes([MultiPartParser, FormParser])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def api_gestion_ordonnance(request, commande_id=None):
     """Client: Upload / Caisse: Liste et Valide sans injection de droits 🔓"""
     
@@ -517,7 +589,7 @@ def api_gestion_ordonnance(request, commande_id=None):
                 # de CETTE pharmacie qu'une nouvelle ordonnance attend leur traitement.
                 _notifier_caisse(
                     request.tenant.schema_name, "nouvelle_ordonnance",
-                    commande=CommandeSerializer(commande).data,
+                    commande=CommandeSerializer(commande, context={'request': request}).data,
                 )
 
                 return Response({"message": "Ordonnance reçue. En attente de vérification. ⏳"})
@@ -527,7 +599,7 @@ def api_gestion_ordonnance(request, commande_id=None):
     if request.user.is_staff:
         if request.method == 'GET' and not commande_id:
             attentes = Commande.objects.filter(statut="attente_validation", ordonnance_valide=False).filter(ordonnance__isnull=False).exclude(ordonnance='')
-            return Response(CommandeSerializer(attentes, many=True).data)
+            return Response(CommandeSerializer(attentes, many=True, context={'request': request}).data)
         
         if request.method == 'POST' and commande_id:
             action = request.data.get('action')
@@ -677,7 +749,7 @@ def api_boss_dashboard(request):
             "graphique_ventes": graphique_data,
             "top_produits_vendus": graphique_produits_data, # 🌟 Ta nouvelle clé de classement !
             "produits_expirant_bientot": ProduitSerializer(expirent, many=True).data,
-            "ventes_recentes": CommandeSerializer(ventes_recentes, many=True).data,
+            "ventes_recentes": CommandeSerializer(ventes_recentes, many=True, context={'request': request}).data,
             "date_rapport": aujourdhui
         })
     except Exception as e:
@@ -895,7 +967,7 @@ def api_vente_directe(request):
                 
                 Mouvement_stock.objects.create(produit=produit, quantite=qte, type="sortie", auteur=request.user)
 
-            serializer = CommandeSerializer(commande)
+            serializer = CommandeSerializer(commande, context={'request': request})
 
         # 📧 Hors du bloc transaction.atomic() : un échec d'envoi d'email ne doit jamais
         # faire rollback une vente déjà encaissée et un stock déjà décrémenté.
@@ -927,7 +999,7 @@ def api_archives_caissiere(request):
         date__gte=il_ya_90_jours
     ).order_by('-date')
     
-    serializer = CommandeSerializer(archives, many=True)
+    serializer = CommandeSerializer(archives, many=True, context={'request': request})
     return Response(serializer.data)
 
 

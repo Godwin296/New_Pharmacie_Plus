@@ -67,6 +67,7 @@ SHARED_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
+    'clients_publics',
 ]
 
 TENANT_APPS = [
