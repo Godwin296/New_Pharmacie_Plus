@@ -6,6 +6,7 @@ from django.db.models import Sum, Q, F
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from .authentication import StaffJWTAuthentication
 from weasyprint import HTML
 import qrcode
 import base64
@@ -25,12 +26,17 @@ def is_boss(user):
 def _recuperer_utilisateur_jwt(request):
     """Extrait secrètement l'utilisateur depuis le token Bearer fourni par Next.js"""
     try:
-        header = JWTAuthentication().get_header(request)
+        # 🔐 CORRECTIF : utilisait JWTAuthentication (vanilla), qui ignore la claim
+        # "type" du jeton -- un jeton CLIENT (marketplace globale) pouvait donc faire
+        # générer/télécharger des PDF réservés au personnel (facture, rapport de stock,
+        # ticket de caisse...) en usurpant l'identité du membre du personnel partageant
+        # le même ID numérique sur le tenant ciblé. Voir core/authentication.py.
+        header = StaffJWTAuthentication().get_header(request)
         if header is None:
             return None
-        raw_token = JWTAuthentication().get_raw_token(header)
-        validated_token = JWTAuthentication().get_validated_token(raw_token)
-        return JWTAuthentication().get_user(validated_token)
+        raw_token = StaffJWTAuthentication().get_raw_token(header)
+        validated_token = StaffJWTAuthentication().get_validated_token(raw_token)
+        return StaffJWTAuthentication().get_user(validated_token)
     except Exception:
         return None
 

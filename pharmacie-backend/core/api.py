@@ -28,7 +28,7 @@ from .throttles import LoginRateThrottle, SoumettrePaiementRateThrottle
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from clients_publics.models import CompteClient 
-from .authentication import ClientJWTAuthentication
+from .authentication import ClientJWTAuthentication, StaffJWTAuthentication
 
 
 def _notifier_caisse(tenant_schema_name, type_event, **payload):
@@ -58,7 +58,7 @@ def _notifier_client(commande_id, **payload):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-@authentication_classes([JWTAuthentication])
+@authentication_classes([StaffJWTAuthentication])
 def infos_pharmacie(request):
     # 🌍 Volontairement PUBLIC (AllowAny) : nom, logo, devise, adresse de la pharmacie
     # doivent s'afficher pour n'importe quel visiteur (catalogue, page de connexion...),
@@ -274,7 +274,7 @@ def api_login(request):
 
 # À ajouter à la fin de core/api.py
 @api_view(['GET'])
-@authentication_classes([JWTAuthentication]) # On s'assure que le JWT est traité avant de vérifier les permissions
+@authentication_classes([StaffJWTAuthentication]) # On s'assure que le JWT est traité avant de vérifier les permissions
 @permission_classes([AllowAny]) # On permet à tous de demander "qui suis-je"
 def api_get_current_user(request):
     if request.user and request.user.is_authenticated:
@@ -664,7 +664,7 @@ def api_gestion_ordonnance(request, commande_id=None):
 
 # --- 📈 DASHBOARD & RAPPORTS BOSS SÉCURISÉS ---
 @api_view(['GET'])
-@authentication_classes([JWTAuthentication])
+@authentication_classes([StaffJWTAuthentication])
 @permission_classes([IsAdminUser])
 def api_boss_dashboard(request):
     """KPIs complets et exacts pour Next.js 🛰️"""
