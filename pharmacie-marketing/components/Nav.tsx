@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Menu, X } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useScroll, useSpring } from "framer-motion";
 
 const links = [
   { href: "#pharmacies", label: "Pour les pharmacies" },
@@ -14,9 +14,15 @@ const links = [
 
 export function Nav() {
   const [open, setOpen] = useState(false);
+  const { scrollYProgress } = useScroll();
+  const progress = useSpring(scrollYProgress, { stiffness: 120, damping: 24, mass: 0.2 });
 
   return (
     <header className="fixed top-0 inset-x-0 z-50">
+      <motion.div
+        style={{ scaleX: progress }}
+        className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-400 via-blue-400 to-emerald-400 origin-left z-[60]"
+      />
       <div className="mx-auto max-w-7xl px-5 sm:px-8">
         <div className="mt-4 flex items-center justify-between rounded-2xl border border-white/10 bg-[var(--color-ink)]/70 backdrop-blur-xl px-4 py-3 shadow-lg shadow-black/20">
           <a href="#top" className="flex items-center gap-2.5 no-underline">
