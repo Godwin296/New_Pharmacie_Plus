@@ -3,6 +3,7 @@ import { Hero } from "@/components/Hero";
 import { PharmacySection } from "@/components/PharmacySection";
 import { ClientSection } from "@/components/ClientSection";
 import { TrustSection } from "@/components/TrustSection";
+import { Faq } from "@/components/Faq";
 import { CTAFooter } from "@/components/CTAFooter";
 
 export default function Home() {
@@ -14,6 +15,7 @@ export default function Home() {
         <PharmacySection />
         <ClientSection />
         <TrustSection />
+        <Faq />
         <CTAFooter />
       </main>
     </>

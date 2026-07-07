@@ -93,7 +93,7 @@ export function PharmacySection() {
           {/* Mobile money */}
           <Reveal delay={0.05} className="md:col-span-2">
             <TiltCard className="h-full">
-              <div className="h-full rounded-[28px] bg-[var(--color-ink)] p-7 shadow-sm hover:shadow-xl hover:shadow-black/20 transition-shadow">
+              <div className="h-full rounded-[28px] bg-brand-deep-soft p-7 shadow-sm hover:shadow-xl hover:shadow-emerald-950/20 transition-shadow">
                 <div className="rounded-2xl bg-white/10 p-3 w-fit">
                   <ShieldCheck className="h-6 w-6 text-emerald-400" />
                 </div>
@@ -187,7 +187,7 @@ export function PharmacySection() {
           </div>
           <a
             href="#contact"
-            className="shrink-0 inline-flex items-center justify-center rounded-2xl bg-[var(--color-ink)] hover:bg-slate-800 px-7 py-4 text-[15px] font-bold text-white no-underline transition-colors"
+            className="shrink-0 inline-flex items-center justify-center rounded-2xl bg-emerald-600 hover:bg-emerald-500 px-7 py-4 text-[15px] font-bold text-white no-underline transition-colors"
           >
             Demander une démo
           </a>

@@ -21,6 +21,14 @@
   --foreground: #0b1220;
 }
 
+.bg-brand-deep {
+  background: linear-gradient(150deg, #043d31 0%, #075169 48%, #0c3a6e 100%);
+}
+
+.bg-brand-deep-soft {
+  background: linear-gradient(150deg, #054a3c 0%, #086082 48%, #0e4483 100%);
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

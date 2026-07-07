@@ -9,6 +9,7 @@ const links = [
   { href: "#pharmacies", label: "Pour les pharmacies" },
   { href: "#clients", label: "Pour les patients" },
   { href: "#confiance", label: "Sécurité" },
+  { href: "#faq", label: "FAQ" },
   { href: "#contact", label: "Contact" },
 ];
 
@@ -24,7 +25,7 @@ export function Nav() {
         className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-400 via-blue-400 to-emerald-400 origin-left z-[60]"
       />
       <div className="mx-auto max-w-7xl px-5 sm:px-8">
-        <div className="mt-4 flex items-center justify-between rounded-2xl border border-white/10 bg-[var(--color-ink)]/70 backdrop-blur-xl px-4 py-3 shadow-lg shadow-black/20">
+        <div className="mt-4 flex items-center justify-between rounded-2xl border border-white/10 bg-[#053a30]/75 backdrop-blur-xl px-4 py-3 shadow-lg shadow-emerald-950/30">
           <a href="#top" className="flex items-center gap-2.5 no-underline">
             <Image
               src="/branding/icon-mark.png"
@@ -85,7 +86,7 @@ export function Nav() {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              className="fixed top-0 right-0 z-[70] h-full w-[80%] max-w-xs bg-[var(--color-ink)] p-6 md:hidden shadow-2xl"
+              className="fixed top-0 right-0 z-[70] h-full w-[80%] max-w-xs bg-brand-deep p-6 md:hidden shadow-2xl"
             >
               <div className="flex justify-end">
                 <button

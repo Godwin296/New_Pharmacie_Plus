@@ -1,12 +1,17 @@
 import Image from "next/image";
-import { Mail, Phone, MessageCircle } from "lucide-react";
+import { Mail, Phone, MessageCircle, ArrowUpRight } from "lucide-react";
 import { Reveal } from "./Reveal";
+import { PulseLine } from "./PulseLine";
 
 export function CTAFooter() {
   return (
     <>
-      <section id="contact" className="relative bg-[var(--color-mist)] py-24 sm:py-32">
-        <div className="mx-auto max-w-4xl px-5 sm:px-8 text-center">
+      <section id="contact" className="relative bg-[var(--color-mist)] py-24 sm:py-32 overflow-hidden">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 h-[420px] w-[420px] rounded-full bg-emerald-400/20 blur-[110px]"
+        />
+        <div className="relative mx-auto max-w-4xl px-5 sm:px-8 text-center">
           <Reveal>
             <h2 className="font-display font-bold text-[var(--color-ink)] text-4xl sm:text-5xl leading-[1.1] tracking-tight">
               Parlons de votre officine.
@@ -21,7 +26,7 @@ export function CTAFooter() {
                 href="https://wa.me/237000000000"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 px-7 py-4 text-[15px] font-bold text-[var(--color-ink)] no-underline transition-colors"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 px-7 py-4 text-[15px] font-bold text-[var(--color-ink)] no-underline transition-all hover:shadow-[0_0_30px_-6px_rgba(16,185,129,0.5)]"
               >
                 <MessageCircle size={17} />
                 Écrire sur WhatsApp
@@ -38,65 +43,83 @@ export function CTAFooter() {
         </div>
       </section>
 
-      <footer className="bg-[var(--color-ink)] pt-16 pb-10">
-        <div className="mx-auto max-w-7xl px-5 sm:px-8">
-          <div className="flex flex-col sm:flex-row justify-between gap-10 pb-10 border-b border-white/10">
-            <div className="max-w-xs">
+      <footer className="relative bg-brand-deep pt-20 pb-10 overflow-hidden">
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 opacity-40">
+          <PulseLine className="w-full h-16" stroke="#5eead4" />
+        </div>
+
+        <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
+          <div className="grid sm:grid-cols-[1.3fr_1fr_1fr] gap-12 pb-12 border-b border-white/10">
+            <div className="max-w-sm">
               <div className="flex items-center gap-2.5">
                 <Image
                   src="/branding/icon-mark.png"
                   alt="Pharmacie+"
-                  width={28}
-                  height={28}
-                  className="h-7 w-7 object-contain"
+                  width={32}
+                  height={32}
+                  className="h-8 w-8 object-contain"
                 />
-                <span className="font-display font-bold text-white text-[15px]">
+                <span className="font-display font-bold text-white text-lg">
                   Pharmacie<span className="text-emerald-400">+</span>
                 </span>
               </div>
-              <p className="mt-4 text-[13px] leading-relaxed text-white/40">
-                Le SaaS de gestion de pharmacie pour la zone CEMAC. Votre
+              <p className="mt-4 text-[14px] leading-relaxed text-white/50">
+                Le SaaS de gestion de pharmacie pour la zone CEMAC. Stock en
+                temps réel, ordonnances sécurisées, Mobile Money — votre
                 santé, notre priorité.
               </p>
+              <a
+                href="#contact"
+                className="mt-5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-emerald-300 no-underline"
+              >
+                Demander une démo
+                <ArrowUpRight size={14} />
+              </a>
             </div>
 
-            <div className="flex gap-16">
-              <div>
-                <div className="text-[11px] font-mono uppercase tracking-widest text-white/30 mb-3">
-                  Produit
-                </div>
-                <div className="flex flex-col gap-2.5">
-                  <a href="#pharmacies" className="text-[14px] text-white/60 hover:text-white no-underline">
-                    Pour les pharmacies
-                  </a>
-                  <a href="#clients" className="text-[14px] text-white/60 hover:text-white no-underline">
-                    Pour les patients
-                  </a>
-                  <a href="#confiance" className="text-[14px] text-white/60 hover:text-white no-underline">
-                    Sécurité
-                  </a>
-                </div>
+            <div>
+              <div className="text-[11px] font-mono uppercase tracking-widest text-white/30 mb-4">
+                Produit
               </div>
+              <div className="flex flex-col gap-3">
+                <a href="#pharmacies" className="text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                  Pour les pharmacies
+                </a>
+                <a href="#clients" className="text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                  Pour les patients
+                </a>
+                <a href="#confiance" className="text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                  Sécurité
+                </a>
+                <a href="#faq" className="text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                  FAQ
+                </a>
+              </div>
+            </div>
 
-              <div>
-                <div className="text-[11px] font-mono uppercase tracking-widest text-white/30 mb-3">
-                  Contact
-                </div>
-                <div className="flex flex-col gap-2.5">
-                  <a href="mailto:contact@pharmacieplus.cm" className="flex items-center gap-2 text-[14px] text-white/60 hover:text-white no-underline">
-                    <Mail size={14} /> contact@pharmacieplus.cm
-                  </a>
-                  <a href="https://wa.me/237000000000" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[14px] text-white/60 hover:text-white no-underline">
-                    <Phone size={14} /> WhatsApp
-                  </a>
-                </div>
+            <div>
+              <div className="text-[11px] font-mono uppercase tracking-widest text-white/30 mb-4">
+                Contact
+              </div>
+              <div className="flex flex-col gap-3">
+                <a href="mailto:contact@pharmacieplus.cm" className="flex items-center gap-2 text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                  <Mail size={14} /> contact@pharmacieplus.cm
+                </a>
+                <a href="https://wa.me/237000000000" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                  <Phone size={14} /> WhatsApp
+                </a>
               </div>
             </div>
           </div>
 
-          <p className="pt-8 text-center text-[12px] text-white/25">
-            © {new Date().getFullYear()} Pharmacie+ — Fait au Cameroun 🇨🇲 pour l&apos;Afrique Centrale
-          </p>
+          <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-[12px] text-white/30">
+              © {new Date().getFullYear()} Pharmacie+ — Fait au Cameroun 🇨🇲 pour l&apos;Afrique Centrale
+            </p>
+            <p className="text-[12px] text-white/20">
+              Isolation des données · FCFA natif · Orange Money &amp; MTN MoMo
+            </p>
+          </div>
         </div>
       </footer>
     </>

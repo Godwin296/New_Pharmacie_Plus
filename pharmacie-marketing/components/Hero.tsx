@@ -44,7 +44,7 @@ export function Hero() {
     <section
       ref={ref}
       id="top"
-      className="relative overflow-hidden bg-[var(--color-ink)] pt-36 pb-40"
+      className="relative overflow-hidden bg-brand-deep pt-36 pb-40"
     >
       <FloatingCapsules />
 
@@ -161,10 +161,42 @@ export function Hero() {
         </div>
       </motion.div>
 
-      {/* Cinematic curved transition into the next section, instead of a hard cut */}
+      {/* Cinematic curved transition into the next section — like paint flowing down */}
       <div className="absolute bottom-0 left-0 right-0 leading-[0]">
-        <svg viewBox="0 0 1440 110" className="w-full h-[70px] sm:h-[110px]" preserveAspectRatio="none">
-          <path d="M0,110 L0,40 C240,110 480,0 720,40 C960,80 1200,10 1440,50 L1440,110 Z" fill="var(--color-mist)" />
+        <svg viewBox="0 0 1440 150" className="w-full h-[90px] sm:h-[150px]" preserveAspectRatio="none">
+          <motion.path
+            d="M0,150 L0,55 C240,150 480,10 720,55 C960,105 1200,15 1440,65 L1440,150 Z"
+            fill="var(--color-mist)"
+            animate={{
+              d: [
+                "M0,150 L0,55 C240,150 480,10 720,55 C960,105 1200,15 1440,65 L1440,150 Z",
+                "M0,150 L0,62 C240,130 480,22 720,62 C960,95 1200,28 1440,58 L1440,150 Z",
+                "M0,150 L0,55 C240,150 480,10 720,55 C960,105 1200,15 1440,65 L1440,150 Z",
+              ],
+            }}
+            transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+          />
+          {/* Paint drips hanging from the wave */}
+          {[
+            { x: 120, w: 26, h: 34, delay: 0 },
+            { x: 340, w: 18, h: 22, delay: 0.4 },
+            { x: 560, w: 30, h: 42, delay: 0.9 },
+            { x: 760, w: 16, h: 20, delay: 0.2 },
+            { x: 980, w: 24, h: 30, delay: 1.2 },
+            { x: 1180, w: 20, h: 26, delay: 0.6 },
+            { x: 1340, w: 28, h: 36, delay: 1.5 },
+          ].map((drip, i) => (
+            <motion.g
+              key={i}
+              animate={{ y: [0, 5, 0] }}
+              transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: drip.delay }}
+            >
+              <path
+                d={`M${drip.x},68 C${drip.x - drip.w / 2},${68 + drip.h * 0.5} ${drip.x - drip.w / 2},${68 + drip.h} ${drip.x},${68 + drip.h + drip.w / 2} C${drip.x + drip.w / 2},${68 + drip.h} ${drip.x + drip.w / 2},${68 + drip.h * 0.5} ${drip.x},68 Z`}
+                fill="var(--color-mist)"
+              />
+            </motion.g>
+          ))}
         </svg>
       </div>
     </section>
