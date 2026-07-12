@@ -1,84 +1,175 @@
+"""
+🌱 SCRIPT DE SEED UNIQUE (session offline, 12/07) -- fusionne l'ancien `seed.py`
+(création des tenants/comptes/config) et l'ancien `mise_a_jour.py` (correction des flags
+is_staff/is_superuser pour que le "role" envoyé par le frontend au login matche bien
+check_role() dans core/api.py). Un seul fichier à lancer, un seul endroit à maintenir.
+
+    python seed.py
+
+RE-JOUABLE SANS RISQUE :
+- Tenants/domaines/comptes/config : get_or_create, donc jamais dupliqués.
+- Produits : le catalogue de chaque tenant est entièrement RECRÉÉ à chaque exécution
+  (les anciens produits générés par ce script -- identifiant préfixé DUP-/MAR- -- sont
+  supprimés puis regénérés) pour permettre de rejouer facilement le seed avec un jeu de
+  données propre et prévisible, notamment pour tester la pagination du catalogue
+  (page_size=20, cf. core/pagination.py) et le curseur de synchro offline
+  (has_more/next_since, cf. api_catalogue_sync dans core/api.py).
+  ⚠️ Ça ne touche PAS aux produits saisis manuellement par un vrai utilisateur avec un
+  identifiant hors de ce préfixe -- uniquement les données de seed elles-mêmes.
+
+⚠️ Ne DROP JAMAIS le schéma PostgreSQL d'un tenant : conformément à la décision de sécurité
+prise dans tenants/models.py (`auto_drop_schema = False`, "on ne supprime jamais un schéma
+automatiquement"), un reset complet d'un tenant (schéma PostgreSQL) reste une action MANUELLE
+volontaire -- voir les commandes dans PROMPT_REPRISE.md / la doc de session -- jamais quelque
+chose que ce script fait tout seul.
+"""
 import os, django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
+
+import random
+from datetime import date, timedelta
 
 from tenants.models import Pharmacie, Domain
 from django_tenants.utils import schema_context
 from django.contrib.auth.models import User, Group
 from core.models import PharmacieConfig, Produit
 
-# --- TENANT DUPONT ---
-dupont, _ = Pharmacie.objects.get_or_create(schema_name="dupont", defaults={"nom": "Pharmacie Dupont", "proprietaire_email": "signingdongmom@gmail.com"})
-Domain.objects.get_or_create(domain="dupont.localhost", defaults={"tenant": dupont, "is_primary": True})
-print("Tenant dupont OK")
+random.seed(42)  # reproductible : deux exécutions du script donnent le même catalogue
 
-with schema_context("dupont"):
-    ag, _ = Group.objects.get_or_create(name="administrateur")
-    cg, _ = Group.objects.get_or_create(name="caissiere")
-    if not User.objects.filter(username="admin_dupont").exists():
-        u = User.objects.create_user("admin_dupont", password="Admin123!", is_staff=True, is_superuser=True)
-        u.groups.add(ag)
-        print("✓ admin_dupont créé (mdp: Admin123!)")
-    if not User.objects.filter(username="caisse_dupont").exists():
-        u = User.objects.create_user("caisse_dupont", password="Caisse123!", is_staff=True, is_superuser=False)
-        u.groups.add(cg)
-        print("✓ caisse_dupont créé (mdp: Caisse123!)")
-    PharmacieConfig.objects.get_or_create(id=1, defaults={"nom": "Pharmacie Dupont", "adresse": "Avenue Kennedy, Yaounde", "telephone": "+237 640 41 55 18", "email_contact": "signingdongmom@gmail.com", "devise_preferee": "FCFA", "numero_orange_money": "640415518", "numero_mtn_momo": "683242487"})
-    print("Config dupont OK")
-    produits = [
-        {"identifiant": "DUP-001", "nom": "Paracetamol 500mg", "categorie": "antalgique", "laboratoire": "SIPOA", "quantite": 150, "prix": 500, "description": "Antalgique et antipyretique", "ordonnance_obligatoire": False},
-        {"identifiant": "DUP-002", "nom": "Amoxicilline 500mg", "categorie": "antibiotique", "laboratoire": "LABOREX", "quantite": 80, "prix": 2500, "description": "Antibiotique a large spectre", "ordonnance_obligatoire": True},
-        {"identifiant": "DUP-003", "nom": "Coartem 20mg", "categorie": "antipaludeen", "laboratoire": "Novartis", "quantite": 60, "prix": 3500, "description": "Traitement antipaludeen", "ordonnance_obligatoire": True},
-        {"identifiant": "DUP-004", "nom": "Vitamine C 500mg", "categorie": "vitamine", "laboratoire": "BIOPHARMA", "quantite": 200, "prix": 800, "description": "Complement vitaminique", "ordonnance_obligatoire": False},
-        {"identifiant": "DUP-005", "nom": "Ibuprofene 400mg", "categorie": "antalgique", "laboratoire": "SIPOA", "quantite": 120, "prix": 1200, "description": "Anti-inflammatoire", "ordonnance_obligatoire": False},
-        {"identifiant": "DUP-006", "nom": "Metronidazole 250mg", "categorie": "antibiotique", "laboratoire": "LABOREX", "quantite": 90, "prix": 1800, "description": "Antibiotique antiprotozoaire", "ordonnance_obligatoire": True},
-        {"identifiant": "DUP-007", "nom": "Omeprazole 20mg", "categorie": "autre", "laboratoire": "BIOPHARMA", "quantite": 70, "prix": 2200, "description": "Inhibiteur pompe a protons", "ordonnance_obligatoire": False},
-        {"identifiant": "DUP-008", "nom": "Zinc 20mg", "categorie": "vitamine", "laboratoire": "SIPOA", "quantite": 180, "prix": 600, "description": "Complement en zinc", "ordonnance_obligatoire": False},
-        {"identifiant": "DUP-009", "nom": "Cotrimoxazole 480mg", "categorie": "antibiotique", "laboratoire": "LABOREX", "quantite": 100, "prix": 1500, "description": "Antibiotique sulfamide", "ordonnance_obligatoire": True},
-        {"identifiant": "DUP-010", "nom": "Doliprane 1000mg", "categorie": "antalgique", "laboratoire": "Sanofi", "quantite": 5, "prix": 1800, "description": "Stock faible - test alerte", "ordonnance_obligatoire": False},
-    ]
-    n = 0
-    for p in produits:
-        if not Produit.objects.filter(identifiant=p["identifiant"]).exists():
-            Produit.objects.create(**p); n += 1
-    print(f"{n} produits crees pour dupont")
+LABOS = ["SIPOA", "LABOREX", "Novartis", "BIOPHARMA", "Sanofi", "GSK", "Pfizer", "Cinqpharm", "Sophartex", "Zenufa"]
 
-# --- TENANT MARTIN ---
-martin, _ = Pharmacie.objects.get_or_create(schema_name="martin", defaults={"nom": "Pharmacie Martin", "proprietaire_email": "marcgodwinsigningdongmo@gmail.com"})
-Domain.objects.get_or_create(domain="martin.localhost", defaults={"tenant": martin, "is_primary": True})
-print("Tenant martin OK")
+# (nom de base, catégorie -- code EXACT de Produit.CATEGORIES, ordonnance obligatoire)
+# 🔐 CORRECTIF au passage : l'ancien seed.py utilisait des codes catégorie ("antipaludeen",
+# "autre") qui n'existent PAS dans Produit.CATEGORIES -- ça s'enregistrait quand même (Django
+# ne valide les `choices` qu'au full_clean(), pas au .save()), mais aucun filtre catalogue par
+# catégorie ne les retrouvait jamais côté frontend. Tous les codes ci-dessous sont vérifiés
+# contre la liste réelle dans core/models.py.
+CATALOGUE_BASE = [
+    ("Paracetamol", "antalgique", False),
+    ("Ibuprofene", "anti_inflam", False),
+    ("Diclofenac", "anti_inflam", True),
+    ("Aspirine", "antalgique", False),
+    ("Tramadol", "antalgique", True),
+    ("Amoxicilline", "antibiotique", True),
+    ("Metronidazole", "antibiotique", True),
+    ("Ciprofloxacine", "antibiotique", True),
+    ("Cotrimoxazole", "antibiotique", True),
+    ("Azithromycine", "antibiotique", True),
+    ("Vitamine C", "vitamine", False),
+    ("Vitamine D3", "vitamine", False),
+    ("Zinc", "complement", False),
+    ("Fer + Acide folique", "complement", False),
+    ("Omeprazole", "anti_acide", False),
+    ("Spasfon (Phloroglucinol)", "antispasmodique", False),
+    ("Lopéramide", "antidiarrhéique", False),
+    ("Duphalac (Lactulose)", "laxatif", False),
+    ("Metformine", "antidiabétique", True),
+    ("Glibenclamide", "antidiabétique", True),
+    ("Amlodipine", "antihypertenseur", True),
+    ("Losartan", "antihypertenseur", True),
+    ("Atorvastatine", "hypolipémiant", True),
+    ("Salbutamol", "bronchodilatateur", False),
+    ("Ambroxol", "expectorant", False),
+    ("Cetirizine", "antihistaminique", False),
+    ("Betamethasone crème", "dermo_corticoide", True),
+    ("Chlorhexidine", "antiseptique", False),
+]
+DOSAGES = ["50mg", "100mg", "250mg", "500mg", "1000mg", "5mg/ml sirop", "1% crème", "20mg"]
 
-with schema_context("martin"):
-    ag, _ = Group.objects.get_or_create(name="administrateur")
-    cg, _ = Group.objects.get_or_create(name="caissiere")
-    if not User.objects.filter(username="admin_martin").exists():
-        u = User.objects.create_user("admin_martin", password="Admin123!", is_staff=True, is_superuser=True)
-        u.groups.add(ag)
-        print("✓ admin_martin créé (mdp: Admin123!)")
-    if not User.objects.filter(username="caisse_martin").exists():
-        u = User.objects.create_user("caisse_martin", password="Caisse123!", is_staff=True, is_superuser=False)
-        u.groups.add(cg)
-        print("✓ caisse_martin créé (mdp: Caisse123!)")
-    PharmacieConfig.objects.get_or_create(id=1, defaults={"nom": "Pharmacie Martin", "adresse": "Rue de la Joie, Douala", "telephone": "+237 683 24 24 87", "email_contact": "marcgodwinsigningdongmo@gmail.com", "devise_preferee": "FCFA", "numero_orange_money": "640415518", "numero_mtn_momo": "683242487"})
-    print("Config martin OK")
-    produits = [
-        {"identifiant": "MAR-001", "nom": "Artemether 80mg", "categorie": "antipaludeen", "laboratoire": "Novartis", "quantite": 45, "prix": 4200, "description": "Antipaludeen injectable", "ordonnance_obligatoire": True},
-        {"identifiant": "MAR-002", "nom": "Paracetamol 1000mg", "categorie": "antalgique", "laboratoire": "Sanofi", "quantite": 200, "prix": 1800, "description": "Antalgique adulte", "ordonnance_obligatoire": False},
-        {"identifiant": "MAR-003", "nom": "Ciprofloxacine 500mg", "categorie": "antibiotique", "laboratoire": "LABOREX", "quantite": 60, "prix": 3200, "description": "Antibiotique fluoroquinolone", "ordonnance_obligatoire": True},
-        {"identifiant": "MAR-004", "nom": "Fer + Acide folique", "categorie": "vitamine", "laboratoire": "BIOPHARMA", "quantite": 150, "prix": 900, "description": "Complement grossesse", "ordonnance_obligatoire": False},
-        {"identifiant": "MAR-005", "nom": "Tramadol 50mg", "categorie": "antalgique", "laboratoire": "SIPOA", "quantite": 3, "prix": 5500, "description": "Stock faible - test alerte", "ordonnance_obligatoire": True},
-        {"identifiant": "MAR-006", "nom": "Diclofenac 50mg", "categorie": "antalgique", "laboratoire": "LABOREX", "quantite": 110, "prix": 1400, "description": "Anti-inflammatoire", "ordonnance_obligatoire": False},
-        {"identifiant": "MAR-007", "nom": "Metformine 500mg", "categorie": "autre", "laboratoire": "BIOPHARMA", "quantite": 80, "prix": 2800, "description": "Antidiabetique oral", "ordonnance_obligatoire": True},
-        {"identifiant": "MAR-008", "nom": "Vitamine D3 1000UI", "categorie": "vitamine", "laboratoire": "SIPOA", "quantite": 160, "prix": 1100, "description": "Complement vitamine D", "ordonnance_obligatoire": False},
-        {"identifiant": "MAR-009", "nom": "Amoxicilline 250mg sirop", "categorie": "antibiotique", "laboratoire": "LABOREX", "quantite": 40, "prix": 2100, "description": "Antibiotique pediatrique", "ordonnance_obligatoire": True},
-        {"identifiant": "MAR-010", "nom": "Spasfon 80mg", "categorie": "autre", "laboratoire": "SIPOA", "quantite": 130, "prix": 1600, "description": "Antispasmodique", "ordonnance_obligatoire": False},
-    ]
-    n = 0
-    for p in produits:
-        if not Produit.objects.filter(identifiant=p["identifiant"]).exists():
-            Produit.objects.create(**p); n += 1
-    print(f"{n} produits crees pour martin")
 
-print("\n=== TERMINE ===")
-print("dupont.localhost → admin_dupont / Admin123!")
-print("martin.localhost → admin_martin / Admin123!")
+def generer_produits(prefix, n=100):
+    """Génère `n` produits uniques et variés pour un tenant : mix volontaire de stock plein,
+    stock faible (< seuil_alerte, pour tester les alertes réappro), rupture (0), et de dates
+    d'expiration passées/proches/lointaines (pour tester les alertes péremption)."""
+    produits, used_noms = [], set()
+    i = 1
+    while len(produits) < n:
+        nom_base, categorie, ordo = random.choice(CATALOGUE_BASE)
+        nom = f"{nom_base} {random.choice(DOSAGES)}"
+        if nom in used_noms:
+            continue
+        used_noms.add(nom)
+        jours_expiration = random.choice([-15, -3, 7, 20, 45, 90, 180, 365, 540, 730])
+        produits.append({
+            "identifiant": f"{prefix}-{i:03d}",
+            "nom": nom,
+            "categorie": categorie,
+            "laboratoire": random.choice(LABOS),
+            "quantite": random.choice([0, 0, 2, 4, 8, 15, 30, 60, 120, 250]),
+            "prix": random.choice([300, 500, 800, 1200, 1500, 1800, 2200, 2800, 3500, 4200, 5500]),
+            "description": f"{nom_base} -- produit de seed pour tests (pagination catalogue, curseur offline)",
+            "ordonnance_obligatoire": ordo,
+            "seuil_alerte": 10,
+            "date_expiration": date.today() + timedelta(days=jours_expiration),
+        })
+        i += 1
+    return produits
+
+
+def creer_ou_reparer_comptes(prefix_user):
+    """Fusion de l'ancien mise_a_jour.py : crée admin_<x>/caisse_<x> s'ils n'existent pas,
+    ET republie systématiquement les bons flags is_staff/is_superuser sur les comptes
+    existants -- check_role() dans core/api.py (voir son commentaire) se base UNIQUEMENT sur
+    ces flags, plus sur des groupes Django, donc c'est la seule source de vérité à maintenir."""
+    Group.objects.get_or_create(name="administrateur")
+    Group.objects.get_or_create(name="caissiere")
+
+    if not User.objects.filter(username=f"admin_{prefix_user}").exists():
+        User.objects.create_user(f"admin_{prefix_user}", password="Admin123!")
+        print(f"  ✓ admin_{prefix_user} créé (mdp: Admin123!)")
+    if not User.objects.filter(username=f"caisse_{prefix_user}").exists():
+        User.objects.create_user(f"caisse_{prefix_user}", password="Caisse123!")
+        print(f"  ✓ caisse_{prefix_user} créé (mdp: Caisse123!)")
+
+    # Réparation systématique (idempotente) des rôles, comptes neufs ET existants confondus.
+    User.objects.filter(username__startswith="admin_").update(is_staff=True, is_superuser=True)
+    User.objects.filter(username__startswith="caisse_").update(is_staff=True, is_superuser=False)
+    print("  ✓ rôles admin_*/caisse_* vérifiés (is_staff/is_superuser)")
+
+
+def seeder_tenant(schema_name, nom_pharmacie, email, adresse, telephone, prefix_produit):
+    tenant, _ = Pharmacie.objects.get_or_create(
+        schema_name=schema_name,
+        defaults={"nom": nom_pharmacie, "proprietaire_email": email},
+    )
+    Domain.objects.get_or_create(
+        domain=f"{schema_name}.localhost", defaults={"tenant": tenant, "is_primary": True}
+    )
+    print(f"Tenant {schema_name} OK")
+
+    with schema_context(schema_name):
+        creer_ou_reparer_comptes(schema_name)
+
+        PharmacieConfig.objects.get_or_create(id=1, defaults={
+            "nom": nom_pharmacie, "adresse": adresse, "telephone": telephone,
+            "email_contact": email, "devise_preferee": "FCFA",
+            "numero_orange_money": "640415518", "numero_mtn_momo": "683242487",
+        })
+        print(f"  Config {schema_name} OK")
+
+        # 🔁 Recréation propre du catalogue de test (voir docstring du module) : supprime
+        # uniquement les produits déjà générés par CE script (préfixe reconnu), jamais les
+        # produits saisis manuellement par un utilisateur réel.
+        supprimes, _ = Produit.objects.filter(identifiant__startswith=f"{prefix_produit}-").delete()
+        if supprimes:
+            print(f"  ({supprimes} anciens produits de seed supprimés avant régénération)")
+
+        Produit.objects.bulk_create([Produit(**p) for p in generer_produits(prefix_produit, n=100)])
+        print(f"  100 produits créés pour {schema_name} (catégories variées, stock/péremption variés)")
+
+
+seeder_tenant(
+    schema_name="dupont", nom_pharmacie="Pharmacie Dupont",
+    email="signingdongmom@gmail.com", adresse="Avenue Kennedy, Yaounde",
+    telephone="+237 640 41 55 18", prefix_produit="DUP",
+)
+seeder_tenant(
+    schema_name="martin", nom_pharmacie="Pharmacie Martin",
+    email="marcgodwinsigningdongmo@gmail.com", adresse="Rue de la Joie, Douala",
+    telephone="+237 683 24 24 87", prefix_produit="MAR",
+)
+
+print("\n=== TERMINÉ ===")
+print("dupont.localhost → admin_dupont / Admin123!  |  caisse_dupont / Caisse123!  (100 produits DUP-xxx)")
+print("martin.localhost → admin_martin / Admin123!  |  caisse_martin / Caisse123!  (100 produits MAR-xxx)")

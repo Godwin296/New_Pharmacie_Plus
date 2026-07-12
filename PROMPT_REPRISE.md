@@ -121,6 +121,42 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 - ⚠️ À vérifier avant déploiement prod sur hébergeur managé : `pg_trgm` doit faire partie des
   extensions autorisées (cas de la quasi-totalité des offres PostgreSQL managées modernes).
 
+### Synchro delta du catalogue (session offline, 12/07 — brique 2/4)
+- Nouveau champ `Produit.date_modification` (`auto_now=True`, indexé) : curseur de la synchro.
+- Nouveau modèle `ProduitSupprimeLog` (tombstone) + signal `post_delete` (`core/signals.py`,
+  branché via `CoreConfig.ready()`) : trace les suppressions pour que le cache offline
+  (IndexedDB, brique 3/4 à venir) sache retirer un produit supprimé côté serveur.
+- Nouvel endpoint `GET /api/catalogue/sync/?since=<ISO8601>` (`api_catalogue_sync` dans
+  `core/api.py`) : renvoie UNIQUEMENT les produits créés/modifiés + supprimés depuis `since`
+  (au lieu de tout le catalogue à chaque appel — coûteux sur 3G/4G instable). Batché à 300
+  produits/appel (`CATALOGUE_SYNC_BATCH_SIZE`), avec curseur `has_more`/`next_since` pour
+  enchaîner les pages si un tenant a un très gros catalogue à synchroniser d'un coup.
+- **Bug de pagination trouvé ET corrigé en testant réellement avec 350 produits générés en
+  `bulk_create()`** (donc partageant le même `date_modification` à la milliseconde près) :
+  un curseur `date_modification >= since` simple réintroduisait en double le dernier produit
+  de la page précédente à la frontière (360 produits récupérés au lieu de 359 attendus). Fixé
+  avec un curseur composé `(date_modification, id)` (`since` au format `"<ISO8601>|<id>"` en
+  cours de pagination) — retesté : 359/359, zéro doublon, zéro perte.
+- Frontend (IndexedDB, brique 3/4) : pas encore commencé.
+
+### Scripts de seed (session offline, 12/07)
+- `seed.py` et `mise_a_jour.py` fusionnés en un seul `seed.py` (l'ancien `mise_a_jour.py`
+  a été supprimé) : plus simple à maintenir, un seul point d'entrée `python seed.py`.
+- Catalogue de test passé de 10 à **100 produits par tenant** (générés, catégories/stock/
+  dates de péremption variés) pour pouvoir tester la pagination catalogue (5 pages de 20) et
+  le curseur de synchro offline en conditions réalistes.
+- Rejouable sans risque : `python seed.py` peut être relancé à volonté, il régénère
+  proprement le catalogue de test (supprime puis recrée uniquement les produits qu'IL a
+  générés, préfixe `DUP-`/`MAR-`) sans toucher aux tenants/comptes/config déjà en place ni
+  aux produits saisis manuellement par un vrai utilisateur.
+- Corrigé au passage : l'ancien seed utilisait des codes de catégorie (`antipaludeen`,
+  `autre`) absents de `Produit.CATEGORIES` — invisibles dans les filtres catalogue du
+  frontend bien qu'enregistrés en base (Django ne valide les `choices` qu'au `full_clean()`,
+  pas au `.save()`).
+- ⚠️ Reset complet d'un tenant (DROP du schéma PostgreSQL) reste volontairement une action
+  MANUELLE, jamais automatisée dans ce script — cf. `tenants/models.py`,
+  `auto_drop_schema = False` ("on ne supprime jamais un schéma automatiquement").
+
 ### Bugs corrigés (historique)
 - `generate_qr_base64` importé depuis le mauvais module
 - `agent_validateur` recevait un username au lieu d'un objet User
@@ -172,7 +208,7 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 - [ ] **Compte client global (`CompteClient`) + marketplace** — modèle dans schéma public, nouveau JWT clients (distinct personnel), migration clients existants, page marketplace
 - [ ] **Mode offline réel (Service Worker + IndexedDB)** — synchronisation bidirectionnelle catalogue/panier. Découpé en 4 briques (session du 12/07) :
   - [x] **1/4 — Indexation BDD** — voir section "Indexation BDD" ci-dessus. Fait et testé (EXPLAIN ANALYZE, 8000 lignes).
-  - [ ] **2/4 — Cache catalogue en IndexedDB** (navigation hors-ligne du catalogue) — nécessite probablement un champ `date_modification` sur `Produit` + un endpoint de sync delta côté backend, pour ne pas retélécharger tout le catalogue à chaque fois sur une connexion 3G/4G instable.
+  - [x] **2/4 — Cache catalogue en IndexedDB (côté backend)** — endpoint `/api/catalogue/sync/` avec synchro delta + curseur, testé (voir section "Synchro delta du catalogue" ci-dessus). ⚠️ Reste à faire : la partie FRONTEND (IndexedDB réel dans le navigateur, pas encore commencée).
   - [ ] **3/4 — File d'attente panier hors-ligne** (ajout au panier en offline, sync auto au retour réseau) — Background Sync API + IndexedDB côté client.
   - [ ] **4/4 — Adaptation du service worker** (`app/sw.ts`) pour mettre en cache les réponses API catalogue (actuellement volontairement minimal, ne cache que les assets statiques).
 - [ ] **Refonte UI/UX mobile-first complète** — maquettes disponibles (6 images, style vert émeraude, cartes arrondies, bottom nav avec bouton central flottant, splash screen avec halo radial). À attaquer APRÈS le compte client global.
