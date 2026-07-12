@@ -163,16 +163,42 @@ export function Hero() {
 
       {/* Paint-drip transition: the hero's dark paint drips down over the light wall below */}
       <div className="absolute bottom-0 left-0 right-0 leading-[0] translate-y-[1px]">
-        <svg viewBox="0 0 1440 220" className="w-full h-[130px] sm:h-[220px]" preserveAspectRatio="none">
+        <svg viewBox="0 0 1440 230" className="w-full h-[135px] sm:h-[230px]" preserveAspectRatio="none">
           {/* light wall base */}
-          <rect x="0" y="0" width="1440" height="220" fill="var(--color-mist)" />
+          <rect x="0" y="0" width="1440" height="230" fill="var(--color-mist)" />
 
           <defs>
             <linearGradient id="paintGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#0a5033" />
               <stop offset="100%" stopColor="#0b6440" />
             </linearGradient>
+            <linearGradient id="dripGradA" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#0b6440" />
+              <stop offset="100%" stopColor="#0a5033" />
+            </linearGradient>
+            <linearGradient id="dripGradB" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#0a5570" />
+              <stop offset="100%" stopColor="#083d52" />
+            </linearGradient>
+            <filter id="softBlur" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="7" />
+            </filter>
           </defs>
+
+          {/* soft blurred shadow beneath the wave edge — gives the paint depth/weight */}
+          <motion.path
+            fill="#031b13"
+            opacity={0.35}
+            filter="url(#softBlur)"
+            animate={{
+              d: [
+                "M0,10 L1440,10 L1440,66 C1260,98 1120,48 980,80 C840,108 700,56 560,86 C420,110 280,58 140,88 C90,96 40,84 0,78 Z",
+                "M0,10 L1440,10 L1440,74 C1260,80 1120,66 980,88 C840,100 700,68 560,78 C420,96 280,70 140,82 C90,88 40,76 0,70 Z",
+                "M0,10 L1440,10 L1440,66 C1260,98 1120,48 980,80 C840,108 700,56 560,86 C420,110 280,58 140,88 C90,96 40,84 0,78 Z",
+              ],
+            }}
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+          />
 
           {/* irregular dark paint edge, coming down from the hero */}
           <motion.path
@@ -187,54 +213,73 @@ export function Hero() {
             transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
           />
 
-          {/* dripping streaks + droplets */}
+          {/* dripping streaks — organic curve, gravity-like fall + slow retract, glossy highlight */}
           {[
-            { x: 70, y: 78, len: 88, w: 7, dur: 5.2, delay: 0 },
-            { x: 190, y: 66, len: 54, w: 5, dur: 4.4, delay: 0.7 },
-            { x: 330, y: 96, len: 118, w: 8, dur: 6.2, delay: 1.3 },
-            { x: 470, y: 62, len: 46, w: 4, dur: 3.9, delay: 0.3 },
-            { x: 610, y: 86, len: 96, w: 6, dur: 5.6, delay: 1.8 },
-            { x: 760, y: 72, len: 68, w: 5, dur: 4.7, delay: 0.2 },
-            { x: 900, y: 100, len: 128, w: 9, dur: 6.6, delay: 1.0 },
-            { x: 1040, y: 64, len: 52, w: 4, dur: 4.1, delay: 1.5 },
-            { x: 1180, y: 84, len: 90, w: 6, dur: 5.4, delay: 0.5 },
-            { x: 1320, y: 76, len: 74, w: 5, dur: 4.9, delay: 2.0 },
-          ].map((d, i) => (
-            <g key={i}>
-              <motion.line
-                x1={d.x}
-                y1={d.y}
-                x2={d.x}
-                y2={d.y + d.len}
-                stroke={i % 2 === 0 ? "#0b6440" : "#0a5570"}
-                strokeWidth={d.w}
-                strokeLinecap="round"
-                initial={{ pathLength: 0, opacity: 0.9 }}
-                animate={{ pathLength: [0, 1, 1, 0] }}
-                transition={{
-                  duration: d.dur,
-                  times: [0, 0.4, 0.8, 1],
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                  delay: d.delay,
-                }}
-              />
-              <motion.circle
-                cx={d.x}
-                cy={d.y + d.len}
-                r={d.w * 0.95}
-                fill={i % 2 === 0 ? "#0b6440" : "#0a5570"}
-                animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.5, 0.5, 1, 1, 0.5] }}
-                transition={{
-                  duration: d.dur,
-                  times: [0, 0.38, 0.45, 0.8, 0.95],
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                  delay: d.delay,
-                }}
-              />
-            </g>
-          ))}
+            { x: 60, y: 78, len: 92, w: 8, wob: 5, dur: 5.6, delay: 0, grad: "A", op: 1 },
+            { x: 195, y: 64, len: 50, w: 5, wob: -4, dur: 4.6, delay: 0.8, grad: "B", op: 0.85 },
+            { x: 320, y: 98, len: 122, w: 9, wob: 6, dur: 6.4, delay: 1.4, grad: "A", op: 1 },
+            { x: 480, y: 60, len: 42, w: 4, wob: -3, dur: 4.0, delay: 0.3, grad: "B", op: 0.75 },
+            { x: 630, y: 88, len: 100, w: 7, wob: 5, dur: 5.8, delay: 1.9, grad: "A", op: 0.95 },
+            { x: 800, y: 70, len: 60, w: 5, wob: -4, dur: 4.8, delay: 0.2, grad: "B", op: 0.85 },
+            { x: 970, y: 102, len: 134, w: 10, wob: 6, dur: 6.8, delay: 1.0, grad: "A", op: 1 },
+            { x: 1160, y: 82, len: 84, w: 6, wob: -5, dur: 5.4, delay: 0.6, grad: "B", op: 0.9 },
+          ].map((d, i) => {
+            const path = `M${d.x},${d.y} Q${d.x + d.wob},${d.y + d.len * 0.55} ${d.x},${d.y + d.len}`;
+            const gradId = d.grad === "A" ? "dripGradA" : "dripGradB";
+            const easeDrip: [number, number, number, number] = [0.16, 0.85, 0.34, 1];
+            return (
+              <g key={i} opacity={d.op}>
+                <motion.path
+                  d={path}
+                  fill="none"
+                  stroke={`url(#${gradId})`}
+                  strokeWidth={d.w}
+                  strokeLinecap="round"
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: [0, 1, 1, 0] }}
+                  transition={{
+                    duration: d.dur,
+                    times: [0, 0.35, 0.82, 1],
+                    repeat: Infinity,
+                    ease: easeDrip,
+                    delay: d.delay,
+                  }}
+                />
+                {/* glossy highlight — thin lighter streak, slightly offset, gives a wet sheen */}
+                <motion.path
+                  d={path}
+                  fill="none"
+                  stroke="#5fcf9a"
+                  strokeOpacity={0.35}
+                  strokeWidth={Math.max(1, d.w * 0.22)}
+                  strokeLinecap="round"
+                  initial={{ pathLength: 0, x: -d.w * 0.18 }}
+                  animate={{ pathLength: [0, 1, 1, 0] }}
+                  transition={{
+                    duration: d.dur,
+                    times: [0, 0.35, 0.82, 1],
+                    repeat: Infinity,
+                    ease: easeDrip,
+                    delay: d.delay,
+                  }}
+                />
+                <motion.circle
+                  cx={d.x}
+                  cy={d.y + d.len}
+                  r={d.w * 0.92}
+                  fill={`url(#${gradId})`}
+                  animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.4, 0.4, 1, 1, 0.5] }}
+                  transition={{
+                    duration: d.dur,
+                    times: [0, 0.33, 0.4, 0.82, 0.96],
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: d.delay,
+                  }}
+                />
+              </g>
+            );
+          })}
         </svg>
       </div>
     </section>
