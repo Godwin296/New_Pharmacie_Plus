@@ -44,7 +44,7 @@ export function Hero() {
     <section
       ref={ref}
       id="top"
-      className="relative overflow-hidden bg-brand-deep pt-36 pb-40"
+      className="relative overflow-hidden bg-brand-deep pt-36 pb-44 sm:pb-72"
     >
       <FloatingCapsules />
 
