@@ -28,6 +28,19 @@ export default function POSPage() {
   const [finalizing, setFinalizing] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // 📄 PAGINATION SERVEUR (session 12/07) : avant, la grille POS demandait toujours
+  // ?page_size=30 sans jamais envoyer `page` -- résultat : plafonné en silence aux 30
+  // premiers produits (ordre alphabétique) dès qu'aucune recherche n'était tapée, sans
+  // AUCUN moyen pour la caissière de voir le reste du catalogue. Exactement le même
+  // symptôme que le bug historique "page_size=100" déjà documenté plus bas (juste avec un
+  // plafond plus bas) -- la vraie correction est d'exposer une pagination, pas de choisir
+  // un plafond "suffisamment grand".
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
+  const POS_PAGE_SIZE = 30;
+
   // 🔎 DEBOUNCE DE LA RECHERCHE : même pattern que /catalogue (session pagination) -- on
   // n'interroge le serveur que 400ms après la dernière frappe, pas à chaque caractère.
   // searchInput = ce qui s'affiche instantanément dans le champ, search = valeur "validée"
@@ -35,14 +48,18 @@ export default function POSPage() {
   const [searchInput, setSearchInput] = useState("");
   const [searching, setSearching] = useState(false);
   useEffect(() => {
-    const timer = setTimeout(() => setSearch(searchInput), 400);
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1); // toute nouvelle recherche repart de la page 1 (sinon page 3 qui n'existe plus)
+    }, 400);
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // 1. CHARGEMENT INITIAL + RECHERCHE (re-déclenché à chaque frappe validée par le debounce)
+  // 1. CHARGEMENT INITIAL + RECHERCHE (re-déclenché à chaque frappe validée par le debounce
+  // OU changement de page)
   useEffect(() => {
-    fetchProduits(search);
-  }, [search]);
+    fetchProduits(search, page);
+  }, [search, page]);
 
   // 2. LISTENER SCANNER BARCODE
   useEffect(() => {
@@ -68,15 +85,21 @@ export default function POSPage() {
   // (CataloguePagination, core/pagination.py). AVANT : ?page_size=100 chargeait TOUT en
   // mémoire une seule fois puis filtrait côté client -- au-delà de 100 produits (le
   // maximum autorisé par la pagination), la caisse ne pouvait plus vendre certains
-  // articles, invisibles car jamais chargés. Désormais, chaque frappe (après debounce)
-  // ou scan interroge le serveur avec ?q=, comme /catalogue.
-  const fetchProduits = async (q: string = "") => {
+  // articles, invisibles car jamais chargés. Un correctif intermédiaire avait ramené ça à
+  // ?page_size=30 sans jamais envoyer `page` -- ça évitait le crash mais recréait le même
+  // problème en plus discret (plafond silencieux à 30). Désormais chaque frappe (après
+  // debounce), scan, ou changement de page interroge le serveur avec ?page=&q=, exactement
+  // comme /catalogue.
+  const fetchProduits = async (q: string = "", pageNum: number = 1) => {
     setSearching(true);
     try {
       const res = await apiClient.get('/api/catalogue/', {
-        params: { page_size: 30, ...(q.trim() ? { q: q.trim() } : {}) },
+        params: { page: pageNum, page_size: POS_PAGE_SIZE, ...(q.trim() ? { q: q.trim() } : {}) },
       });
       setProduitsDB(res.data.results.produits);
+      setTotalCount(res.data.count);
+      setHasNext(Boolean(res.data.next));
+      setHasPrevious(Boolean(res.data.previous));
     } catch (err) { 
       console.error("Erreur API Catalogue au comptoir:", err); 
     } finally { 
@@ -159,7 +182,7 @@ export default function POSPage() {
       setStep('success');
       setShowConfirmModal(false);
       setOrdonnanceVerifiee(false);
-      fetchProduits(search); // Rafraîchir les stocks réels, en gardant la recherche en cours
+      fetchProduits(search, page); // Rafraîchir les stocks réels, en gardant recherche ET page en cours
       // Ouverture de la page de facture Next.js locale
       router.push(`/facture?id=${res.data.id}`);
   
@@ -214,6 +237,34 @@ export default function POSPage() {
               </motion.div>
             ))}
           </div>
+
+          {/* 📄 PAGINATION : mêmes principes que /catalogue -- permet de voir tout le
+              catalogue au comptoir, pas seulement les 30 premiers produits alphabétiques. */}
+          {!searching && totalCount > POS_PAGE_SIZE && (
+            <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={!hasPrevious}
+                title="Page précédente"
+                aria-label="Page précédente"
+                className="px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest border-none cursor-pointer bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+              >
+                ← Précédent
+              </button>
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                Page {page} · {totalCount} produit{totalCount > 1 ? 's' : ''}
+              </span>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={!hasNext}
+                title="Page suivante"
+                aria-label="Page suivante"
+                className="px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest border-none cursor-pointer bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+              >
+                Suivant →
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

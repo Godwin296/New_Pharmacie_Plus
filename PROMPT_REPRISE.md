@@ -139,6 +139,26 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
   cours de pagination) — retesté : 359/359, zéro doublon, zéro perte.
 - Frontend (IndexedDB, brique 3/4) : pas encore commencé.
 
+### Correctifs UX remontés en test (session offline, 12/07)
+- **Perte de focus dans la recherche du catalogue** (`app/catalogue/page.tsx`) : `if (loading)
+  return <spinner plein écran>` démontait TOUT le composant -- input inclus -- à CHAQUE
+  nouvelle recherche (pas seulement au 1er chargement), puisque `setLoading(true)` était
+  appelé à chaque fetch. Corrigé avec un état `hasLoadedOnce` : le plein écran ne s'affiche
+  plus qu'au tout premier chargement ; les recherches/pages/catégories suivantes gardent le
+  champ de recherche monté en permanence et affichent juste un indicateur "Recherche..."
+  inline dans la grille (même pattern que `/caisse/pos`, qui n'avait jamais eu ce bug).
+- **Pagination manquante sur le POS** (`app/caisse/pos/page.tsx`) : la grille demandait
+  toujours `?page_size=30` sans jamais envoyer `page` -- plafonnée en silence aux 30 premiers
+  produits (ordre alphabétique) dès qu'aucune recherche n'était tapée, sans aucun moyen de
+  voir le reste. Ajout d'une vraie pagination (page/hasNext/hasPrevious + boutons Précédent/
+  Suivant), même pattern que `/catalogue`, avec reset à la page 1 à chaque nouvelle recherche.
+- Validé : `npx tsc --noEmit` propre, `next build` complet sans erreur (30 pages), et
+  pagination testée en réel côté backend (page 1 = 30/100, page 4 = 10/100 restants,
+  recherche paginée correcte). ⚠️ Le fix de focus repose sur la sémantique React
+  (unmount/remount) et n'a PAS pu être testé avec un vrai navigateur headless (Playwright/
+  Puppeteer téléchargent leurs binaires depuis des domaines hors de la liste réseau
+  autorisée dans ce sandbox) -- à confirmer visuellement côté utilisateur.
+
 ### Scripts de seed (session offline, 12/07)
 - `seed.py` et `mise_a_jour.py` fusionnés en un seul `seed.py` (l'ancien `mise_a_jour.py`
   a été supprimé) : plus simple à maintenir, un seul point d'entrée `python seed.py`.
