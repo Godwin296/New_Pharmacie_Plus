@@ -1,4 +1,5 @@
 import uuid
+import logging
 from rest_framework.decorators import api_view, permission_classes, parser_classes, authentication_classes, throttle_classes
 from rest_framework.response import Response
 from rest_framework import status
@@ -9,6 +10,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 from django.contrib.auth import authenticate
 from django.db.models import Q, Sum, F
 from django.db.models.functions import TruncDate
@@ -30,6 +32,10 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from clients_publics.models import CompteClient 
 from .authentication import ClientJWTAuthentication, StaffJWTAuthentication
+
+logger = logging.getLogger(__name__)
+
+
 
 
 def _notifier_caisse(tenant_schema_name, type_event, **payload):
@@ -262,12 +268,26 @@ def api_login(request):
         
         # SÉCURITÉ JWT : On génère les jetons d'accès pour ton frontend Next.js
         refresh = RefreshToken.for_user(user)
-        
+
+        # 🔐 CORRECTION (bug remonté en test, session du 12/07) : le splash screen affichait
+        # jusqu'ici le nom d'utilisateur technique (`user.username`, ex: "client_test") comme
+        # s'il s'agissait d'un simple libellé de rôle -- tous les clients qui se connectaient
+        # avec le même compte de test voyaient donc toujours le même nom, ce qui pouvait
+        # laisser croire à tort que l'app affichait le GROUPE plutôt que le compte réel.
+        # Pour un client, on préfère désormais afficher son nom complet réel (Client.nom,
+        # ex: "Jean Dupont") -- bien plus parlant que l'identifiant de connexion technique.
+        display_name = user.username
+        if role_req == "client":
+            client_profile = getattr(user, "client_profile", None)
+            if client_profile and client_profile.nom:
+                display_name = client_profile.nom
+
         return Response({
             "message": "Connexion réussie",
             "access": str(refresh.access_token),  # Jeton à inclure dans le Header Next.js
             "refresh": str(refresh),              # Jeton pour renouveler la session en tâche de fond
             "user": user.username,
+            "display_name": display_name,
             "role": role_req
         }, status=200)
         
@@ -1053,19 +1073,108 @@ def api_vente_directe(request):
 # On supprime @authentication_classes([]) pour permettre au JWT de valider le rôle is_staff
 @permission_classes([IsAuthenticated])
 def api_archives_caissiere(request):
-    """Récupère toutes les factures et ordonnances validées des 90 derniers jours"""
+    """
+    Récupère les ventes RÉELLEMENT CONFIRMÉES des 90 derniers jours (reçus/factures).
+
+    🔐 CORRECTION (bug remonté en test, session du 12/07) : l'ancien filtre incluait
+    `Q(ordonnance_valide=True)` en plus de `Q(payee=True)`. Or une ordonnance peut être
+    validée par la caisse BIEN AVANT que le client ait payé (et même avant qu'il ait
+    seulement soumis sa référence de transaction) -- une commande encore en "en_cours"
+    ou "paiement_a_verifier" pouvait donc apparaître ici, dans le registre des ventes,
+    avec le badge "Certifiée", alors qu'elle n'est pas encore une vente réelle et
+    n'apparaît pas encore dans le chiffre d'affaires du tableau de bord (qui, lui, filtre
+    correctement sur payee=True). Seul `payee=True` doit faire foi : c'est le seul
+    moment où le stock a réellement été décrémenté et l'argent réellement encaissé/vérifié.
+    """
     if not request.user.is_staff: 
         return Response({"error": "Réservé au personnel de la pharmacie"}, status=403)        
     
     il_ya_90_jours = timezone.now() - timedelta(days=90)
     
     archives = Commande.objects.filter(
-        Q(payee=True) | Q(ordonnance_valide=True),
+        payee=True,
         date__gte=il_ya_90_jours
     ).order_by('-date')
     
     serializer = CommandeSerializer(archives, many=True, context={'request': request})
     return Response(serializer.data)
+
+
+# --- 👤 GESTION ADMIN DES COMPTES CLIENTS (réinitialisation de mot de passe) ---
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_admin_liste_clients(request):
+    """
+    Liste des clients en ligne (comptes créés via l'app mobile/web) du tenant courant,
+    pour la page de gestion admin. Réservé au superuser du tenant : accéder aux
+    coordonnées de tous les clients est une action sensible, pas une simple tâche de
+    caisse.
+    """
+    if not request.user.is_superuser:
+        return Response({"error": "Accès réservé à l'administrateur."}, status=403)
+
+    clients = Client.objects.select_related('user').order_by('nom')
+    data = [{
+        "id": c.id,
+        "nom": c.nom,
+        "identifiant": c.identifiant,
+        "telephone": c.telephone,
+        "email": c.email,
+        "username": c.user.username,
+        "is_active": c.user.is_active,
+    } for c in clients]
+    return Response(data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_admin_reset_password_client(request, client_id):
+    """
+    🔐 Réinitialise le mot de passe d'un client et le lui envoie IMMÉDIATEMENT par email,
+    en un seul clic côté frontend admin -- remplace le processus Django admin en 3 étapes
+    (ouvrir l'utilisateur, cliquer sur "changer le mot de passe", le communiquer soi-même
+    au client par un autre canal). Réservé au superuser du tenant.
+
+    Ne modifie RIEN en base tant que l'email n'a pas été confirmé parti : si l'envoi
+    échoue (ex: Brevo pas configuré / sender non vérifié), on ne veut surtout pas que
+    l'admin croie avoir communiqué un mot de passe qui n'est en réalité connu de personne
+    -- le compte serait alors bloqué sans que personne ne s'en aperçoive.
+    """
+    if not request.user.is_superuser:
+        return Response({"error": "Accès réservé à l'administrateur."}, status=403)
+
+    client_obj = get_object_or_404(Client, id=client_id)
+    if not client_obj.email:
+        return Response({
+            "error": "Ce client n'a pas d'adresse email enregistrée -- impossible de lui "
+                     "envoyer un nouveau mot de passe automatiquement."
+        }, status=400)
+
+    # Mot de passe temporaire aléatoire (12 caractères, alphabet large -> passe sans
+    # difficulté les validateurs Django par défaut : longueur mini, pas 100% numérique...).
+    alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789!@#$%"
+    nouveau_mdp = get_random_string(12, allowed_chars=alphabet)
+
+    from .emails import envoyer_email_nouveau_mot_de_passe
+    try:
+        envoyer_email_nouveau_mot_de_passe(client_obj, nouveau_mdp)
+    except Exception:
+        logger.exception("Échec de l'envoi de l'email de réinitialisation pour le client %s", client_obj.identifiant)
+        return Response({
+            "error": "Le nouveau mot de passe n'a PAS pu être envoyé par email (problème de "
+                     "configuration Brevo/SMTP côté serveur) -- le mot de passe du client n'a "
+                     "donc PAS été modifié, pour éviter de le bloquer sans recours."
+        }, status=502)
+
+    # 🔐 On ne change réellement le mot de passe qu'APRÈS confirmation que l'email est parti.
+    with transaction.atomic():
+        user = client_obj.user
+        user.set_password(nouveau_mdp)
+        user.save()
+
+    return Response({
+        "message": f"Nouveau mot de passe généré et envoyé à {client_obj.email}. ✅"
+    })
 
 
 

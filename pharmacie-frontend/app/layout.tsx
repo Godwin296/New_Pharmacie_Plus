@@ -39,7 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 3500);
     const savedRole = localStorage.getItem('user_role');
-    const savedName = localStorage.getItem('username');
+    const savedName = localStorage.getItem('display_name') || localStorage.getItem('username');
     
     if (savedRole && savedName) {
       setUser({

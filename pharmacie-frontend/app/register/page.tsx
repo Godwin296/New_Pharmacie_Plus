@@ -53,6 +53,7 @@ export default function RegisterPage() {
             // Profil utilisateur
             localStorage.setItem('user_role', loginRes.data.role);
             localStorage.setItem('username', loginRes.data.user);
+            localStorage.setItem('display_name', loginRes.data.display_name || loginRes.data.user);
             
             // Redirection fluide et synchronisée vers le catalogue
             window.location.href = '/';

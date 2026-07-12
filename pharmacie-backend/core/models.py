@@ -270,12 +270,18 @@ class Commande(models.Model):
         # même si cette méthode était appelée par erreur depuis ailleurs dans le code.
         if self.statut in ("payee_a_retirer", "retiree", "payee"):
             return
+        # 🔐 CORRECTION (bug remonté en test, session du 12/07) : cette méthode n'est JAMAIS
+        # atteignable pour une commande dont le stock a réellement été décrémenté -- le
+        # garde-fou ci-dessus bloque déjà "payee_a_retirer" / "retiree" / "payee". Or la
+        # décrémentation du stock n'a lieu QUE dans Commande.valider() (-> statut
+        # "payee_a_retirer") ou dans api_vente_directe() (-> statut "payee"). Autrement dit,
+        # TOUTE commande qui arrive ici ("en_cours", "attente_validation" ou
+        # "paiement_a_verifier") n'a JAMAIS touché au stock -- le recréditer serait donc une
+        # fraude comptable pure (augmentation artificielle et injustifiée du stock). On se
+        # contente donc de marquer la commande comme annulée, sans AUCUN mouvement de stock.
+        # (Ancien code : recréditait `item.quantite` pour chaque article -> gonflait le stock
+        # à chaque panier abandonné après 48h, ou annulé manuellement avant paiement.)
         with transaction.atomic():
-            for item in self.items.all():
-                p = Produit.objects.select_for_update().get(id=item.produit.id)
-                p.quantite += item.quantite
-                p.save()
-                Mouvement_stock.objects.create(produit=p, quantite=item.quantite, type="entree")
             self.statut = "annulee"
             self.save()
     
