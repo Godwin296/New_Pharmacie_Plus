@@ -24,7 +24,7 @@ from .serializers import (
     ProduitSerializer, CommandeSerializer, CommandeClientSerializer, ClientRegisterSerializer, 
     PharmacieConfigSerializer, FournisseurSerializer
 )
-from .validators import valider_et_desinfecter_ordonnance
+from .validators import valider_et_desinfecter_ordonnance, valider_et_desinfecter_photo_produit
 from .pagination import CataloguePagination
 from .throttles import LoginRateThrottle, SoumettrePaiementRateThrottle
 from .services_prediction import predire_pour_produit, predire_pour_tous_produits
@@ -1058,13 +1058,19 @@ def api_modifier_photo_produit(request, produit_id):
         return Response({"error": "Action réservée à l'administrateur"}, status=403)
         
     if 'image' in request.FILES:
-        image_file = request.FILES['image']
-        extension = image_file.name.split('.')[-1].lower()
-        if extension not in ['jpg', 'jpeg', 'png', 'webp']:
-            return Response({"error": "Format d'image non autorisé"}, status=400)
+        image_brute = request.FILES['image']
+
+        # 🔐 Mêmes garanties que pour une ordonnance : on ne fait jamais confiance au nom de
+        # fichier ni au Content-Type déclaré par le navigateur -- détection par contenu réel,
+        # réencodage complet (élimine tout payload caché), ET compression au passage (photo
+        # catalogue = juste illustrative, pas besoin du poids d'une photo de téléphone brute).
+        try:
+            image_propre = valider_et_desinfecter_photo_produit(image_brute)
+        except ValidationError as e:
+            return Response({"error": str(e.message) if hasattr(e, 'message') else str(e)}, status=400)
 
         produit = get_object_or_404(Produit, id=produit_id)
-        produit.image = image_file
+        produit.image = image_propre
         produit.save()
         image_url_complete = request.build_absolute_uri(produit.image.url)
         return Response({

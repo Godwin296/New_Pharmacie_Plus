@@ -26,7 +26,7 @@ import uuid
 import logging
 
 import magic
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import InMemoryUploadedFile
 
@@ -82,11 +82,17 @@ def detecter_type_reel(fichier) -> str:
     return mime_detecte
 
 
-def _desinfecter_image(fichier) -> io.BytesIO:
+def _desinfecter_image(fichier, largeur_max_px=1600, qualite_jpeg=88) -> io.BytesIO:
     """
     Réencode entièrement une image à partir de ses pixels réels.
     Toute donnée cachée en dehors des pixels légitimes (queue de fichier, métadonnées EXIF
     forgées, payload de stéganographie) est éliminée car jamais recopiée.
+
+    `largeur_max_px` / `qualite_jpeg` sont volontairement paramétrables : une ordonnance
+    (document médical, doit rester lisible) et une photo de produit catalogue (juste
+    illustrative) n'ont pas les mêmes contraintes de qualité -- voir les deux points
+    d'entrée `valider_et_desinfecter_ordonnance` et `valider_et_desinfecter_photo_produit`
+    ci-dessous, qui appellent cette même fonction avec des réglages différents.
     """
     fichier.seek(0)
     try:
@@ -102,6 +108,13 @@ def _desinfecter_image(fichier) -> io.BytesIO:
             "Le fichier image est corrompu ou invalide. Merci d'essayer avec une autre photo."
         ) from e
 
+    # 🔄 ORIENTATION EXIF : un téléphone enregistre souvent l'image "à plat" (capteur) et
+    # note juste "tourner de 90°" dans une métadonnée EXIF -- que l'affichage applique
+    # automatiquement. Comme on va justement SUPPRIMER ces métadonnées ci-dessous (c'est le
+    # but : nettoyage de sécurité), il faut d'abord "figer" cette rotation dans les pixels
+    # eux-mêmes, sinon l'ordonnance ressort couchée sur le côté après désinfection.
+    image = ImageOps.exif_transpose(image)
+
     # On force la conversion en RGB : élimine toute palette/canal alpha exotique qui pourrait
     # servir de vecteur d'attaque, et garantit un JPEG de sortie cohérent.
     if image.mode not in ("RGB", "L"):
@@ -113,14 +126,14 @@ def _desinfecter_image(fichier) -> io.BytesIO:
     # à l'impression, ce qui réduit drastiquement le poids final (utile sur connexion 3G/4G).
     # On ne redimensionne QUE si l'image dépasse la limite : jamais d'upscale d'une image
     # déjà plus petite (ça l'agrandirait artificiellement sans gagner en qualité réelle).
-    LARGEUR_MAX_PX = 1600
+    LARGEUR_MAX_PX = largeur_max_px
     if image.width > LARGEUR_MAX_PX:
         ratio = LARGEUR_MAX_PX / image.width
         nouvelle_taille = (LARGEUR_MAX_PX, round(image.height * ratio))
         image = image.resize(nouvelle_taille, Image.LANCZOS)
 
     tampon_propre = io.BytesIO()
-    image.save(tampon_propre, format="JPEG", quality=88, optimize=True)
+    image.save(tampon_propre, format="JPEG", quality=qualite_jpeg, optimize=True)
     tampon_propre.seek(0)
     return tampon_propre
 
@@ -210,6 +223,72 @@ def valider_et_desinfecter_ordonnance(fichier_upload) -> InMemoryUploadedFile:
         field_name="ordonnance",
         name=nom_fichier_propre,
         content_type="application/pdf" if extension == "pdf" else "image/jpeg",
+        size=taille_finale,
+        charset=None,
+    )
+
+
+# Taille maximale acceptée pour une photo de produit catalogue AVANT compression : 5 Mo.
+# Généreux pour ne pas frustrer l'admin qui upload depuis son téléphone, tout en bloquant
+# les abus -- le fichier réel stocké est de toute façon bien plus petit après compression.
+TAILLE_MAX_PHOTO_PRODUIT_OCTETS = 5 * 1024 * 1024  # 5 Mo
+
+# Réglages volontairement plus agressifs que pour une ordonnance : une vignette catalogue
+# n'a besoin d'être lisible qu'à l'écran (grille produit, jamais imprimée pour une décision
+# médicale), donc on privilégie la bande passante -- surtout précieux en 3G/4G, avec un
+# catalogue qui peut afficher des dizaines de photos d'un coup (cf. CataloguePagination).
+LARGEUR_MAX_PHOTO_PRODUIT_PX = 900
+QUALITE_JPEG_PHOTO_PRODUIT = 78
+
+
+def valider_et_desinfecter_photo_produit(fichier_upload) -> InMemoryUploadedFile:
+    """
+    Point d'entrée pour les photos de produit catalogue (api_modifier_photo_produit) :
+    mêmes couches de sécurité que pour une ordonnance (taille, type réel par contenu
+    binaire, désinfection par reconstruction complète, nom généré côté serveur), mais avec
+    une compression plus agressive puisqu'il s'agit d'une simple photo illustrative, jamais
+    d'un document dont la lisibilité doit être préservée à tout prix.
+
+    Contrairement aux ordonnances, un PDF n'a aucun sens ici : seules les images sont
+    acceptées.
+    """
+    if fichier_upload.size > TAILLE_MAX_PHOTO_PRODUIT_OCTETS:
+        taille_recue_mo = round(fichier_upload.size / (1024 * 1024), 1)
+        taille_max_mo = TAILLE_MAX_PHOTO_PRODUIT_OCTETS // (1024 * 1024)
+        raise ValidationError(
+            f"L'image est trop volumineuse ({taille_recue_mo} Mo). "
+            f"Taille maximale acceptée : {taille_max_mo} Mo."
+        )
+
+    fichier_upload.seek(0)
+    entete = fichier_upload.read(2048)
+    fichier_upload.seek(0)
+    mime_detecte = magic.from_buffer(entete, mime=True)
+    if mime_detecte not in ("image/jpeg", "image/png", "image/webp"):
+        raise ValidationError(
+            "Ce fichier n'est pas reconnu comme une image valide (JPG/PNG/WEBP). "
+            "Si vous pensez qu'il s'agit d'une erreur, essayez de réenregistrer l'image "
+            "puis de la charger à nouveau."
+        )
+
+    contenu_propre = _desinfecter_image(
+        fichier_upload,
+        largeur_max_px=LARGEUR_MAX_PHOTO_PRODUIT_PX,
+        qualite_jpeg=QUALITE_JPEG_PHOTO_PRODUIT,
+    )
+    taille_finale = contenu_propre.getbuffer().nbytes
+    nom_fichier_propre = f"produit_{uuid.uuid4().hex}.jpg"
+
+    logger.info(
+        "Photo produit compressée avec succès : %s (%d octets, contre %d à l'origine)",
+        nom_fichier_propre, taille_finale, fichier_upload.size,
+    )
+
+    return InMemoryUploadedFile(
+        file=contenu_propre,
+        field_name="image",
+        name=nom_fichier_propre,
+        content_type="image/jpeg",
         size=taille_finale,
         charset=None,
     )
