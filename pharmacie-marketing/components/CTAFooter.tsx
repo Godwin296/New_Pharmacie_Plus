@@ -1,7 +1,9 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Mail, Phone, MessageCircle, ArrowUpRight } from "lucide-react";
 import { Reveal } from "./Reveal";
 import { PulseLine } from "./PulseLine";
+import { QualifiedLeadForm } from "./QualifiedLeadForm";
 import { CONTACT, GENERAL_WHATSAPP_LINK, DEMO_WHATSAPP_LINK } from "@/lib/contact";
 
 export function CTAFooter() {
@@ -21,22 +23,29 @@ export function CTAFooter() {
               Que vous gériez une pharmacie ou que vous cherchiez simplement à
               commander vos médicaments plus simplement, écrivez-nous.
             </p>
+          </Reveal>
 
-            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+          <Reveal delay={0.1} className="mt-10">
+            <QualifiedLeadForm />
+          </Reveal>
+
+          <Reveal delay={0.15}>
+            <p className="mt-8 text-[13px] text-slate-400">Une question rapide, sans formulaire ?</p>
+            <div className="mt-3 flex flex-col sm:flex-row gap-3 justify-center">
               <a
                 href={GENERAL_WHATSAPP_LINK}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 px-7 py-4 text-[15px] font-bold text-white no-underline transition-all hover:shadow-[0_0_30px_-6px_rgba(16,185,129,0.5)]"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-white/15 hover:border-emerald-400 px-5 py-2.5 text-[13px] font-semibold text-[var(--color-ink)] dark:text-white no-underline transition-colors"
               >
-                <MessageCircle size={17} />
-                Écrire sur WhatsApp
+                <MessageCircle size={15} />
+                WhatsApp
               </a>
               <a
                 href={`mailto:${CONTACT.email}`}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 dark:border-white/15 hover:border-emerald-400 px-7 py-4 text-[15px] font-bold text-[var(--color-ink)] dark:text-white no-underline transition-colors"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-white/15 hover:border-emerald-400 px-5 py-2.5 text-[13px] font-semibold text-[var(--color-ink)] dark:text-white no-underline transition-colors"
               >
-                <Mail size={17} />
+                <Mail size={15} />
                 {CONTACT.email}
               </a>
             </div>
@@ -119,9 +128,14 @@ export function CTAFooter() {
             <p className="text-[12px] text-white/30">
               © {new Date().getFullYear()} Pharmacie+ — Fait au Cameroun 🇨🇲 pour l&apos;Afrique Centrale
             </p>
-            <p className="text-[12px] text-white/20">
-              Isolation des données · FCFA natif · Orange Money &amp; MTN MoMo
-            </p>
+            <div className="flex items-center gap-4">
+              <Link href="/mentions-legales" className="text-[12px] text-white/30 hover:text-white/60 no-underline transition-colors">
+                Mentions légales
+              </Link>
+              <Link href="/politique-de-confidentialite" className="text-[12px] text-white/30 hover:text-white/60 no-underline transition-colors">
+                Confidentialité
+              </Link>
+            </div>
           </div>
         </div>
       </footer>
