@@ -46,7 +46,7 @@ export function CTAFooter() {
 
       <footer className="relative bg-brand-deep pt-20 pb-10 overflow-hidden">
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 opacity-40">
-          <PulseLine className="w-full h-16" stroke="#5eead4" />
+          <PulseLine className="w-full h-16" stroke="#0e7a4e" />
         </div>
 
         <div className="relative mx-auto max-w-7xl px-5 sm:px-8">

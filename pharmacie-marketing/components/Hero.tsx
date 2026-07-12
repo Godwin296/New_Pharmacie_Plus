@@ -61,7 +61,7 @@ export function Hero() {
 
       {/* Ambient ECG pulse threading behind the headline — pharma signature motif */}
       <div className="pointer-events-none absolute left-0 right-0 top-[30%] opacity-70">
-        <PulseLine className="w-full h-24" stroke="#10b981" />
+        <PulseLine className="w-full h-24" stroke="#158f5f" />
       </div>
 
       <motion.div style={{ y: contentY, opacity: contentOpacity }} className="relative mx-auto max-w-7xl px-5 sm:px-8">
