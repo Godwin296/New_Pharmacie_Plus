@@ -9,11 +9,25 @@
   --color-ink-soft: #131c2e;
   --color-blue: #2563eb;
   --color-blue-light: #4f8cff;
-  --color-emerald: #10b981;
-  --color-emerald-deep: #059669;
+  --color-emerald: #0e9f6e;
+  --color-emerald-deep: #076b49;
   --color-mist: #f3faf7;
   --color-mist-deep: #e7f3ee;
   --color-amber: #f59e0b;
+
+  /* Deep, authentic pharmacy green - replaces Tailwind's default minty emerald
+     scale everywhere emerald utility classes are used. */
+  --color-emerald-50: #eafaf1;
+  --color-emerald-100: #cdf2dd;
+  --color-emerald-200: #9de5bf;
+  --color-emerald-300: #67d29e;
+  --color-emerald-400: #34b57c;
+  --color-emerald-500: #158f5f;
+  --color-emerald-600: #0e7a4e;
+  --color-emerald-700: #0b6440;
+  --color-emerald-800: #0a5033;
+  --color-emerald-900: #08402a;
+  --color-emerald-950: #04241a;
 }
 
 :root {
@@ -22,11 +36,11 @@
 }
 
 .bg-brand-deep {
-  background: linear-gradient(150deg, #043d31 0%, #075169 48%, #0c3a6e 100%);
+  background: linear-gradient(150deg, #04241a 0%, #0b6440 38%, #0a5570 68%, #0c3a6e 100%);
 }
 
 .bg-brand-deep-soft {
-  background: linear-gradient(150deg, #054a3c 0%, #086082 48%, #0e4483 100%);
+  background: linear-gradient(150deg, #0a5033 0%, #0a5570 48%, #0e4483 100%);
 }
 
 body {

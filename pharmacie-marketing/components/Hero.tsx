@@ -161,41 +161,79 @@ export function Hero() {
         </div>
       </motion.div>
 
-      {/* Cinematic curved transition into the next section — like paint flowing down */}
-      <div className="absolute bottom-0 left-0 right-0 leading-[0]">
-        <svg viewBox="0 0 1440 150" className="w-full h-[90px] sm:h-[150px]" preserveAspectRatio="none">
+      {/* Paint-drip transition: the hero's dark paint drips down over the light wall below */}
+      <div className="absolute bottom-0 left-0 right-0 leading-[0] translate-y-[1px]">
+        <svg viewBox="0 0 1440 220" className="w-full h-[130px] sm:h-[220px]" preserveAspectRatio="none">
+          {/* light wall base */}
+          <rect x="0" y="0" width="1440" height="220" fill="var(--color-mist)" />
+
+          <defs>
+            <linearGradient id="paintGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#0a5033" />
+              <stop offset="100%" stopColor="#0b6440" />
+            </linearGradient>
+          </defs>
+
+          {/* irregular dark paint edge, coming down from the hero */}
           <motion.path
-            d="M0,150 L0,55 C240,150 480,10 720,55 C960,105 1200,15 1440,65 L1440,150 Z"
-            fill="var(--color-mist)"
+            fill="url(#paintGrad)"
             animate={{
               d: [
-                "M0,150 L0,55 C240,150 480,10 720,55 C960,105 1200,15 1440,65 L1440,150 Z",
-                "M0,150 L0,62 C240,130 480,22 720,62 C960,95 1200,28 1440,58 L1440,150 Z",
-                "M0,150 L0,55 C240,150 480,10 720,55 C960,105 1200,15 1440,65 L1440,150 Z",
+                "M0,0 L1440,0 L1440,58 C1260,90 1120,40 980,72 C840,100 700,48 560,78 C420,102 280,50 140,80 C90,88 40,76 0,70 Z",
+                "M0,0 L1440,0 L1440,66 C1260,72 1120,58 980,80 C840,92 700,60 560,70 C420,88 280,62 140,74 C90,80 40,68 0,62 Z",
+                "M0,0 L1440,0 L1440,58 C1260,90 1120,40 980,72 C840,100 700,48 560,78 C420,102 280,50 140,80 C90,88 40,76 0,70 Z",
               ],
             }}
-            transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
           />
-          {/* Paint drips hanging from the wave */}
+
+          {/* dripping streaks + droplets */}
           {[
-            { x: 120, w: 26, h: 34, delay: 0 },
-            { x: 340, w: 18, h: 22, delay: 0.4 },
-            { x: 560, w: 30, h: 42, delay: 0.9 },
-            { x: 760, w: 16, h: 20, delay: 0.2 },
-            { x: 980, w: 24, h: 30, delay: 1.2 },
-            { x: 1180, w: 20, h: 26, delay: 0.6 },
-            { x: 1340, w: 28, h: 36, delay: 1.5 },
-          ].map((drip, i) => (
-            <motion.g
-              key={i}
-              animate={{ y: [0, 5, 0] }}
-              transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: drip.delay }}
-            >
-              <path
-                d={`M${drip.x},68 C${drip.x - drip.w / 2},${68 + drip.h * 0.5} ${drip.x - drip.w / 2},${68 + drip.h} ${drip.x},${68 + drip.h + drip.w / 2} C${drip.x + drip.w / 2},${68 + drip.h} ${drip.x + drip.w / 2},${68 + drip.h * 0.5} ${drip.x},68 Z`}
-                fill="var(--color-mist)"
+            { x: 70, y: 78, len: 88, w: 7, dur: 5.2, delay: 0 },
+            { x: 190, y: 66, len: 54, w: 5, dur: 4.4, delay: 0.7 },
+            { x: 330, y: 96, len: 118, w: 8, dur: 6.2, delay: 1.3 },
+            { x: 470, y: 62, len: 46, w: 4, dur: 3.9, delay: 0.3 },
+            { x: 610, y: 86, len: 96, w: 6, dur: 5.6, delay: 1.8 },
+            { x: 760, y: 72, len: 68, w: 5, dur: 4.7, delay: 0.2 },
+            { x: 900, y: 100, len: 128, w: 9, dur: 6.6, delay: 1.0 },
+            { x: 1040, y: 64, len: 52, w: 4, dur: 4.1, delay: 1.5 },
+            { x: 1180, y: 84, len: 90, w: 6, dur: 5.4, delay: 0.5 },
+            { x: 1320, y: 76, len: 74, w: 5, dur: 4.9, delay: 2.0 },
+          ].map((d, i) => (
+            <g key={i}>
+              <motion.line
+                x1={d.x}
+                y1={d.y}
+                x2={d.x}
+                y2={d.y + d.len}
+                stroke={i % 2 === 0 ? "#0b6440" : "#0a5570"}
+                strokeWidth={d.w}
+                strokeLinecap="round"
+                initial={{ pathLength: 0, opacity: 0.9 }}
+                animate={{ pathLength: [0, 1, 1, 0] }}
+                transition={{
+                  duration: d.dur,
+                  times: [0, 0.4, 0.8, 1],
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                  delay: d.delay,
+                }}
               />
-            </motion.g>
+              <motion.circle
+                cx={d.x}
+                cy={d.y + d.len}
+                r={d.w * 0.95}
+                fill={i % 2 === 0 ? "#0b6440" : "#0a5570"}
+                animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.5, 0.5, 1, 1, 0.5] }}
+                transition={{
+                  duration: d.dur,
+                  times: [0, 0.38, 0.45, 0.8, 0.95],
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                  delay: d.delay,
+                }}
+              />
+            </g>
           ))}
         </svg>
       </div>

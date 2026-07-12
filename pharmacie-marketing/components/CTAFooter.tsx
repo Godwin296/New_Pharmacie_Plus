@@ -2,6 +2,7 @@ import Image from "next/image";
 import { Mail, Phone, MessageCircle, ArrowUpRight } from "lucide-react";
 import { Reveal } from "./Reveal";
 import { PulseLine } from "./PulseLine";
+import { CONTACT, GENERAL_WHATSAPP_LINK, DEMO_WHATSAPP_LINK } from "@/lib/contact";
 
 export function CTAFooter() {
   return (
@@ -23,7 +24,7 @@ export function CTAFooter() {
 
             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
               <a
-                href="https://wa.me/237000000000"
+                href={GENERAL_WHATSAPP_LINK}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 px-7 py-4 text-[15px] font-bold text-[var(--color-ink)] no-underline transition-all hover:shadow-[0_0_30px_-6px_rgba(16,185,129,0.5)]"
@@ -32,11 +33,11 @@ export function CTAFooter() {
                 Écrire sur WhatsApp
               </a>
               <a
-                href="mailto:contact@pharmacieplus.cm"
+                href={`mailto:${CONTACT.email}`}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 hover:border-emerald-400 px-7 py-4 text-[15px] font-bold text-[var(--color-ink)] no-underline transition-colors"
               >
                 <Mail size={17} />
-                contact@pharmacieplus.cm
+                {CONTACT.email}
               </a>
             </div>
           </Reveal>
@@ -69,7 +70,9 @@ export function CTAFooter() {
                 santé, notre priorité.
               </p>
               <a
-                href="#contact"
+                href={DEMO_WHATSAPP_LINK}
+                target="_blank"
+                rel="noreferrer"
                 className="mt-5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-emerald-300 no-underline"
               >
                 Demander une démo
@@ -102,10 +105,10 @@ export function CTAFooter() {
                 Contact
               </div>
               <div className="flex flex-col gap-3">
-                <a href="mailto:contact@pharmacieplus.cm" className="flex items-center gap-2 text-[14px] text-white/60 hover:text-white no-underline transition-colors">
-                  <Mail size={14} /> contact@pharmacieplus.cm
+                <a href={`mailto:${CONTACT.email}`} className="flex items-center gap-2 text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                  <Mail size={14} /> {CONTACT.email}
                 </a>
-                <a href="https://wa.me/237000000000" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                <a href={GENERAL_WHATSAPP_LINK} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[14px] text-white/60 hover:text-white no-underline transition-colors">
                   <Phone size={14} /> WhatsApp
                 </a>
               </div>

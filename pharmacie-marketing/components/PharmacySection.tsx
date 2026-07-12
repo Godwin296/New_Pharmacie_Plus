@@ -11,6 +11,7 @@ import {
 import { motion } from "framer-motion";
 import { Reveal } from "./Reveal";
 import { TiltCard } from "./TiltCard";
+import { DEMO_WHATSAPP_LINK } from "@/lib/contact";
 
 const stockRows = [
   { name: "Paracétamol 500mg", pct: 78 },
@@ -186,7 +187,9 @@ export function PharmacySection() {
             </p>
           </div>
           <a
-            href="#contact"
+            href={DEMO_WHATSAPP_LINK}
+            target="_blank"
+            rel="noreferrer"
             className="shrink-0 inline-flex items-center justify-center rounded-2xl bg-emerald-600 hover:bg-emerald-500 px-7 py-4 text-[15px] font-bold text-white no-underline transition-colors"
           >
             Demander une démo

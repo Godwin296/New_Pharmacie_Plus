@@ -1,5 +1,6 @@
 import { FileUp, ShieldCheck, Radio, PackageCheck, MessageCircle } from "lucide-react";
 import { Reveal } from "./Reveal";
+import { CLIENT_WHATSAPP_LINK } from "@/lib/contact";
 
 const steps = [
   {
@@ -53,7 +54,9 @@ export function ClientSection() {
                 nous nous en chargeons.
               </p>
               <a
-                href="#contact"
+                href={CLIENT_WHATSAPP_LINK}
+                target="_blank"
+                rel="noreferrer"
                 className="mt-4 inline-flex items-center gap-2 text-[14px] font-bold text-emerald-700 no-underline"
               >
                 <MessageCircle size={16} />
