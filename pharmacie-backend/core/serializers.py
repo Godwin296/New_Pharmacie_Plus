@@ -49,7 +49,7 @@ class CommandeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Commande
         fields = [
-            'id', 'client', 'client_guichet', 'client_nom', 'client_telephone', 'client_email',
+            'id', 'client', 'compte_client', 'client_guichet', 'client_nom', 'client_telephone', 'client_email',
             'client_region', 'client_ville', 'client_quartier', 'date', 'payee', 'type_vente', 
             'agent_validateur_nom', 'statut', 'ordonnance', 'ordonnance_valide', 
             'motif_refus', 'date_limite', 'items', 'total_general', 'qr_code', 'est_perimee'
@@ -58,17 +58,21 @@ class CommandeSerializer(serializers.ModelSerializer):
     def get_total_general(self, obj):
         return obj.total()
 
-    # 🧠 Logique intelligente : si la commande est de guichet, on lit la table ClientGuichet, sinon la table Client classique
+    # 🧠 Logique intelligente : guichet (ClientGuichet) > compte client global (CompteClient,
+    # marketplace, nouveau système) > ancien Client par-tenant (compatibilité descendante)
     def get_client_nom(self, obj):
         if obj.client_guichet: return obj.client_guichet.nom
+        if obj.compte_client: return obj.compte_client.nom
         return obj.client.nom if obj.client else "Client Anonyme"
 
     def get_client_telephone(self, obj):
         if obj.client_guichet: return obj.client_guichet.telephone
+        if obj.compte_client: return obj.compte_client.telephone
         return obj.client.telephone if obj.client else ""
 
     def get_client_email(self, obj):
         if obj.client_guichet: return obj.client_guichet.email
+        if obj.compte_client: return obj.compte_client.email
         return obj.client.email if obj.client else ""
 
     def get_client_region(self, obj):
@@ -87,7 +91,7 @@ class CommandeSerializer(serializers.ModelSerializer):
     def get_qr_code(self, obj):
         try:
             num_facture = f"FAC-{obj.id}"
-            nom_client = obj.client.nom if obj.client else "Client au Guichet"
+            nom_client = self.get_client_nom(obj)
             date_info = obj.date.strftime('%d/%m/%Y %H:%M') if obj.date else "N/A"
         
             liste_produits = ""

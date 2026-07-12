@@ -28,7 +28,12 @@ from .throttles import LoginRateThrottle, SoumettrePaiementRateThrottle
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from clients_publics.models import CompteClient 
-from .authentication import ClientJWTAuthentication, StaffJWTAuthentication
+from .authentication import (
+    ClientJWTAuthentication,
+    StaffJWTAuthentication,
+    ClientOrStaffJWTAuthentication,
+    resoudre_identite_client,
+)
 
 
 def _notifier_caisse(tenant_schema_name, type_event, **payload):
@@ -123,6 +128,7 @@ def api_update_config(request):
 
 
 @api_view(['GET'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def api_infos_paiement(request):
     """
@@ -130,6 +136,11 @@ def api_infos_paiement(request):
     (jamais le PharmacieConfig complet, qui peut contenir d'autres informations internes).
     Accessible à tout utilisateur connecté (client comme staff) -- nécessaire pour afficher
     les instructions de paiement sur la page panier.
+
+    🔧 CORRECTIF JONCTION COMPTECLIENT : sans @authentication_classes explicite, cette vue
+    utilisait l'authentification par défaut (StaffJWTAuthentication), qui REJETTE tout jeton
+    "type": "client" -- un client marketplace connecté ne pouvait donc jamais voir les
+    coordonnées de paiement sur sa propre page panier.
     """
     config = PharmacieConfig.objects.first()
     if not config:
@@ -274,10 +285,27 @@ def api_login(request):
 
 # À ajouter à la fin de core/api.py
 @api_view(['GET'])
-@authentication_classes([StaffJWTAuthentication]) # On s'assure que le JWT est traité avant de vérifier les permissions
+@authentication_classes([ClientOrStaffJWTAuthentication]) # Traite AUSSI les jetons CompteClient (marketplace)
 @permission_classes([AllowAny]) # On permet à tous de demander "qui suis-je"
 def api_get_current_user(request):
+    """
+    🔧 CORRECTIF JONCTION COMPTECLIENT : utilisait StaffJWTAuthentication seule, qui rejette
+    tout jeton "type": "client" -- un client marketplace connecté apparaissait donc comme
+    "non authentifié" sur cette route (utilisée par la page d'accueil pour savoir quel bouton
+    afficher). CompteClient n'a pas d'attribut is_superuser/username (pas de PermissionsMixin
+    volontairement, cf. clients_publics/models.py) -> on distingue explicitement les deux cas
+    plutôt que d'accéder à des attributs qui n'existent pas sur ce modèle.
+    """
     if request.user and request.user.is_authenticated:
+        if isinstance(request.user, CompteClient):
+            return Response({
+                "is_authenticated": True,
+                "username": request.user.nom,
+                "email": request.user.email,
+                "is_staff": False,
+                "is_superuser": False,
+                "role": "client",
+            })
         return Response({
             "is_authenticated": True,
             "username": request.user.username,
@@ -325,8 +353,17 @@ def api_catalogue(request):
 
 # --- 🛒 GESTION DU PANIER SÉCURISÉ (Vérification 48h incluse) ---
 @api_view(['GET', 'POST'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def api_panier(request):
+    """
+    🔧 CORRECTIF JONCTION COMPTECLIENT : cette vue utilisait auparavant l'authentification
+    par défaut (StaffJWTAuthentication), qui rejette tout jeton "type": "client" -- un client
+    marketplace connecté ne pouvait donc ni consulter, ni modifier son panier. Elle utilisait
+    aussi exclusivement l'ancien modèle Client (OneToOne vers auth.User) ; resoudre_identite_client()
+    route désormais vers CompteClient pour tout nouveau client, tout en restant compatible avec
+    d'éventuels anciens comptes Client existants.
+    """
     facture_id = request.GET.get('id')
     
     # 1. Protection du personnel de caisse
@@ -334,7 +371,7 @@ def api_panier(request):
         return Response({"error": "Le personnel ne peut pas avoir de panier client"}, status=403)
         
     # 🎯 SÉCURITÉ CONTRÔLE D'ACCÈS (Anti-IDOR)
-    client_profile = get_object_or_404(Client, user=request.user) if not request.user.is_staff else None
+    client_instance, client_field = resoudre_identite_client(request.user)
     
     # 2. CAS A : Consultation d'une facture spécifique (?id=XXX) -> Accessible Staff ET Client propriétaire
     if facture_id:
@@ -343,7 +380,7 @@ def api_panier(request):
             # Le staff voit le serializer complet (avec le nom de l'agent validateur, pour l'audit)
             return Response(CommandeSerializer(commande_detail, context={'request': request}).data)
         else:
-            commande_detail = get_object_or_404(Commande, id=facture_id, client=client_profile)
+            commande_detail = get_object_or_404(Commande, id=facture_id, **{client_field: client_instance})
             # 🔐 Le client ne voit jamais quel agent a traité sa commande
             return Response(CommandeClientSerializer(commande_detail).data)
 
@@ -353,12 +390,12 @@ def api_panier(request):
     # (payee_a_retirer/retiree), ce n'est plus un panier modifiable -> on en ouvre un nouveau.
     STATUTS_PANIER_MODIFIABLE = ("en_cours", "attente_validation")
     commande = (
-        Commande.objects.filter(client=client_profile, statut__in=STATUTS_PANIER_MODIFIABLE)
+        Commande.objects.filter(statut__in=STATUTS_PANIER_MODIFIABLE, **{client_field: client_instance})
         .order_by("-date").first()
     )
     created = False
     if commande is None:
-        commande = Commande.objects.create(client=client_profile, statut="en_cours")
+        commande = Commande.objects.create(statut="en_cours", **{client_field: client_instance})
         created = True
     
     if not created and getattr(commande, 'est_perimee', False):
@@ -396,6 +433,7 @@ def api_panier(request):
 
 
 @api_view(['POST'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
 @permission_classes([IsAuthenticated])
 @throttle_classes([SoumettrePaiementRateThrottle])
 def api_soumettre_paiement(request, commande_id):
@@ -405,12 +443,16 @@ def api_soumettre_paiement(request, commande_id):
     STOCK N'EST PAS ENCORE DÉCRÉMENTÉ à ce stade (seule la confirmation par la caisse via
     api_confirmer_paiement déclenche réellement Commande.valider()) -- on ne fait jamais
     confiance à une simple déclaration du client pour engager le stock réel.
+
+    🔧 CORRECTIF JONCTION COMPTECLIENT : authentification par défaut remplacée par
+    ClientOrStaffJWTAuthentication (sans quoi un jeton client marketplace était rejeté avant
+    même d'atteindre le contrôle is_staff ci-dessous) + résolution via CompteClient.
     """
     if request.user.is_staff:
         return Response({"error": "Action réservée aux clients"}, status=403)
 
-    client_profile = get_object_or_404(Client, user=request.user)
-    commande = get_object_or_404(Commande, id=commande_id, client=client_profile)
+    client_instance, client_field = resoudre_identite_client(request.user)
+    commande = get_object_or_404(Commande, id=commande_id, **{client_field: client_instance})
 
     if commande.statut not in ("en_cours",):
         return Response({"error": "Cette commande ne peut pas être soumise au paiement dans son état actuel."}, status=409)
@@ -433,8 +475,12 @@ def api_soumettre_paiement(request, commande_id):
     commande.save()
 
     # 🔴 TEMPS RÉEL : la caisse voit immédiatement apparaître cette demande de vérification
+    # 🐛 CORRECTIF (bug préexistant, sans rapport avec CompteClient) : _notifier_caisse()
+    # n'accepte que des kwargs après (schema, type_event) -- cet appel passait le payload
+    # en positionnel, ce qui levait TypeError et faisait planter TOUTE soumission de
+    # paiement (client comme staff) avec un 500, avant même d'atteindre la réponse finale.
     _notifier_caisse(request.tenant.schema_name, "nouvelle_demande_paiement",
-                      CommandeSerializer(commande, context={'request': request}).data)
+                      commande=CommandeSerializer(commande, context={'request': request}).data)
 
     return Response({
         "message": "Merci ! Votre paiement est en cours de vérification par la pharmacie.",
@@ -544,26 +590,43 @@ def api_marquer_retiree(request, commande_id):
 
 
 @api_view(['GET'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def api_mes_commandes(request):
-    """Récupère l'historique des commandes du client connecté"""
-    client_profile = get_object_or_404(Client, user=request.user)
-    commandes = Commande.objects.filter(client=client_profile).order_by('-date')
+    """
+    Récupère l'historique des commandes du client connecté.
+
+    🔧 CORRECTIF JONCTION COMPTECLIENT : authentification par défaut remplacée (sans quoi un
+    jeton client marketplace était rejeté d'office) + résolution via CompteClient. Le personnel
+    n'a par définition aucun "historique client" -> 403 explicite plutôt qu'un 404 accidentel.
+    """
+    client_instance, client_field = resoudre_identite_client(request.user)
+    if client_instance is None:
+        return Response({"error": "Action réservée aux clients"}, status=403)
+    commandes = Commande.objects.filter(**{client_field: client_instance}).order_by('-date')
     # 🔐 Le client ne doit jamais voir quel agent a validé/refusé ses ordonnances
     serializer = CommandeClientSerializer(commandes, many=True)
     return Response(serializer.data)
 
 # --- 📋 GESTION DES ORDONNANCES SÉCURISÉE ---
 @api_view(['GET', 'POST'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser, JSONParser])
 def api_gestion_ordonnance(request, commande_id=None):
-    """Client: Upload / Caisse: Liste et Valide sans injection de droits 🔓"""
+    """
+    Client: Upload / Caisse: Liste et Valide sans injection de droits 🔓
+
+    🔧 CORRECTIF JONCTION COMPTECLIENT : authentification par défaut remplacée (sans quoi un
+    jeton client marketplace était rejeté avant même d'atteindre la vérification is_staff
+    ci-dessous) + résolution de la commande via CompteClient dans la branche client.
+    """
     
     # ÉTAPE 1 : Rôle Client -> Envoi de l'ordonnance
     if not request.user.is_staff:
         if request.method == 'POST' and commande_id:
-            commande = get_object_or_404(Commande, id=commande_id, client__user=request.user)
+            client_instance, client_field = resoudre_identite_client(request.user)
+            commande = get_object_or_404(Commande, id=commande_id, **{client_field: client_instance})
             if 'fichier_ordonnance' in request.FILES:
                 fichier_brut = request.FILES['fichier_ordonnance']
 

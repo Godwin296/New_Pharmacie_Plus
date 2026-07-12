@@ -179,10 +179,24 @@ class Commande(models.Model):
         ("payee", "Payée (vente directe guichet)"),
         ("annulee", "Annulée"),
     ]
-    # Pour les clients en ligne (smartphone) - Reste permanent
+    # 🕰️ ANCIEN SYSTÈME (par-tenant) -- conservé uniquement pour compatibilité descendante
+    # avec des commandes déjà existantes. Le nouveau flux d'inscription/connexion client
+    # n'alimente plus ce champ : voir `compte_client` ci-dessous.
     client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name="commandes")
-    
-    # 🌟 NOUVEAU : Pour les clients physiques encaissés au guichet
+
+    # 🌍 NOUVEAU SYSTÈME : compte client GLOBAL (marketplace), vivant dans le schéma
+    # public (app "clients_publics"). Référence déclarée via chaîne "app.Modele" car
+    # CompteClient vit dans une AUTRE app (SHARED_APPS) que Commande (TENANT_APPS) --
+    # ça fonctionne car django-tenants garde "public" sur le search_path Postgres de
+    # CHAQUE schéma tenant : la table clients_publics_compteclient est donc toujours
+    # visible/joignable, même si Commande, elle, vit physiquement dans le schéma de
+    # cette seule pharmacie. C'est ce champ que le cycle panier/paiement/historique
+    # utilise désormais pour tout nouveau client en ligne.
+    compte_client = models.ForeignKey(
+        "clients_publics.CompteClient", on_delete=models.SET_NULL, null=True, blank=True, related_name="commandes"
+    )
+
+    # 🌟 Pour les clients physiques encaissés au guichet
     client_guichet = models.ForeignKey(ClientGuichet, on_delete=models.SET_NULL, null=True, blank=True, related_name="commandes")
 
     # 🔖 RÉFÉRENCE LISIBLE ET RECHERCHABLE : générée une seule fois à la création, jamais modifiée.

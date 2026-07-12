@@ -11,8 +11,10 @@ export default function RegisterPage() {
   const router = useRouter();
 
   // --- LOGIQUE D'ÉTAT ---
+  // 🌍 CompteClient (marketplace globale) s'identifie par email, pas par un nom
+  // d'utilisateur choisi -- voir clients_publics/models.py.
   const [formData, setFormData] = useState({
-    username: '',
+    email: '',
     nom: '',
     telephone: '',
     password: ''
@@ -32,17 +34,16 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // 1. Soumission des données d'inscription au validateur Django
-      const res = await apiClient.post(`/api/register/`, formData);
+      // 1. Création du compte client global (CompteClient, schéma public)
+      const res = await apiClient.post(`/api/client/register/`, formData);
       
       if (res.status === 201) {
         
         // 2. 🛰️ STRATÉGIE AUTO-LOGIN : On connecte automatiquement le client dans la foulée
         try {
-          const loginRes = await apiClient.post(`/api/login/`, {
-            username: formData.username,
+          const loginRes = await apiClient.post(`/api/client/login/`, {
+            email: formData.email,
             password: formData.password,
-            role: 'client' // Rôle client par défaut sur ce formulaire
           });
 
           if (loginRes.status === 200) {
@@ -51,8 +52,8 @@ export default function RegisterPage() {
             localStorage.setItem('refresh_token', loginRes.data.refresh);
             
             // Profil utilisateur
-            localStorage.setItem('user_role', loginRes.data.role);
-            localStorage.setItem('username', loginRes.data.user);
+            localStorage.setItem('user_role', 'client');
+            localStorage.setItem('username', loginRes.data.nom);
             
             // Redirection fluide et synchronisée vers le catalogue
             window.location.href = '/';
@@ -112,7 +113,7 @@ export default function RegisterPage() {
             
             <div className="relative group">
               <User className="absolute left-5 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-emerald-400" size={20} />
-              <input required name="username" type="text" placeholder="Nom d'utilisateur" value={formData.username} onChange={handleChange} className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-14 pr-6 text-white font-bold focus:outline-none focus:border-emerald-500 transition-all shadow-inner"/>
+              <input required name="email" type="email" placeholder="Adresse email" value={formData.email} onChange={handleChange} className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-14 pr-6 text-white font-bold focus:outline-none focus:border-emerald-500 transition-all shadow-inner"/>
             </div>
 
             <div className="relative group">

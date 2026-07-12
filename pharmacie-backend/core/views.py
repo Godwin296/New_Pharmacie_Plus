@@ -6,7 +6,7 @@ from django.db.models import Sum, Q, F
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from .authentication import StaffJWTAuthentication
+from .authentication import StaffJWTAuthentication, ClientOrStaffJWTAuthentication, resoudre_identite_client
 from weasyprint import HTML
 import qrcode
 import base64
@@ -41,6 +41,25 @@ def _recuperer_utilisateur_jwt(request):
         return None
 
 
+def _recuperer_utilisateur_jwt_client_ou_staff(request):
+    """
+    Variante de _recuperer_utilisateur_jwt() ci-dessus qui accepte AUSSI les jetons
+    "type": "client" (marketplace globale, CompteClient) en plus des jetons du personnel --
+    réservée à export_facture_pdf, seul export PDF qu'un client doit pouvoir télécharger
+    (sa propre facture). Les 3 autres exports (financier, stock, alertes) restent strictement
+    personnel et continuent d'utiliser _recuperer_utilisateur_jwt() : CompteClient n'a
+    volontairement pas d'attribut is_superuser (pas de PermissionsMixin), donc les mélanger
+    là ferait planter les contrôles de rôle (AttributeError) au lieu de les bloquer proprement.
+    """
+    try:
+        header = ClientOrStaffJWTAuthentication().get_header(request)
+        if header is None:
+            return None
+        raw_token = ClientOrStaffJWTAuthentication().get_raw_token(header)
+        validated_token = ClientOrStaffJWTAuthentication().get_validated_token(raw_token)
+        return ClientOrStaffJWTAuthentication().get_user(validated_token)
+    except Exception:
+        return None
 
 
 # 🔐 FONCTION PRIVÉE DE VÉRIFICATION DU TOKEN JWT POUR LES TÉLÉCHARGEMENTS
@@ -49,7 +68,10 @@ def export_facture_pdf(request, commande_id):
     """Génération de PDF hautement sécurisée (Anti-IDOR) compatible Next.js 📄"""
     
     # 1. Authentification stricte via le Jetons JWT envoyé par le Frontend
-    user = _recuperer_utilisateur_jwt(request)
+    # 🔧 CORRECTIF JONCTION COMPTECLIENT : _recuperer_utilisateur_jwt() (staff uniquement)
+    # remplacée ici par la variante qui reconnaît aussi les jetons CompteClient -- sans ça,
+    # un client marketplace ne pouvait jamais télécharger sa propre facture.
+    user = _recuperer_utilisateur_jwt_client_ou_staff(request)
     if not user or not user.is_authenticated:
         return HttpResponse("Authentification requise pour télécharger ce PDF.", status=401)
 
@@ -57,14 +79,21 @@ def export_facture_pdf(request, commande_id):
     if user.is_staff:
         commande = get_object_or_404(Commande, id=commande_id)
     else:
-        client_profile = get_object_or_404(Client, user=user)
+        client_instance, client_field = resoudre_identite_client(user)
         # L'ID de la commande doit impérativement correspondre au profil du client connecté
-        commande = get_object_or_404(Commande, id=commande_id, client=client_profile)
+        commande = get_object_or_404(Commande, id=commande_id, **{client_field: client_instance})
 
     config = PharmacieConfig.objects.first()
 
     # 3. Génération du QR Code basé sur le total exact et figé
-    nom_client = commande.client.nom if commande.client else "Client au Guichet"
+    if commande.client_guichet:
+        nom_client = commande.client_guichet.nom
+    elif commande.compte_client:
+        nom_client = commande.compte_client.nom
+    elif commande.client:
+        nom_client = commande.client.nom
+    else:
+        nom_client = "Client au Guichet"
     qr_data = f"FACTURE:{commande.id}|CLIENT:{nom_client}|TOTAL:{commande.total()} CFA"
     
     qr = qrcode.make(qr_data)

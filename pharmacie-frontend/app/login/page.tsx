@@ -23,13 +23,31 @@ export default function LoginPage() {
     { id: 'admin', label: 'Admin', icon: <Shield size={20} /> },
   ];
 
-    // --- FONCTION DE CONNEXION SÉCURISÉE AVEC CAPTURE JWT ---
+  // --- FONCTION DE CONNEXION SÉCURISÉE AVEC CAPTURE JWT ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
+      // 🌍 CompteClient (marketplace globale) utilise un endpoint et une identité (email)
+      // distincts du personnel -- voir core/authentication.py (ClientJWTAuthentication).
+      if (role === 'client') {
+        const response = await apiClient.post(`/api/client/login/`, {
+          email: username,
+          password: password,
+        });
+
+        if (response.status === 200) {
+          localStorage.setItem('access_token', response.data.access);
+          localStorage.setItem('refresh_token', response.data.refresh);
+          localStorage.setItem('user_role', 'client');
+          localStorage.setItem('username', response.data.nom);
+          window.location.href = '/';
+        }
+        return;
+      }
+
       const response = await apiClient.post(`/api/login/`, {
         username: username,
         password: password,
@@ -145,10 +163,10 @@ export default function LoginPage() {
               <AtSign className="absolute left-5 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-emerald-400 transition-colors" size={18} />
               <input 
                 required
-                type="text" 
+                type={role === 'client' ? 'email' : 'text'}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Nom d'utilisateur"
+                placeholder={role === 'client' ? 'Adresse email' : "Nom d'utilisateur"}
                 className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-14 pr-6 text-white font-bold placeholder:text-white/20 focus:outline-none focus:border-emerald-500 transition-all shadow-inner"
               />
             </div>

@@ -46,11 +46,11 @@ class ItemCommandeAdmin(admin.ModelAdmin):
 # --- 🛒 GESTIONS DES COMMANDES (VENTES) ---
 @admin.register(Commande)
 class CommandeAdmin(admin.ModelAdmin):
-    # 🌟 STABLE : On ajoute 'client_guichet' dans la liste pour voir immédiatement l'origine de la vente
-    list_display = ("id", "client", "client_guichet", "date", "type_vente", "statut", "payee", "ordonnance_valide")
+    # 🌟 STABLE : On ajoute 'client_guichet' et 'compte_client' pour voir immédiatement l'origine de la vente
+    list_display = ("id", "client", "compte_client", "client_guichet", "date", "type_vente", "statut", "payee", "ordonnance_valide")
     list_filter = ("statut", "type_vente", "payee", "date")
     list_editable = ("ordonnance_valide", "statut") 
-    search_fields = ("client__nom", "client_guichet__nom", "id")
+    search_fields = ("client__nom", "compte_client__nom", "client_guichet__nom", "id")
     actions = ['marquer_comme_valide_main_propre']
 
     def marquer_comme_valide_main_propre(self, request, queryset):
