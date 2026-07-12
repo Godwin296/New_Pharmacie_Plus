@@ -7,17 +7,17 @@ import { CONTACT, GENERAL_WHATSAPP_LINK, DEMO_WHATSAPP_LINK } from "@/lib/contac
 export function CTAFooter() {
   return (
     <>
-      <section id="contact" className="relative bg-[var(--color-mist)] py-24 sm:py-32 overflow-hidden">
+      <section id="contact" className="relative bg-[var(--color-mist)] dark:bg-[#050e0c] py-24 sm:py-32 overflow-hidden">
         <div
           aria-hidden
           className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 h-[420px] w-[420px] rounded-full bg-emerald-400/20 blur-[110px]"
         />
         <div className="relative mx-auto max-w-4xl px-5 sm:px-8 text-center">
           <Reveal>
-            <h2 className="font-display font-bold text-[var(--color-ink)] text-4xl sm:text-5xl leading-[1.1] tracking-tight">
+            <h2 className="font-display font-bold text-[var(--color-ink)] dark:text-white text-4xl sm:text-5xl leading-[1.1] tracking-tight">
               Parlons de votre officine.
             </h2>
-            <p className="mt-5 text-[17px] leading-relaxed text-slate-600 max-w-xl mx-auto">
+            <p className="mt-5 text-[17px] leading-relaxed text-slate-600 dark:text-slate-400 max-w-xl mx-auto">
               Que vous gériez une pharmacie ou que vous cherchiez simplement à
               commander vos médicaments plus simplement, écrivez-nous.
             </p>
@@ -27,14 +27,14 @@ export function CTAFooter() {
                 href={GENERAL_WHATSAPP_LINK}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 px-7 py-4 text-[15px] font-bold text-[var(--color-ink)] no-underline transition-all hover:shadow-[0_0_30px_-6px_rgba(16,185,129,0.5)]"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 px-7 py-4 text-[15px] font-bold text-white no-underline transition-all hover:shadow-[0_0_30px_-6px_rgba(16,185,129,0.5)]"
               >
                 <MessageCircle size={17} />
                 Écrire sur WhatsApp
               </a>
               <a
                 href={`mailto:${CONTACT.email}`}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 hover:border-emerald-400 px-7 py-4 text-[15px] font-bold text-[var(--color-ink)] no-underline transition-colors"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 dark:border-white/15 hover:border-emerald-400 px-7 py-4 text-[15px] font-bold text-[var(--color-ink)] dark:text-white no-underline transition-colors"
               >
                 <Mail size={17} />
                 {CONTACT.email}

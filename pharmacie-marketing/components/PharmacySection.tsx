@@ -21,17 +21,17 @@ const stockRows = [
 
 export function PharmacySection() {
   return (
-    <section id="pharmacies" className="relative bg-[var(--color-mist)] py-24 sm:py-32">
+    <section id="pharmacies" className="relative bg-[var(--color-mist)] dark:bg-[#050e0c] py-24 sm:py-32">
       <div className="mx-auto max-w-7xl px-5 sm:px-8">
         <Reveal className="max-w-2xl">
           <span className="text-[12px] font-mono uppercase tracking-[0.2em] text-emerald-600">
             Pour votre officine
           </span>
-          <h2 className="mt-4 font-display font-bold text-[var(--color-ink)] text-4xl sm:text-5xl leading-[1.1] tracking-tight">
+          <h2 className="mt-4 font-display font-bold text-[var(--color-ink)] dark:text-white text-4xl sm:text-5xl leading-[1.1] tracking-tight">
             Tout ce qu&apos;il faut pour piloter votre pharmacie, depuis votre
             téléphone.
           </h2>
-          <p className="mt-5 text-[17px] leading-relaxed text-slate-600">
+          <p className="mt-5 text-[17px] leading-relaxed text-slate-600 dark:text-slate-400">
             Fini le stock sur cahier et les ordonnances perdues. Chaque vente,
             chaque paiement, chaque ordonnance est tracé et vérifié — en temps
             réel, même au guichet.
@@ -42,12 +42,12 @@ export function PharmacySection() {
           {/* Large card — stock en temps réel */}
           <Reveal className="md:col-span-4 md:row-span-2">
             <TiltCard className="h-full">
-              <div className="h-full rounded-[28px] bg-white border border-slate-200/70 p-8 shadow-sm hover:shadow-xl hover:shadow-emerald-900/5 transition-shadow">
+              <div className="h-full rounded-[28px] bg-white dark:bg-[#0b1a16] border border-slate-200/70 dark:border-white/10 p-8 shadow-sm hover:shadow-xl hover:shadow-emerald-900/5 transition-shadow">
                 <div className="flex items-center justify-between">
                   <div className="rounded-2xl bg-emerald-50 p-3">
                     <PackageSearch className="h-6 w-6 text-emerald-600" />
                   </div>
-                  <span className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-slate-400">
+                  <span className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-slate-400 dark:text-slate-500">
                     <span className="relative flex h-1.5 w-1.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                       <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
@@ -55,10 +55,10 @@ export function PharmacySection() {
                     Stock — en direct
                   </span>
                 </div>
-                <h3 className="mt-6 font-display font-bold text-xl text-[var(--color-ink)]">
+                <h3 className="mt-6 font-display font-bold text-xl text-[var(--color-ink)] dark:text-white">
                   Suivi de stock en temps réel
                 </h3>
-                <p className="mt-3 text-[15px] leading-relaxed text-slate-500">
+                <p className="mt-3 text-[15px] leading-relaxed text-slate-500 dark:text-slate-400">
                   Chaque vente décrémente le stock instantanément. Des alertes de
                   rupture vous préviennent avant qu&apos;un médicament essentiel ne
                   manque.
@@ -68,9 +68,9 @@ export function PharmacySection() {
                   {stockRows.map((row) => (
                     <div key={row.name}>
                       <div className="flex justify-between text-[13px] mb-1.5">
-                        <span className="font-medium text-slate-700">{row.name}</span>
+                        <span className="font-medium text-slate-700 dark:text-slate-200">{row.name}</span>
                         <span
-                          className={`font-mono ${row.pct < 15 ? "text-amber-600" : "text-slate-400"}`}
+                          className={`font-mono ${row.pct < 15 ? "text-amber-600" : "text-slate-400 dark:text-slate-500"}`}
                         >
                           {row.pct}%
                         </span>
@@ -112,14 +112,14 @@ export function PharmacySection() {
           {/* Ordonnances */}
           <Reveal delay={0.1} className="md:col-span-2">
             <TiltCard className="h-full">
-              <div className="h-full rounded-[28px] bg-white border border-slate-200/70 p-7 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 transition-shadow">
+              <div className="h-full rounded-[28px] bg-white dark:bg-[#0b1a16] border border-slate-200/70 dark:border-white/10 p-7 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 transition-shadow">
                 <div className="rounded-2xl bg-blue-50 p-3 w-fit">
                   <FileLock2 className="h-6 w-6 text-blue-600" />
                 </div>
-                <h3 className="mt-5 font-display font-bold text-lg text-[var(--color-ink)]">
+                <h3 className="mt-5 font-display font-bold text-lg text-[var(--color-ink)] dark:text-white">
                   Ordonnances sécurisées
                 </h3>
-                <p className="mt-2.5 text-[14px] leading-relaxed text-slate-500">
+                <p className="mt-2.5 text-[14px] leading-relaxed text-slate-500 dark:text-slate-400">
                   Upload depuis le téléphone, validation par le pharmacien,
                   fichiers vérifiés et re-encodés avant stockage.
                 </p>
@@ -129,14 +129,14 @@ export function PharmacySection() {
 
           {/* PWA */}
           <Reveal delay={0.15} className="md:col-span-2">
-            <div className="h-full rounded-[28px] bg-white border border-slate-200/70 p-7 shadow-sm hover:shadow-lg transition-shadow hover:-translate-y-0.5 duration-300">
+            <div className="h-full rounded-[28px] bg-white dark:bg-[#0b1a16] border border-slate-200/70 dark:border-white/10 p-7 shadow-sm hover:shadow-lg transition-shadow hover:-translate-y-0.5 duration-300">
               <div className="rounded-2xl bg-emerald-50 p-3 w-fit">
                 <Smartphone className="h-6 w-6 text-emerald-600" />
               </div>
-              <h3 className="mt-5 font-display font-bold text-lg text-[var(--color-ink)]">
+              <h3 className="mt-5 font-display font-bold text-lg text-[var(--color-ink)] dark:text-white">
                 Installable, comme une app
               </h3>
-              <p className="mt-2.5 text-[14px] leading-relaxed text-slate-500">
+              <p className="mt-2.5 text-[14px] leading-relaxed text-slate-500 dark:text-slate-400">
                 Aucun store nécessaire. Ajoutez Pharmacie+ à l&apos;écran d&apos;accueil
                 Android en un geste.
               </p>
@@ -145,14 +145,14 @@ export function PharmacySection() {
 
           {/* Dashboard */}
           <Reveal delay={0.2} className="md:col-span-3">
-            <div className="h-full rounded-[28px] bg-white border border-slate-200/70 p-7 shadow-sm hover:shadow-lg transition-shadow hover:-translate-y-0.5 duration-300">
+            <div className="h-full rounded-[28px] bg-white dark:bg-[#0b1a16] border border-slate-200/70 dark:border-white/10 p-7 shadow-sm hover:shadow-lg transition-shadow hover:-translate-y-0.5 duration-300">
               <div className="rounded-2xl bg-blue-50 p-3 w-fit">
                 <BarChart3 className="h-6 w-6 text-blue-600" />
               </div>
-              <h3 className="mt-5 font-display font-bold text-lg text-[var(--color-ink)]">
+              <h3 className="mt-5 font-display font-bold text-lg text-[var(--color-ink)] dark:text-white">
                 Dashboard &amp; rapports
               </h3>
-              <p className="mt-2.5 text-[14px] leading-relaxed text-slate-500">
+              <p className="mt-2.5 text-[14px] leading-relaxed text-slate-500 dark:text-slate-400">
                 Chiffre d&apos;affaires ventilé cash / en ligne, historique complet,
                 exports PDF pour votre comptabilité.
               </p>
@@ -161,14 +161,14 @@ export function PharmacySection() {
 
           {/* Multi-role */}
           <Reveal delay={0.25} className="md:col-span-3">
-            <div className="h-full rounded-[28px] bg-white border border-slate-200/70 p-7 shadow-sm hover:shadow-lg transition-shadow hover:-translate-y-0.5 duration-300">
+            <div className="h-full rounded-[28px] bg-white dark:bg-[#0b1a16] border border-slate-200/70 dark:border-white/10 p-7 shadow-sm hover:shadow-lg transition-shadow hover:-translate-y-0.5 duration-300">
               <div className="rounded-2xl bg-emerald-50 p-3 w-fit">
                 <Users className="h-6 w-6 text-emerald-600" />
               </div>
-              <h3 className="mt-5 font-display font-bold text-lg text-[var(--color-ink)]">
+              <h3 className="mt-5 font-display font-bold text-lg text-[var(--color-ink)] dark:text-white">
                 Un accès par rôle
               </h3>
-              <p className="mt-2.5 text-[14px] leading-relaxed text-slate-500">
+              <p className="mt-2.5 text-[14px] leading-relaxed text-slate-500 dark:text-slate-400">
                 Client, caissière, administrateur : chacun ne voit que ce dont
                 il a besoin, avec authentification dédiée.
               </p>
@@ -176,12 +176,12 @@ export function PharmacySection() {
           </Reveal>
         </div>
 
-        <Reveal delay={0.1} className="mt-14 flex flex-col sm:flex-row items-start sm:items-center gap-6 justify-between rounded-[28px] bg-white border border-slate-200/70 p-8">
+        <Reveal delay={0.1} className="mt-14 flex flex-col sm:flex-row items-start sm:items-center gap-6 justify-between rounded-[28px] bg-white dark:bg-[#0b1a16] border border-slate-200/70 dark:border-white/10 p-8">
           <div>
-            <h3 className="font-display font-bold text-xl text-[var(--color-ink)]">
+            <h3 className="font-display font-bold text-xl text-[var(--color-ink)] dark:text-white">
               Prêt à moderniser votre officine ?
             </h3>
-            <p className="mt-2 text-slate-500 text-[15px]">
+            <p className="mt-2 text-slate-500 dark:text-slate-400 text-[15px]">
               Une démo de 15 minutes suffit pour voir Pharmacie+ tourner avec
               vos propres produits.
             </p>

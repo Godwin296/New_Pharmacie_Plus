@@ -122,7 +122,7 @@ export function Hero() {
             >
               <a
                 href="#pharmacies"
-                className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 px-7 py-4 text-[15px] font-bold text-[var(--color-ink)] no-underline transition-all hover:shadow-[0_0_30px_-6px_rgba(16,185,129,0.6)]"
+                className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 px-7 py-4 text-[15px] font-bold text-white no-underline transition-all hover:shadow-[0_0_30px_-6px_rgba(16,185,129,0.6)]"
               >
                 Je gère une pharmacie
                 <ArrowRight size={17} className="group-hover:translate-x-0.5 transition-transform" />

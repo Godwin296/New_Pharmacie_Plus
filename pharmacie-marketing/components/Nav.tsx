@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence, useScroll, useSpring } from "framer-motion";
 import { DEMO_WHATSAPP_LINK } from "@/lib/contact";
+import { ThemeToggle } from "./ThemeToggle";
 
 const links = [
   { href: "#pharmacies", label: "Pour les pharmacies" },
@@ -54,6 +55,7 @@ export function Nav() {
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
+            <ThemeToggle />
             <a
               href={DEMO_WHATSAPP_LINK}
               target="_blank"
@@ -64,13 +66,16 @@ export function Nav() {
             </a>
           </div>
 
-          <button
-            aria-label="Ouvrir le menu"
-            onClick={() => setOpen(true)}
-            className="md:hidden p-2 text-white bg-transparent border-none cursor-pointer"
-          >
-            <Menu size={22} />
-          </button>
+          <div className="flex md:hidden items-center gap-2">
+            <ThemeToggle />
+            <button
+              aria-label="Ouvrir le menu"
+              onClick={() => setOpen(true)}
+              className="p-2 text-white bg-transparent border-none cursor-pointer"
+            >
+              <Menu size={22} />
+            </button>
+          </div>
         </div>
       </div>
 
