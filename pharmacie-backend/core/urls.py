@@ -37,6 +37,8 @@ urlpatterns = [
     path("fournisseurs/", api.api_fournisseurs, name="api_fournisseurs"),
     path("fournisseurs/<int:pk>/", api.api_fournisseur_detail, name="api_fournisseur_detail"),
     path("inventaire_stock/", api.api_inventaire_stock, name="api_inventaire_stock"),
+    path("predictions-stock/", api.api_predictions_stock, name="api_predictions_stock"),
+    path("predictions-stock/<int:produit_id>/", api.api_prediction_stock_produit, name="api_prediction_stock_produit"),
     # 🔐 BRANCHEMENT SÉCURISÉ : On pointe vers la fonction API protégée par le JWT de l'Admin
     path("modifier-photo/<int:produit_id>/", api.api_modifier_photo_produit, name="api_modifier_photo_produit"),
 

@@ -25,6 +25,7 @@ from .serializers import (
 from .validators import valider_et_desinfecter_ordonnance
 from .pagination import CataloguePagination
 from .throttles import LoginRateThrottle, SoumettrePaiementRateThrottle
+from .services_prediction import predire_pour_produit, predire_pour_tous_produits
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from clients_publics.models import CompteClient 
@@ -854,6 +855,70 @@ def api_inventaire_stock(request):
 
     except Exception as e:
         return Response({"detail": "Erreur technique lors de la récupération de l'inventaire."}, status=500)
+
+
+# --- 📊 PRÉDICTION DE STOCK (statistiques classiques, PAS de LLM -- décision ferme) ---
+@api_view(['GET'])
+@authentication_classes([StaffJWTAuthentication])
+@permission_classes([IsAdminUser])
+def api_predictions_stock(request):
+    """
+    Liste des prédictions de réapprovisionnement pour tous les produits du tenant,
+    triées par urgence (rupture la plus proche en premier).
+
+    Query params optionnels :
+    - ?lookback_jours=90   : fenêtre d'historique analysée (défaut 90)
+    - ?lead_time_jours=7   : délai de livraison fournisseur supposé (défaut 7)
+    - ?alerte_uniquement=1 : ne renvoie que les produits à surveiller réellement
+      (rupture prévue dans le délai de livraison, ou commande recommandée non nulle)
+    """
+    # 🔐 IsAdminUser (DRF) ne vérifie que is_staff, or une caissière est aussi is_staff=True
+    # (cf. seed.py). Les décisions de réapprovisionnement/commande fournisseur relèvent du
+    # BOSS uniquement -- même restriction explicite que api_boss_dashboard.
+    if not request.user.is_superuser:
+        return Response({"error": "Accès réservé à l'administrateur."}, status=403)
+
+    try:
+        lookback_jours = int(request.query_params.get("lookback_jours", 90))
+        lead_time_jours = int(request.query_params.get("lead_time_jours", 7))
+    except ValueError:
+        return Response({"error": "lookback_jours et lead_time_jours doivent être des entiers"}, status=400)
+
+    if lookback_jours < 2 or lead_time_jours < 0:
+        return Response({"error": "Paramètres hors limites"}, status=400)
+
+    alerte_uniquement = request.query_params.get("alerte_uniquement") in ("1", "true", "True")
+
+    predictions = predire_pour_tous_produits(
+        lookback_jours=lookback_jours,
+        lead_time_jours=lead_time_jours,
+        alerte_uniquement=alerte_uniquement,
+    )
+    return Response({"count": len(predictions), "predictions": predictions}, status=200)
+
+
+@api_view(['GET'])
+@authentication_classes([StaffJWTAuthentication])
+@permission_classes([IsAdminUser])
+def api_prediction_stock_produit(request, produit_id):
+    """Prédiction détaillée d'un seul produit (utilisée sur sa fiche/page de détail)."""
+    if not request.user.is_superuser:
+        return Response({"error": "Accès réservé à l'administrateur."}, status=403)
+
+    produit = get_object_or_404(Produit, id=produit_id)
+
+    try:
+        lookback_jours = int(request.query_params.get("lookback_jours", 90))
+        lead_time_jours = int(request.query_params.get("lead_time_jours", 7))
+    except ValueError:
+        return Response({"error": "lookback_jours et lead_time_jours doivent être des entiers"}, status=400)
+
+    if lookback_jours < 2 or lead_time_jours < 0:
+        return Response({"error": "Paramètres hors limites"}, status=400)
+
+    resultat = predire_pour_produit(produit, lookback_jours=lookback_jours, lead_time_jours=lead_time_jours)
+    return Response(resultat, status=200)
+
 
 # 🔐 BLINDAGE PHOTO : Passage au standard API DRF pour hériter de la protection JWT
 @api_view(['POST'])
