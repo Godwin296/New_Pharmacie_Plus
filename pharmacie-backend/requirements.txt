@@ -15,7 +15,7 @@ djangorestframework-simplejwt==5.5.1
 pikepdf==10.9.1
 psycopg[binary]==3.2.3
 python-decouple==3.8
-python-magic-bin==0.4.14
+python-magic==0.4.27
 fonttools==4.62.1
 pillow==12.2.0
 pycparser==3.0

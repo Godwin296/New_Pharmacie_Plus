@@ -10,7 +10,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
-from django.utils.crypto import get_random_string
+from django.utils.dateparse import parse_datetime
 from django.contrib.auth import authenticate
 from django.db.models import Q, Sum, F
 from django.db.models.functions import TruncDate
@@ -19,12 +19,12 @@ from django.contrib.auth.models import User
 from datetime import timedelta
 from django.utils import timezone
 
-from .models import Produit, Commande, ItemCommande, Client, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock
+from .models import Produit, Commande, ItemCommande, Client, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog
 from .serializers import (
     ProduitSerializer, CommandeSerializer, CommandeClientSerializer, ClientRegisterSerializer, 
     PharmacieConfigSerializer, FournisseurSerializer
 )
-from .validators import valider_et_desinfecter_ordonnance
+from .validators import valider_et_desinfecter_ordonnance, valider_et_desinfecter_photo_produit
 from .pagination import CataloguePagination
 from .throttles import LoginRateThrottle, SoumettrePaiementRateThrottle
 from .services_prediction import predire_pour_produit, predire_pour_tous_produits
@@ -254,6 +254,12 @@ def api_register(request):
     serializer = ClientRegisterSerializer(data=request.data)
     if serializer.is_valid():
         nouveau_client = serializer.save()
+
+        # 📧 Hors du cœur de la transaction d'inscription : un échec d'envoi ne doit jamais
+        # faire échouer une création de compte déjà validée en base.
+        from .emails import envoyer_email_bienvenue
+        envoyer_email_bienvenue(nouveau_client)
+
         return Response({
             "message": "Compte créé avec succès ! 🎉",
             "id_client": nouveau_client.identifiant
@@ -370,6 +376,115 @@ def api_catalogue(request):
     return paginator.get_paginated_response({
         "produits": serializer.data,
         "categories": categories_dict # Envoie les labels pour les menus Next.js
+    })
+
+
+# --- 🚀 MODE OFFLINE (session 12/07, brique 2/4) : SYNCHRO DELTA DU CATALOGUE ---
+DATE_MODIFICATION_MIN = "1970-01-01T00:00:00+00:00"  # sentinelle "depuis toujours" (1er sync)
+CATALOGUE_SYNC_BATCH_SIZE = 300  # cf. docstring api_catalogue_sync : compromis payload/round-trips
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def api_catalogue_sync(request):
+    """
+    🌐 Endpoint dédié au cache offline (IndexedDB côté frontend) -- DIFFÉRENT de api_catalogue
+    (qui sert l'affichage paginé normal du catalogue, 20 produits/page). Ici, l'objectif est de
+    permettre au frontend de reconstituer et maintenir à jour une COPIE LOCALE COMPLÈTE du
+    catalogue, consultable même sans réseau -- donc on raisonne en "qu'est-ce qui a changé
+    depuis mon dernier sync" plutôt qu'en pages.
+
+    Paramètre `?since=<ISO8601>` : timestamp du dernier sync réussi côté client (renvoyé par
+    l'appel précédent dans `server_time`). Absent ou vide -- notamment au tout premier sync,
+    IndexedDB étant encore vide -- l'endpoint se comporte comme un sync complet ("depuis
+    toujours").
+
+    ⚠️ POURQUOI PAS UNE SIMPLE PAGINATION CLASSIQUE : sur une 3G/4G instable (zone CEMAC),
+    retélécharger les centaines/milliers de produits d'un tenant à CHAQUE ouverture de l'app
+    serait lent et coûteux en data pour l'utilisateur. En ne renvoyant que les produits dont
+    `date_modification >= since`, la très grande majorité des syncs (l'utilisateur rouvre son
+    app le lendemain, rien n'a changé) ne coûtent presque rien à transférer.
+
+    ⚠️ POURQUOI UN BATCH_SIZE FIXE PLUTÔT QUE `page`/`page_size` COMME api_catalogue : le
+    frontend n'a PAS besoin de choisir une page précise ici -- il veut juste "tout ce qui a
+    changé", quitte à rappeler l'endpoint en boucle (voir `has_more`/`next_since`) si le volume
+    dépasse un batch. C'est un détail d'implémentation invisible pour l'appelant, pas un choix
+    utilisateur comme la pagination du catalogue affiché.
+
+    Réponse :
+    {
+      "server_time": "<ISO8601>",           -- à renvoyer comme `since` au PROCHAIN appel
+      "produits": [...],                     -- créés/modifiés depuis `since`, triés par
+                                                 date_modification croissante (limité à
+                                                 CATALOGUE_SYNC_BATCH_SIZE)
+      "supprimes": [id, id, ...],            -- produits supprimés depuis `since` (à retirer
+                                                 du cache local, cf. ProduitSupprimeLog)
+      "categories": {code: label, ...},
+      "has_more": bool,                      -- si true, rappeler IMMÉDIATEMENT avec
+                                                 `since=next_since` avant d'utiliser `server_time`
+      "next_since": "<ISO8601>|<id>" | null  -- curseur composé (cf. commentaire dans le code :
+                                                 évite les doublons de page quand plusieurs
+                                                 produits partagent le même timestamp)
+    }
+    """
+    since_str = (request.GET.get('since') or '').strip() or DATE_MODIFICATION_MIN
+    # 🔧 Curseur composé "since|since_id" utilisé pour ENCHAÎNER les pages d'un même sync
+    # (has_more=True). Sans le "|since_id", une simple comparaison date_modification >= since
+    # RÉINTRODUIT en double le(s) dernier(s) produit(s) de la page précédente dès que plusieurs
+    # lignes partagent EXACTEMENT le même timestamp -- ce qui arrive systématiquement avec
+    # bulk_create() (import fournisseur, seed...) où toute une série de lignes est insérée dans
+    # la même transaction/même `now()`. Constaté en test avec 350 produits bulk_create : la
+    # boucle de pagination renvoyait 360 produits au lieu de 359 (1 doublon exact à la frontière
+    # de page). Le paramètre `since` "simple" (sans `|id`) reste utilisé pour le premier appel
+    # d'un sync (bookmark stocké côté client) où ce risque de doublon frontière ne se pose pas.
+    since_id = None
+    if '|' in since_str:
+        since_str, since_id_str = since_str.rsplit('|', 1)
+        try:
+            since_id = int(since_id_str)
+        except ValueError:
+            since_id = None
+    since = parse_datetime(since_str)
+    if since is None:
+        return Response({"error": "Paramètre 'since' invalide, attendu au format ISO8601"}, status=400)
+
+    # 🔐 Capturé AVANT la requête : si des écritures arrivent pendant qu'on répond, elles seront
+    # simplement incluses au PROCHAIN sync (since >= server_time actuel) plutôt que perdues.
+    server_time = timezone.now()
+
+    if since_id is not None:
+        # Milieu de pagination : comparaison stricte sur le couple (date_modification, id).
+        produits_filtre = Q(date_modification__gt=since) | Q(date_modification=since, id__gt=since_id)
+    else:
+        produits_filtre = Q(date_modification__gte=since)
+
+    produits_qs = (
+        Produit.objects.filter(produits_filtre)
+        .order_by('date_modification', 'id')[: CATALOGUE_SYNC_BATCH_SIZE + 1]
+    )
+    produits_batch = list(produits_qs)
+    has_more = len(produits_batch) > CATALOGUE_SYNC_BATCH_SIZE
+    if has_more:
+        produits_batch = produits_batch[:CATALOGUE_SYNC_BATCH_SIZE]
+    dernier = produits_batch[-1] if has_more else None
+    next_since = f"{dernier.date_modification.isoformat()}|{dernier.id}" if dernier else None
+
+    supprimes = list(
+        ProduitSupprimeLog.objects.filter(date_suppression__gte=since)
+        .values_list('produit_id', flat=True)
+        .distinct()
+    )
+
+    serializer = ProduitSerializer(produits_batch, many=True, context={'request': request})
+    categories_dict = dict(getattr(Produit, 'CATEGORIES', {}))
+
+    return Response({
+        "server_time": server_time.isoformat(),
+        "produits": serializer.data,
+        "supprimes": supprimes,
+        "categories": categories_dict,
+        "has_more": has_more,
+        "next_since": next_since,
     })
 
 # --- 🛒 GESTION DU PANIER SÉCURISÉ (Vérification 48h incluse) ---
@@ -740,6 +855,11 @@ def api_gestion_ordonnance(request, commande_id=None):
                     _notifier_client(commande.id, statut=commande.statut,
                                       ordonnance_valide=False, motif_refus=commande.motif_refus)
 
+                    # 📧 Complément à la notif temps réel : utile si le client n'a pas
+                    # l'application ouverte au moment du refus.
+                    from .emails import envoyer_email_ordonnance_refusee
+                    envoyer_email_ordonnance_refusee(commande)
+
                     return Response({"message": "Rejetée ❌"})
 
                 return Response({"error": "Action invalide"}, status=400)
@@ -1012,13 +1132,19 @@ def api_modifier_photo_produit(request, produit_id):
         return Response({"error": "Action réservée à l'administrateur"}, status=403)
         
     if 'image' in request.FILES:
-        image_file = request.FILES['image']
-        extension = image_file.name.split('.')[-1].lower()
-        if extension not in ['jpg', 'jpeg', 'png', 'webp']:
-            return Response({"error": "Format d'image non autorisé"}, status=400)
+        image_brute = request.FILES['image']
+
+        # 🔐 Mêmes garanties que pour une ordonnance : on ne fait jamais confiance au nom de
+        # fichier ni au Content-Type déclaré par le navigateur -- détection par contenu réel,
+        # réencodage complet (élimine tout payload caché), ET compression au passage (photo
+        # catalogue = juste illustrative, pas besoin du poids d'une photo de téléphone brute).
+        try:
+            image_propre = valider_et_desinfecter_photo_produit(image_brute)
+        except ValidationError as e:
+            return Response({"error": str(e.message) if hasattr(e, 'message') else str(e)}, status=400)
 
         produit = get_object_or_404(Produit, id=produit_id)
-        produit.image = image_file
+        produit.image = image_propre
         produit.save()
         image_url_complete = request.build_absolute_uri(produit.image.url)
         return Response({

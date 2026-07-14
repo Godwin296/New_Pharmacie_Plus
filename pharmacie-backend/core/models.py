@@ -104,6 +104,12 @@ class Produit(models.Model):
     quantite = models.PositiveIntegerField(default=0)
     prix = models.DecimalField(max_digits=12, decimal_places=2)
     date_ajout = models.DateTimeField(auto_now_add=True)
+    # 🚀 MODE OFFLINE (session 12/07, brique 2/4) : horodatage mis à jour automatiquement à
+    # CHAQUE sauvegarde (auto_now=True). C'est le curseur utilisé par l'endpoint de synchro
+    # delta /api/catalogue/sync/ pour ne renvoyer au frontend QUE les produits modifiés depuis
+    # le dernier sync -- indispensable sur une 3G/4G instable (zone CEMAC) où retélécharger tout
+    # le catalogue à chaque ouverture de l'app serait à la fois lent et coûteux en data.
+    date_modification = models.DateTimeField(auto_now=True, db_index=True)
     date_expiration = models.DateField(null=True, blank=True)
     lot = models.CharField(max_length=100, blank=True, null=True)
     seuil_alerte = models.IntegerField(default=10)
@@ -188,6 +194,29 @@ class Produit(models.Model):
             return format_html('<span style="color: #ea580c; font-weight: bold;">ALERTE ({} j) ⏳</span>', jours_restants)
         return format_html('<span style="color: #16a34a;">VALIDE ✅</span>')
     statut_peremption.short_description = "État Péremption"
+
+
+class ProduitSupprimeLog(models.Model):
+    """
+    🚀 MODE OFFLINE (session 12/07, brique 2/4) : "tombstone" -- trace qu'un produit a été
+    supprimé, pour que la synchro delta (/api/catalogue/sync/) puisse dire au frontend
+    "retire cet ID de ton cache IndexedDB" même si le produit lui-même n'existe plus en base
+    pour être interrogé.
+
+    Sans ce log, un produit supprimé côté serveur resterait invisible du diff par date de
+    modification (il n'existe juste plus) et continuerait à s'afficher indéfiniment dans le
+    catalogue mis en cache localement sur le téléphone d'un client jusqu'à ce qu'il vide son
+    cache manuellement -- inacceptable pour un produit retiré (rappel sanitaire, arrêt de
+    commercialisation...).
+
+    Alimenté automatiquement par le signal post_delete sur Produit (voir core/signals.py).
+    `produit_id` n'est PAS une ForeignKey : le produit référencé n'existe justement plus.
+    """
+    produit_id = models.PositiveIntegerField(db_index=True)
+    date_suppression = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    def __str__(self):
+        return f"Produit #{self.produit_id} supprimé le {self.date_suppression:%d/%m/%Y %H:%M}"
 
 
 class Mouvement_stock(models.Model):

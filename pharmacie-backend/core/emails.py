@@ -121,3 +121,85 @@ def envoyer_email_nouveau_mot_de_passe(client, nouveau_mot_de_passe):
         recipient_list=[client.email],
         fail_silently=False,
     )
+
+
+def envoyer_email_bienvenue(client):
+    """
+    👋 Email de bienvenue à l'inscription d'un nouveau compte client (en ligne).
+    Comme pour la confirmation de commande : on n'avale JAMAIS une exception au point de
+    faire échouer la création du compte pour autant -- rater un email de bienvenue est
+    largement préférable à rater une inscription déjà validée en base. Ne fait rien
+    silencieusement si le client n'a pas renseigné d'email (champ optionnel).
+    """
+    if not client.email:
+        return
+
+    from .models import PharmacieConfig  # import local : évite l'import circulaire avec models.py
+
+    config = PharmacieConfig.objects.first()
+    nom_pharmacie = config.nom if config else "Pharmacie Plus"
+
+    sujet = f"Bienvenue chez {nom_pharmacie} 🎉"
+    corps = (
+        f"Bonjour {client.nom},\n\n"
+        f"Ton compte {nom_pharmacie} a bien été créé (identifiant : {client.identifiant}).\n\n"
+        f"Tu peux dès maintenant parcourir le catalogue, passer commande en ligne et payer "
+        f"par Orange Money ou MTN MoMo, pour venir récupérer directement au guichet.\n\n"
+        f"À très vite !\n"
+    )
+
+    try:
+        send_mail(
+            subject=sujet,
+            message=corps,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[client.email],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception(
+            "Échec de l'envoi de l'email de bienvenue pour le client %s", client.identifiant
+        )
+
+
+def envoyer_email_ordonnance_refusee(commande):
+    """
+    ❌ Prévient le client par email quand son ordonnance est refusée par la caisse, avec le
+    motif. Complète la notification temps réel WebSocket (`_notifier_client` dans api.py) :
+    utile si le client n'a pas l'application ouverte au moment du refus -- une ordonnance
+    refusée bloque sa commande, il est important qu'il le sache rapidement même hors ligne.
+    Même logique défensive que les autres emails transactionnels : jamais bloquant.
+    """
+    destinataire = commande.client
+    if not destinataire or not destinataire.email:
+        return
+
+    from .models import PharmacieConfig  # import local : évite l'import circulaire avec models.py
+
+    config = PharmacieConfig.objects.first()
+    nom_pharmacie = config.nom if config else "Pharmacie Plus"
+
+    sujet = f"{nom_pharmacie} — Ordonnance refusée pour la commande {commande.reference}"
+    corps = (
+        f"Bonjour {destinataire.nom},\n\n"
+        f"L'ordonnance envoyée pour ta commande {commande.reference} n'a malheureusement pas "
+        f"pu être validée par {nom_pharmacie}.\n\n"
+        f"Motif : {commande.motif_refus or 'Document invalide'}\n\n"
+        f"Tu peux te reconnecter à l'application pour envoyer un nouveau document et relancer "
+        f"ta commande.\n\n"
+        f"Si tu as des questions, contacte directement {nom_pharmacie}.\n"
+    )
+
+    try:
+        send_mail(
+            subject=sujet,
+            message=corps,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[destinataire.email],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception(
+            "Échec de l'envoi de l'email de refus d'ordonnance pour la commande %s",
+            commande.reference,
+        )

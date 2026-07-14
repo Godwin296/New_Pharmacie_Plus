@@ -25,6 +25,20 @@ export default function CataloguePage() {
   const [search, setSearch] = useState("");
   const [activeCat, setActiveCat] = useState("all");
   const [loading, setLoading] = useState(true);
+  // 🔐 CORRECTIF (bug remonté en test, session 12/07) : `loading` était utilisé pour un
+  // early-return "plein écran" (voir plus bas) qui démontait TOUT le composant -- y compris
+  // le champ de recherche -- à CHAQUE nouvelle recherche, pas seulement au premier chargement.
+  // Résultat concret : l'utilisateur tapait une lettre, le debounce (400ms) déclenchait un
+  // fetch, `loading` passait à true, tout l'arbre (input inclus) disparaissait remplacé par
+  // le spinner plein écran, puis remontait en tant que NOUVEL élément DOM une fois les
+  // données arrivées -- le focus clavier posé sur l'ancien `<input>` (détruit entre-temps)
+  // ne pouvait pas suivre. Il fallait recliquer dans le champ à chaque lettre.
+  // `hasLoadedOnce` distingue maintenant le tout premier chargement (où rien n'est encore
+  // affiché, le plein écran a du sens) des rechargements suivants (recherche, page,
+  // catégorie), où le champ de recherche et la mise en page restent montés en permanence --
+  // seul le contenu de la grille affiche un indicateur "Recherche..." le temps du fetch,
+  // exactement comme /caisse/pos (voir son commentaire "searching").
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [quantites, setQuantites] = useState<Record<number, number>>({});
 
@@ -75,6 +89,7 @@ export default function CataloguePage() {
         console.error("Erreur Catalogue:", err);
       } finally {
         setLoading(false);
+        setHasLoadedOnce(true);
       }
     };
     fetchData();
@@ -133,7 +148,7 @@ export default function CataloguePage() {
 
   const filteredProduits = produits; // le filtrage (recherche + catégorie) est désormais fait côté serveur
 
-  if (loading) {
+  if (loading && !hasLoadedOnce) {
     return (
       <div className="h-screen flex items-center justify-center">
         <Loader2 className="animate-spin text-emerald-500" size={48} />
@@ -183,8 +198,21 @@ export default function CataloguePage() {
 
       {/* 🏗️ GRILLE DES PRODUITS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {/* Indicateur de chargement INLINE (recherche/pagination/catégorie) -- le formulaire
+            et le champ de recherche au-dessus restent montés, contrairement à l'ancien
+            early-return plein écran (cf. commentaire sur `hasLoadedOnce`). */}
+        {loading && (
+          <div className="col-span-full flex items-center justify-center py-12 text-slate-400 text-xs font-black uppercase tracking-widest gap-3">
+            <Loader2 size={18} className="animate-spin text-emerald-500" /> Recherche...
+          </div>
+        )}
+        {!loading && filteredProduits.length === 0 && (
+          <div className="col-span-full flex items-center justify-center py-12 text-slate-400 text-xs font-black uppercase tracking-widest">
+            Aucun produit trouvé
+          </div>
+        )}
         <AnimatePresence mode="popLayout">
-          {filteredProduits.map((p) => (
+          {!loading && filteredProduits.map((p) => (
             <motion.div
               key={p.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
               className="bg-white dark:bg-slate-900 rounded-[3rem] p-8 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-2xl transition-all group flex flex-col justify-between"

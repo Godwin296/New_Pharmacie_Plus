@@ -153,6 +153,11 @@ else:
 EMAIL_HOST = config('EMAIL_HOST', default='smtp-relay.brevo.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+# 🔐 Sans ceci, Django attend INDÉFINIMENT une réponse SMTP par défaut (EMAIL_TIMEOUT=None).
+# Comme l'envoi se fait de façon synchrone pendant la confirmation de paiement (cf.
+# core/emails.py), un simple souci réseau avec Brevo pourrait sinon bloquer la requête
+# de paiement du client pendant un temps arbitrairement long.
+EMAIL_TIMEOUT = config('EMAIL_TIMEOUT', default=10, cast=int)
 # 🌟 Adresse affichée comme expéditeur -- DOIT correspondre à un sender vérifié dans
 # Brevo (Senders, Domains & Dedicated IPs > Senders), sinon Brevo rejette l'envoi.
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Pharmacie Plus <no-reply@pharmacieplus.local>')
