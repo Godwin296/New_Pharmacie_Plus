@@ -105,13 +105,13 @@ const ICONS: Array<{
   bobDuration: number;
   bobDelay: number;
 }> = [
-  { kind: "capsule", width: 92, height: 39, color1: "#10b981", color2: "#059669", rotate: -24, style: { top: "16%", left: "6%" }, dirX: -1, dirY: 0.6, amplitude: 26, bobDuration: 6, bobDelay: 0 },
+  { kind: "capsule", width: 92, height: 39, color1: "#34b57c", color2: "#0a5033", rotate: -24, style: { top: "16%", left: "6%" }, dirX: -1, dirY: 0.6, amplitude: 26, bobDuration: 6, bobDelay: 0 },
   { kind: "tablet", width: 46, height: 46, color1: "#2563eb", color2: "#4f8cff", rotate: 0, style: { top: "58%", left: "11%" }, dirX: 0.8, dirY: -1, amplitude: 22, bobDuration: 7.5, bobDelay: 0.6 },
-  { kind: "capsule", width: 70, height: 30, color1: "#10b981", color2: "#059669", rotate: 42, style: { top: "10%", right: "24%" }, dirX: 1, dirY: 0.7, amplitude: 30, bobDuration: 8.5, bobDelay: 1.1 },
+  { kind: "capsule", width: 70, height: 30, color1: "#34b57c", color2: "#0a5033", rotate: 42, style: { top: "10%", right: "24%" }, dirX: 1, dirY: 0.7, amplitude: 30, bobDuration: 8.5, bobDelay: 1.1 },
   { kind: "tablet", width: 40, height: 40, color1: "#2563eb", color2: "#4f8cff", rotate: 0, style: { bottom: "16%", right: "9%" }, dirX: -0.7, dirY: -1, amplitude: 20, bobDuration: 6.5, bobDelay: 0.3 },
-  { kind: "syringe", width: 96, height: 26, color1: "#5eead4", color2: "#10b981", rotate: -12, style: { bottom: "26%", left: "3%" }, dirX: 1, dirY: -0.6, amplitude: 24, bobDuration: 9, bobDelay: 1.6 },
+  { kind: "syringe", width: 96, height: 26, color1: "#34b57c", color2: "#34b57c", rotate: -12, style: { bottom: "26%", left: "3%" }, dirX: 1, dirY: -0.6, amplitude: 24, bobDuration: 9, bobDelay: 1.6 },
   { kind: "scissors", width: 42, height: 42, color1: "#93c5fd", color2: "#2563eb", rotate: 20, style: { top: "34%", right: "6%" }, dirX: -0.9, dirY: 0.8, amplitude: 22, bobDuration: 7, bobDelay: 0.9 },
-  { kind: "tablet", width: 34, height: 34, color1: "#10b981", color2: "#10b981", rotate: 0, style: { top: "72%", right: "30%" }, dirX: 0.6, dirY: 1, amplitude: 18, bobDuration: 6, bobDelay: 1.9 },
+  { kind: "tablet", width: 34, height: 34, color1: "#34b57c", color2: "#34b57c", rotate: 0, style: { top: "72%", right: "30%" }, dirX: 0.6, dirY: 1, amplitude: 18, bobDuration: 6, bobDelay: 1.9 },
 ];
 
 export function FloatingCapsules({ className = "" }: { className?: string }) {

@@ -54,6 +54,7 @@ export default function RegisterPage() {
             // Profil utilisateur
             localStorage.setItem('user_role', 'client');
             localStorage.setItem('username', loginRes.data.nom);
+            localStorage.setItem('display_name', loginRes.data.nom);
             
             // Redirection fluide et synchronisée vers le catalogue
             window.location.href = '/';

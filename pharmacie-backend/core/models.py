@@ -6,9 +6,17 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 from django.utils.html import format_html
 from django.db.models import Sum, F
+from django.db.models.functions import Upper
 from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth.hashers import make_password, check_password # 👈 Pour la sécurité
+
+# 🚀 INDEXATION BDD (session offline) : GinIndex + opclass gin_trgm_ops permet d'accélérer les
+# recherches __icontains (LIKE '%...%') qu'un index B-Tree classique ne peut PAS utiliser --
+# indispensable ici car catalogue, clients et commandes sont TOUS cherchés par sous-chaîne
+# (nom de médicament, nom/téléphone client, référence commande). Nécessite l'extension
+# PostgreSQL "pg_trgm" (activée une fois via la migration core.0006, cf. TrigramExtension).
+from django.contrib.postgres.indexes import GinIndex
 
 
 class Client(models.Model):
@@ -18,7 +26,16 @@ class Client(models.Model):
     email = models.EmailField(blank=True, null=True)
     telephone = models.CharField(max_length=20, unique=True, verbose_name="Téléphone 📞")
     is_active = models.BooleanField(default=True)
-    
+
+    class Meta:
+        # 🔍 Utilisés en __icontains dans api_commandes_a_retirer (recherche caisse par
+        # nom/téléphone client) -- un index B-Tree classique ne sert à rien pour ce type de
+        # recherche par sous-chaîne, d'où le trigram.
+        indexes = [
+            GinIndex(fields=['nom'], name='client_nom_trgm_idx', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['telephone'], name='client_tel_trgm_idx', opclasses=['gin_trgm_ops']),
+        ]
+
     def save(self, *args, **kwargs):
         # Génération de l'ID unique si absent
         if not self.identifiant:
@@ -46,6 +63,14 @@ class ClientGuichet(models.Model):
     ville = models.CharField(max_length=100, blank=True, null=True)
     quartier = models.CharField(max_length=255, blank=True, null=True)
     date_creation = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Même besoin que Client.Meta.indexes : recherche __icontains côté caisse
+        # (api_commandes_a_retirer combine Client ET ClientGuichet dans le même Q()).
+        indexes = [
+            GinIndex(fields=['nom'], name='cguichet_nom_trgm_idx', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['telephone'], name='cguichet_tel_trgm_idx', opclasses=['gin_trgm_ops']),
+        ]
 
     def __str__(self):
         return f"{self.nom} - {self.telephone or 'Sans numéro'}"
@@ -98,6 +123,29 @@ class Produit(models.Model):
         # 🔐 SÉCURITÉ : Contrainte physique empêchant le stock de descendre sous 0 en cas de requêtes simultanées
         constraints = [
             models.CheckConstraint(check=models.Q(quantite__gte=0), name="quantite_produit_positive_strict")
+        ]
+        # 🚀 INDEXATION (session offline, 12/07) : alignée sur les requêtes RÉELLES de
+        # api_catalogue() et api_dashboard() dans core/api.py -- pas d'index "au cas où".
+        #
+        # - categorie : filter(categorie=...) à chaque changement d'onglet catalogue
+        # - nom : order_by('nom') (tri par défaut du catalogue ET de la vue admin stock)
+        # - date_expiration : filter(date_expiration__range=[...]) pour les alertes péremption
+        # - GinIndex nom/laboratoire (trigram) : accélère les recherches __icontains (nom, labo)
+        #   -- un B-Tree classique est INUTILISABLE pour "LIKE '%terme%'", seul un index trigram
+        #   (extension pg_trgm, cf. migration 0006) permet à Postgres d'éviter un scan complet
+        #   de la table à mesure que le catalogue grossit (potentiellement des milliers de
+        #   produits par pharmacie à terme).
+        # - Upper('identifiant') : le code utilise Q(identifiant__iexact=...) qui, sous Postgres,
+        #   se traduit par UPPER(identifiant) = UPPER(%s) -- l'index unique standard sur
+        #   `identifiant` (sensible à la casse) n'est PAS utilisé par ce type de requête, d'où
+        #   cet index fonctionnel dédié.
+        indexes = [
+            models.Index(fields=['categorie'], name='prod_categorie_idx'),
+            models.Index(fields=['nom'], name='prod_nom_idx'),
+            models.Index(fields=['date_expiration'], name='prod_expiration_idx'),
+            GinIndex(fields=['nom'], name='prod_nom_trgm_idx', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['laboratoire'], name='prod_labo_trgm_idx', opclasses=['gin_trgm_ops']),
+            models.Index(Upper('identifiant'), name='prod_ident_upper_idx'),
         ]
     
     @property
@@ -242,6 +290,28 @@ class Commande(models.Model):
         verbose_name="Référence de transaction fournie par le client"
     )
     
+    class Meta:
+        # 🚀 INDEXATION (session offline, 12/07) : chaque index ci-dessous correspond à une
+        # requête RÉELLEMENT exécutée dans core/api.py --
+        #
+        # - (statut, -date) : api_paiements_a_verifier / api_commandes_a_retirer
+        #   -> filter(statut="...").order_by('-date')
+        # - (client, statut) : api_panier (panier courant) + api_historique_client
+        #   -> filter(client=..., statut__in=[...]) et filter(client=...).order_by('-date')
+        # - (payee, -date) : dashboard (ventes 7 derniers jours) + ventes_recentes
+        #   -> filter(payee=True, date__gte=...) et .order_by('-date')[:5]
+        # - (payee, type_vente) : dashboard (ventilation CA cash / en ligne)
+        #   -> filter(payee=True, type_vente='guichet'|'en_ligne')
+        # - GinIndex reference (trigram) : api_commandes_a_retirer cherche aussi par
+        #   Q(reference__icontains=...) en plus du numéro exact.
+        indexes = [
+            models.Index(fields=['statut', '-date'], name='cmd_statut_date_idx'),
+            models.Index(fields=['client', 'statut'], name='cmd_client_statut_idx'),
+            models.Index(fields=['payee', '-date'], name='cmd_payee_date_idx'),
+            models.Index(fields=['payee', 'type_vente'], name='cmd_payee_type_idx'),
+            GinIndex(fields=['reference'], name='cmd_ref_trgm_idx', opclasses=['gin_trgm_ops']),
+        ]
+
     def save(self, *args, **kwargs):
         if not self.id and not self.date_limite:
             self.date_limite = timezone.now() + timedelta(hours=48)
@@ -284,12 +354,18 @@ class Commande(models.Model):
         # même si cette méthode était appelée par erreur depuis ailleurs dans le code.
         if self.statut in ("payee_a_retirer", "retiree", "payee"):
             return
+        # 🔐 CORRECTION (bug remonté en test, session du 12/07) : cette méthode n'est JAMAIS
+        # atteignable pour une commande dont le stock a réellement été décrémenté -- le
+        # garde-fou ci-dessus bloque déjà "payee_a_retirer" / "retiree" / "payee". Or la
+        # décrémentation du stock n'a lieu QUE dans Commande.valider() (-> statut
+        # "payee_a_retirer") ou dans api_vente_directe() (-> statut "payee"). Autrement dit,
+        # TOUTE commande qui arrive ici ("en_cours", "attente_validation" ou
+        # "paiement_a_verifier") n'a JAMAIS touché au stock -- le recréditer serait donc une
+        # fraude comptable pure (augmentation artificielle et injustifiée du stock). On se
+        # contente donc de marquer la commande comme annulée, sans AUCUN mouvement de stock.
+        # (Ancien code : recréditait `item.quantite` pour chaque article -> gonflait le stock
+        # à chaque panier abandonné après 48h, ou annulé manuellement avant paiement.)
         with transaction.atomic():
-            for item in self.items.all():
-                p = Produit.objects.select_for_update().get(id=item.produit.id)
-                p.quantite += item.quantite
-                p.save()
-                Mouvement_stock.objects.create(produit=p, quantite=item.quantite, type="entree")
             self.statut = "annulee"
             self.save()
     

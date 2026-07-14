@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 
 export function PulseLine({
   className = "",
-  stroke = "#10b981",
+  stroke = "#158f5f",
   width = 900,
   height = 120,
 }: {

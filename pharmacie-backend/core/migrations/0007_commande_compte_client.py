@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('clients_publics', '0001_initial'),
-        ('core', '0005_commande_ordonnance_verifiee_visuellement'),
+        ('core', '0006_client_client_nom_trgm_idx_and_more'),
     ]
 
     operations = [

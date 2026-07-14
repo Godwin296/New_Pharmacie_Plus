@@ -26,6 +26,8 @@ urlpatterns = [
     path("ordonnances/", api.api_gestion_ordonnance, name="api_liste_ordonnances"),
     path("ordonnances/<int:commande_id>/", api.api_gestion_ordonnance, name="api_action_ordonnance"),
     path("archives/", api.api_archives_caissiere, name="api_archives"),
+    path("admin/clients/", api.api_admin_liste_clients, name="api_admin_liste_clients"),
+    path("admin/clients/<int:client_id>/reset-password/", api.api_admin_reset_password_client, name="api_admin_reset_password_client"),
     path("commandes/<int:commande_id>/confirmer-paiement/", api.api_confirmer_paiement, name="api_confirmer_paiement"),
     path("paiements-a-verifier/", api.api_paiements_a_verifier, name="api_paiements_a_verifier"),
     path("commandes/<int:commande_id>/marquer-retiree/", api.api_marquer_retiree, name="api_marquer_retiree"),
@@ -37,6 +39,8 @@ urlpatterns = [
     path("fournisseurs/", api.api_fournisseurs, name="api_fournisseurs"),
     path("fournisseurs/<int:pk>/", api.api_fournisseur_detail, name="api_fournisseur_detail"),
     path("inventaire_stock/", api.api_inventaire_stock, name="api_inventaire_stock"),
+    path("predictions-stock/", api.api_predictions_stock, name="api_predictions_stock"),
+    path("predictions-stock/<int:produit_id>/", api.api_prediction_stock_produit, name="api_prediction_stock_produit"),
     # 🔐 BRANCHEMENT SÉCURISÉ : On pointe vers la fonction API protégée par le JWT de l'Admin
     path("modifier-photo/<int:produit_id>/", api.api_modifier_photo_produit, name="api_modifier_photo_produit"),
 

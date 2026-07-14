@@ -4,6 +4,8 @@ import { useState } from "react";
 import Image from "next/image";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence, useScroll, useSpring } from "framer-motion";
+import { DEMO_WHATSAPP_LINK } from "@/lib/contact";
+import { ThemeToggle } from "./ThemeToggle";
 
 const links = [
   { href: "#pharmacies", label: "Pour les pharmacies" },
@@ -53,21 +55,27 @@ export function Nav() {
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
+            <ThemeToggle />
             <a
-              href="#pharmacies"
-              className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-[var(--color-ink)] text-[13px] font-bold px-4 py-2 no-underline transition-colors"
+              href={DEMO_WHATSAPP_LINK}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-[13px] font-bold px-4 py-2 no-underline transition-colors"
             >
               Demander une démo
             </a>
           </div>
 
-          <button
-            aria-label="Ouvrir le menu"
-            onClick={() => setOpen(true)}
-            className="md:hidden p-2 text-white bg-transparent border-none cursor-pointer"
-          >
-            <Menu size={22} />
-          </button>
+          <div className="flex md:hidden items-center gap-2">
+            <ThemeToggle />
+            <button
+              aria-label="Ouvrir le menu"
+              onClick={() => setOpen(true)}
+              className="p-2 text-white bg-transparent border-none cursor-pointer"
+            >
+              <Menu size={22} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -109,9 +117,11 @@ export function Nav() {
                   </a>
                 ))}
                 <a
-                  href="#pharmacies"
+                  href={DEMO_WHATSAPP_LINK}
+                  target="_blank"
+                  rel="noreferrer"
                   onClick={() => setOpen(false)}
-                  className="mt-6 rounded-xl bg-emerald-500 text-center text-[var(--color-ink)] text-sm font-bold px-4 py-3 no-underline"
+                  className="mt-6 rounded-xl bg-emerald-500 text-center text-white text-sm font-bold px-4 py-3 no-underline"
                 >
                   Demander une démo
                 </a>

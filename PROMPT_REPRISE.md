@@ -98,6 +98,29 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 - Service worker réellement généré et servi
 - Icônes PNG générées (192/512 standard + maskable + apple-touch-icon 180px)
 
+### Indexation BDD (session offline, 12/07 — 1ère brique du chantier "Mode offline réel")
+- 15 nouveaux index PostgreSQL sur `Produit`, `Commande`, `Client`, `ClientGuichet`
+  (`core/migrations/0006_...`), tous alignés sur des requêtes RÉELLES grepées dans `core/api.py`
+  (pas d'index spéculatif) : `categorie`, `nom`, `date_expiration`, `(statut,-date)`,
+  `(client,statut)`, `(payee,-date)`, `(payee,type_vente)`.
+- Extension PostgreSQL `pg_trgm` activée (GIN trigram) pour accélérer les recherches
+  `__icontains` (nom produit, laboratoire, nom/téléphone client, référence commande) qu'un
+  index B-Tree classique ne peut PAS servir. **Piège rencontré et documenté** : `pg_trgm`
+  doit être activée dans une migration SHARED_APP (schéma `public`), PAS dans `core`
+  (TENANT_APP) — sinon l'extension se retrouve installée dans le schéma du 1er tenant migré
+  et casse tous les tenants suivants (`operator class gin_trgm_ops does not exist`). Voir
+  `tenants/migrations/0002_enable_pg_trgm.py` pour le détail.
+- Index fonctionnel `Upper('identifiant')` : le code utilise `identifiant__iexact`, qui sous
+  Postgres devient `UPPER(identifiant) = UPPER(%s)` — l'index unique standard n'est pas
+  utilisé par ce type de requête sans cet index dédié.
+- **Validé avec `EXPLAIN ANALYZE` sur un catalogue de test à 8000 lignes** (pas juste "ça
+  migre sans erreur") : `prod_ident_upper_idx` et `prod_nom_idx` bien utilisés (Index Scan),
+  `prod_nom_trgm_idx` bien utilisé (Bitmap Index Scan) sur une recherche sélective réaliste
+  (9 résultats/8010 lignes, 0.37ms vs Seq Scan sur motif peu sélectif où Postgres a raison de
+  préférer le Seq Scan — comportement attendu, pas un bug).
+- ⚠️ À vérifier avant déploiement prod sur hébergeur managé : `pg_trgm` doit faire partie des
+  extensions autorisées (cas de la quasi-totalité des offres PostgreSQL managées modernes).
+
 ### Bugs corrigés (historique)
 - `generate_qr_base64` importé depuis le mauvais module
 - `agent_validateur` recevait un username au lieu d'un objet User
@@ -147,7 +170,11 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 ### 🔴 Effort élevé / risque architectural
 - [ ] **Gestion des lots (`LotProduit`) + FEFO** — nouveau modèle, migration données existantes (`Produit.lot`/`date_expiration` → lots individuels), décrémentation FEFO dans tout le cycle de vente sans casser `select_for_update()`
 - [ ] **Compte client global (`CompteClient`) + marketplace** — modèle dans schéma public, nouveau JWT clients (distinct personnel), migration clients existants, page marketplace
-- [ ] **Mode offline réel (Service Worker + IndexedDB)** — synchronisation bidirectionnelle catalogue/panier
+- [ ] **Mode offline réel (Service Worker + IndexedDB)** — synchronisation bidirectionnelle catalogue/panier. Découpé en 4 briques (session du 12/07) :
+  - [x] **1/4 — Indexation BDD** — voir section "Indexation BDD" ci-dessus. Fait et testé (EXPLAIN ANALYZE, 8000 lignes).
+  - [ ] **2/4 — Cache catalogue en IndexedDB** (navigation hors-ligne du catalogue) — nécessite probablement un champ `date_modification` sur `Produit` + un endpoint de sync delta côté backend, pour ne pas retélécharger tout le catalogue à chaque fois sur une connexion 3G/4G instable.
+  - [ ] **3/4 — File d'attente panier hors-ligne** (ajout au panier en offline, sync auto au retour réseau) — Background Sync API + IndexedDB côté client.
+  - [ ] **4/4 — Adaptation du service worker** (`app/sw.ts`) pour mettre en cache les réponses API catalogue (actuellement volontairement minimal, ne cache que les assets statiques).
 - [ ] **Refonte UI/UX mobile-first complète** — maquettes disponibles (6 images, style vert émeraude, cartes arrondies, bottom nav avec bouton central flottant, splash screen avec halo radial). À attaquer APRÈS le compte client global.
 
 ---

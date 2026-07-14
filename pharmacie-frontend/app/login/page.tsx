@@ -43,6 +43,7 @@ export default function LoginPage() {
           localStorage.setItem('refresh_token', response.data.refresh);
           localStorage.setItem('user_role', 'client');
           localStorage.setItem('username', response.data.nom);
+          localStorage.setItem('display_name', response.data.nom);
           window.location.href = '/';
         }
         return;
@@ -62,6 +63,9 @@ export default function LoginPage() {
         // Stockage des informations de profil
         localStorage.setItem('user_role', response.data.role);
         localStorage.setItem('username', response.data.user);
+        // 🌟 Nom d'affichage convivial (nom complet du client, ou username pour le personnel)
+        // -- utilisé par le splash screen d'accueil (app/layout.tsx) à la place du login technique.
+        localStorage.setItem('display_name', response.data.display_name || response.data.user);
         
         // Redirection avec rafraîchissement complet du layout Next.js
         if (response.data.role === 'admin') {

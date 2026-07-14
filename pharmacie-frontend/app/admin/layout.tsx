@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, Box, History, Truck, 
   BarChart3, Settings, Power, Sun, Moon,
-  House, Pill, ShieldAlert, ArrowLeft
-} from 'lucide-react'; // 🌟 Ajout de ShieldAlert et ArrowLeft
+  House, Pill, ShieldAlert, ArrowLeft, TrendingUp, Users
+} from 'lucide-react'; // 🌟 Ajout de ShieldAlert, ArrowLeft, TrendingUp (prédictions) et Users (clients)
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -58,7 +58,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Tableau de Bord', icon: LayoutDashboard, href: '/admin/dashboard' },
     { name: 'Catalogue & Photos', icon: Pill, href: '/catalogue' }, 
     { name: 'Gestion des Stocks', icon: Box, href: '/admin/stocks' },
+    { name: 'Prédiction Stock', icon: TrendingUp, href: '/admin/predictions' },
     { name: 'Historique Ventes', icon: History, href: '/admin/historique' },
+    { name: 'Clients', icon: Users, href: '/admin/clients' },
     { name: 'Fournisseurs', icon: Truck, href: '/admin/fournisseurs' },
     { name: 'Rapports & Stats', icon: BarChart3, href: '/admin/rapports' },
   ];

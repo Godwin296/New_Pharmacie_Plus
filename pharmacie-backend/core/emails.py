@@ -85,3 +85,39 @@ def envoyer_email_confirmation_commande(commande):
             "Échec de l'envoi de l'email de confirmation pour la commande %s",
             commande.reference,
         )
+
+
+def envoyer_email_nouveau_mot_de_passe(client, nouveau_mot_de_passe):
+    """
+    🔐 Envoie un nouveau mot de passe généré par l'administrateur à un client (compte en
+    ligne) qui a perdu l'accès à son compte. Contrairement à `envoyer_email_confirmation_commande`,
+    on NE VEUT PAS avaler l'exception ici en silence : l'administrateur qui clique sur
+    "réinitialiser & envoyer" doit savoir immédiatement si l'email est réellement parti,
+    sinon il pense (à tort) avoir communiqué un mot de passe au client -- risque de blocage
+    total du compte sans que personne ne s'en aperçoive. C'est à l'appelant (la vue API)
+    de décider quoi répondre au frontend en cas d'échec.
+    """
+    from .models import PharmacieConfig  # import local : évite l'import circulaire avec models.py
+
+    config = PharmacieConfig.objects.first()
+    nom_pharmacie = config.nom if config else "Pharmacie Plus"
+
+    sujet = f"{nom_pharmacie} — Votre nouveau mot de passe"
+    corps = (
+        f"Bonjour {client.nom},\n\n"
+        f"Votre mot de passe a été réinitialisé par l'équipe de {nom_pharmacie}.\n\n"
+        f"Voici votre nouveau mot de passe temporaire :\n\n"
+        f"    {nouveau_mot_de_passe}\n\n"
+        f"Merci de vous connecter avec ce mot de passe, puis de le modifier dès que possible "
+        f"depuis votre profil.\n\n"
+        f"Si vous n'êtes pas à l'origine de cette demande, contactez immédiatement "
+        f"{nom_pharmacie}.\n"
+    )
+
+    send_mail(
+        subject=sujet,
+        message=corps,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[client.email],
+        fail_silently=False,
+    )

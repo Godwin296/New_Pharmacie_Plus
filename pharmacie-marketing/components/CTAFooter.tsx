@@ -1,42 +1,52 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Mail, Phone, MessageCircle, ArrowUpRight } from "lucide-react";
 import { Reveal } from "./Reveal";
 import { PulseLine } from "./PulseLine";
+import { QualifiedLeadForm } from "./QualifiedLeadForm";
+import { CONTACT, GENERAL_WHATSAPP_LINK, DEMO_WHATSAPP_LINK } from "@/lib/contact";
 
 export function CTAFooter() {
   return (
     <>
-      <section id="contact" className="relative bg-[var(--color-mist)] py-24 sm:py-32 overflow-hidden">
+      <section id="contact" className="relative bg-[var(--color-mist)] dark:bg-[#050e0c] py-24 sm:py-32 overflow-hidden">
         <div
           aria-hidden
           className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 h-[420px] w-[420px] rounded-full bg-emerald-400/20 blur-[110px]"
         />
         <div className="relative mx-auto max-w-4xl px-5 sm:px-8 text-center">
           <Reveal>
-            <h2 className="font-display font-bold text-[var(--color-ink)] text-4xl sm:text-5xl leading-[1.1] tracking-tight">
+            <h2 className="font-display font-bold text-[var(--color-ink)] dark:text-white text-4xl sm:text-5xl leading-[1.1] tracking-tight">
               Parlons de votre officine.
             </h2>
-            <p className="mt-5 text-[17px] leading-relaxed text-slate-600 max-w-xl mx-auto">
+            <p className="mt-5 text-[17px] leading-relaxed text-slate-600 dark:text-slate-400 max-w-xl mx-auto">
               Que vous gériez une pharmacie ou que vous cherchiez simplement à
               commander vos médicaments plus simplement, écrivez-nous.
             </p>
+          </Reveal>
 
-            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+          <Reveal delay={0.1} className="mt-10">
+            <QualifiedLeadForm />
+          </Reveal>
+
+          <Reveal delay={0.15}>
+            <p className="mt-8 text-[13px] text-slate-400">Une question rapide, sans formulaire ?</p>
+            <div className="mt-3 flex flex-col sm:flex-row gap-3 justify-center">
               <a
-                href="https://wa.me/237000000000"
+                href={GENERAL_WHATSAPP_LINK}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 px-7 py-4 text-[15px] font-bold text-[var(--color-ink)] no-underline transition-all hover:shadow-[0_0_30px_-6px_rgba(16,185,129,0.5)]"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-white/15 hover:border-emerald-400 px-5 py-2.5 text-[13px] font-semibold text-[var(--color-ink)] dark:text-white no-underline transition-colors"
               >
-                <MessageCircle size={17} />
-                Écrire sur WhatsApp
+                <MessageCircle size={15} />
+                WhatsApp
               </a>
               <a
-                href="mailto:contact@pharmacieplus.cm"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 hover:border-emerald-400 px-7 py-4 text-[15px] font-bold text-[var(--color-ink)] no-underline transition-colors"
+                href={`mailto:${CONTACT.email}`}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-white/15 hover:border-emerald-400 px-5 py-2.5 text-[13px] font-semibold text-[var(--color-ink)] dark:text-white no-underline transition-colors"
               >
-                <Mail size={17} />
-                contact@pharmacieplus.cm
+                <Mail size={15} />
+                {CONTACT.email}
               </a>
             </div>
           </Reveal>
@@ -45,7 +55,7 @@ export function CTAFooter() {
 
       <footer className="relative bg-brand-deep pt-20 pb-10 overflow-hidden">
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 opacity-40">
-          <PulseLine className="w-full h-16" stroke="#5eead4" />
+          <PulseLine className="w-full h-16" stroke="#0e7a4e" />
         </div>
 
         <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
@@ -69,7 +79,9 @@ export function CTAFooter() {
                 santé, notre priorité.
               </p>
               <a
-                href="#contact"
+                href={DEMO_WHATSAPP_LINK}
+                target="_blank"
+                rel="noreferrer"
                 className="mt-5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-emerald-300 no-underline"
               >
                 Demander une démo
@@ -102,10 +114,10 @@ export function CTAFooter() {
                 Contact
               </div>
               <div className="flex flex-col gap-3">
-                <a href="mailto:contact@pharmacieplus.cm" className="flex items-center gap-2 text-[14px] text-white/60 hover:text-white no-underline transition-colors">
-                  <Mail size={14} /> contact@pharmacieplus.cm
+                <a href={`mailto:${CONTACT.email}`} className="flex items-center gap-2 text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                  <Mail size={14} /> {CONTACT.email}
                 </a>
-                <a href="https://wa.me/237000000000" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                <a href={GENERAL_WHATSAPP_LINK} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[14px] text-white/60 hover:text-white no-underline transition-colors">
                   <Phone size={14} /> WhatsApp
                 </a>
               </div>
@@ -116,9 +128,14 @@ export function CTAFooter() {
             <p className="text-[12px] text-white/30">
               © {new Date().getFullYear()} Pharmacie+ — Fait au Cameroun 🇨🇲 pour l&apos;Afrique Centrale
             </p>
-            <p className="text-[12px] text-white/20">
-              Isolation des données · FCFA natif · Orange Money &amp; MTN MoMo
-            </p>
+            <div className="flex items-center gap-4">
+              <Link href="/mentions-legales" className="text-[12px] text-white/30 hover:text-white/60 no-underline transition-colors">
+                Mentions légales
+              </Link>
+              <Link href="/politique-de-confidentialite" className="text-[12px] text-white/30 hover:text-white/60 no-underline transition-colors">
+                Confidentialité
+              </Link>
+            </div>
           </div>
         </div>
       </footer>
