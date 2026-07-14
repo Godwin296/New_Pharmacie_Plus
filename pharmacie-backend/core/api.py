@@ -243,6 +243,12 @@ def api_register(request):
     serializer = ClientRegisterSerializer(data=request.data)
     if serializer.is_valid():
         nouveau_client = serializer.save()
+
+        # 📧 Hors du cœur de la transaction d'inscription : un échec d'envoi ne doit jamais
+        # faire échouer une création de compte déjà validée en base.
+        from .emails import envoyer_email_bienvenue
+        envoyer_email_bienvenue(nouveau_client)
+
         return Response({
             "message": "Compte créé avec succès ! 🎉",
             "id_client": nouveau_client.identifiant
@@ -785,6 +791,11 @@ def api_gestion_ordonnance(request, commande_id=None):
                     # Le client voit le motif de refus apparaître en direct (jamais le nom de l'agent)
                     _notifier_client(commande.id, statut=commande.statut,
                                       ordonnance_valide=False, motif_refus=commande.motif_refus)
+
+                    # 📧 Complément à la notif temps réel : utile si le client n'a pas
+                    # l'application ouverte au moment du refus.
+                    from .emails import envoyer_email_ordonnance_refusee
+                    envoyer_email_ordonnance_refusee(commande)
 
                     return Response({"message": "Rejetée ❌"})
 
