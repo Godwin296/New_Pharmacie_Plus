@@ -3,189 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <style>
+        /* 📄 Design volontairement SOBRE : un vrai document professionnel, pas une
+           interface d'application. Une seule couleur d'accent (vert pharmacie), une
+           seule graisse de titre par niveau, pas de coins ultra-arrondis ni de texte
+           tout en italique/majuscules -- l'inverse du style précédent. */
         @page { size: A4; margin: 0; }
-        body { 
-            font-family: 'Helvetica', sans-serif; 
-            background-color: #f8fafc; 
-            margin: 0; 
-            padding: 40px;
-            color: #1e293b;
+        body {
+            font-family: 'Helvetica', Arial, sans-serif;
+            background-color: #ffffff;
+            margin: 0;
+            padding: 0;
+            color: #1f2937;
+            font-size: 13px;
+            line-height: 1.5;
         }
-        /* Conteneur principal style "Card" */
-        .invoice-container {
-            background-color: white;
-            border-radius: 48px; /* Correspond à rounded-[3rem] */
-            padding: 50px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-            border: 1px solid #f1f5f9;
-            max-width: 800px;
-            margin: 0 auto;
-        }
+        .page { padding: 42px 48px; }
+
         /* En-tête */
         .header {
             display: table;
             width: 100%;
-            border-bottom: 2px solid #f8fafc;
-            padding-bottom: 30px;
-            margin-bottom: 30px;
+            border-bottom: 2px solid #10b981;
+            padding-bottom: 18px;
+            margin-bottom: 28px;
         }
-        .header-left { display: table-cell; vertical-align: middle; }
-        .logo-box {
-            width: 70px;
-            height: 70px;
-            background-color: #10b981;
-            border-radius: 16px;
-            color: white;
-            text-align: center;
-            line-height: 70px;
-            font-weight: 900;
-            font-size: 24px;
-            display: inline-block;
+        .header-left { display: table-cell; vertical-align: middle; width: 65%; }
+        .header-right { display: table-cell; vertical-align: middle; width: 35%; text-align: right; }
+        .logo-img { max-height: 52px; max-width: 220px; object-fit: contain; }
+        .logo-fallback {
+            display: inline-block; width: 52px; height: 52px; border-radius: 10px;
+            background-color: #10b981; color: #fff; font-weight: bold; font-size: 20px;
+            text-align: center; line-height: 52px;
         }
-        .header-info { display: inline-block; vertical-align: middle; margin-left: 20px; }
-        .pharmacie-nom { 
-            font-size: 24px; 
-            font-weight: 900; 
-            text-transform: uppercase; 
-            font-style: italic; 
-            color: #1e293b;
-            margin: 0;
-        }
-        /* Badge Statut */
-        .status-badge {
-            display: table-cell;
-            text-align: right;
-            vertical-align: top;
-        }
-        .badge {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            background-color: #ecfdf5;
-            color: #059669;
-        }
-        /* Infos Client */
-        .client-section {
-            background-color: #f8fafc;
-            border-radius: 40px;
-            padding: 30px;
-            margin-bottom: 40px;
-        }
-        .label { font-size: 9px; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin-bottom: 5px; }
-        .value { font-size: 18px; font-weight: 900; color: #1e293b; text-transform: uppercase; font-style: italic; }
+        .pharmacie-nom { font-size: 17px; font-weight: bold; color: #111827; margin: 8px 0 2px 0; }
+        .pharmacie-contact { font-size: 10.5px; color: #6b7280; margin: 0; }
 
-        /* Table des articles */
-        table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
-        th { 
-            text-align: left; 
-            font-size: 10px; 
-            font-weight: 900; 
-            color: #94a3b8; 
-            text-transform: uppercase; 
-            padding: 15px; 
-            border-bottom: 1px solid #f1f5f9;
+        .doc-titre { font-size: 20px; font-weight: bold; color: #111827; margin: 0 0 6px 0; letter-spacing: 0.5px; }
+        .doc-ref { font-size: 11px; color: #6b7280; margin: 0; }
+        .badge {
+            display: inline-block; margin-top: 8px; padding: 4px 12px; border-radius: 4px;
+            font-size: 9.5px; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase;
         }
-        td { padding: 20px 15px; border-bottom: 1px solid #f8fafc; }
-        .item-nom { font-weight: 900; text-transform: uppercase; font-style: italic; font-size: 13px; }
-        .item-qty { color: #64748b; font-weight: 900; }
+        .badge-payee { background-color: #ecfdf5; color: #059669; }
+        .badge-attente { background-color: #fffbeb; color: #b45309; }
+
+        /* Bloc infos (client / date) -- deux colonnes simples, sans carte surchargée */
+        .infos-table { width: 100%; border-collapse: collapse; margin-bottom: 26px; }
+        .infos-table td { padding: 0; vertical-align: top; width: 50%; }
+        .info-label { font-size: 9.5px; font-weight: bold; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+        .info-value { font-size: 13.5px; font-weight: bold; color: #111827; }
+        .info-sub { font-size: 10.5px; color: #6b7280; margin-top: 2px; }
+
+        /* Table des articles -- lignes fines, alignement classique de facture */
+        table.items { width: 100%; border-collapse: collapse; margin-bottom: 22px; }
+        table.items thead th {
+            text-align: left; font-size: 10px; font-weight: bold; color: #6b7280;
+            text-transform: uppercase; letter-spacing: 0.4px;
+            padding: 8px 6px; border-bottom: 1.5px solid #e5e7eb;
+        }
+        table.items tbody td { padding: 10px 6px; border-bottom: 1px solid #f1f3f5; font-size: 12.5px; }
+        table.items tbody tr:last-child td { border-bottom: 1px solid #e5e7eb; }
+        .col-nom { width: 46%; }
+        .col-qte { width: 14%; text-align: center; }
+        .col-pu { width: 20%; text-align: right; }
+        .col-total { width: 20%; text-align: right; font-weight: bold; }
+        .item-nom { font-weight: bold; color: #111827; }
+        .item-ordonnance { font-size: 9px; color: #b45309; margin-top: 2px; }
 
         /* Total */
-        .total-section {
-            text-align: right;
-            border-top: 4px solid #10b98120;
-            padding-top: 20px;
-            font-size: 32px;
-            font-weight: 900;
-            color: #059669;
-            font-style: italic;
+        .total-wrap { display: table; width: 100%; margin-bottom: 32px; }
+        .total-spacer { display: table-cell; width: 58%; }
+        .total-box { display: table-cell; width: 42%; }
+        .total-row { display: table; width: 100%; padding: 6px 0; }
+        .total-row.grand {
+            border-top: 2px solid #111827; margin-top: 6px; padding-top: 10px;
         }
-        /* QR Code & Footer */
+        .total-row .lbl { display: table-cell; font-size: 12px; color: #6b7280; }
+        .total-row .val { display: table-cell; text-align: right; font-size: 12px; color: #111827; }
+        .total-row.grand .lbl { font-size: 15px; font-weight: bold; color: #111827; }
+        .total-row.grand .val { font-size: 20px; font-weight: bold; color: #059669; }
+
+        /* Pied de page */
         .footer {
-            margin-top: 50px;
-            border-top: 2px solid #f8fafc;
-            padding-top: 30px;
-            display: table;
-            width: 100%;
+            display: table; width: 100%; border-top: 1px solid #e5e7eb;
+            padding-top: 20px; margin-top: 10px;
         }
-        .footer-note { display: table-cell; width: 70%; font-size: 11px; color: #64748b; font-style: italic; }
-        .qr-box { 
-            display: table-cell; 
-            width: 30%; 
-            text-align: right; 
-        }
-        .qr-img { width: 90px; height: 90px; border: 1px solid #f1f5f9; padding: 5px; border-radius: 12px; }
+        .footer-note { display: table-cell; width: 68%; vertical-align: middle; font-size: 10.5px; color: #6b7280; }
+        .footer-note strong { color: #374151; }
+        .qr-box { display: table-cell; width: 32%; text-align: right; vertical-align: middle; }
+        .qr-img { width: 74px; height: 74px; border: 1px solid #e5e7eb; padding: 4px; border-radius: 6px; }
+        .qr-caption { font-size: 8px; color: #9ca3af; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 6px; }
     </style>
 </head>
 <body>
-    <div class="invoice-container">
+    <div class="page">
         <div class="header">
             <div class="header-left">
-                {% if config.logo %}
-                    <img src="{{ logo_url }}" style="width: 70px; height: 70px; border-radius: 16px;">
+                {% if logo_url %}
+                    <img src="{{ logo_url }}" class="logo-img" alt="{{ config.nom|default:'Pharmacie' }}">
                 {% else %}
-                    <div class="logo-box">P+</div>
+                    <span class="logo-fallback">{{ config.nom|default:"P+"|slice:":1" }}</span>
                 {% endif %}
-                <div class="header-info">
-                    <h1 class="pharmacie-nom">{{ config.nom|default:"PHARMACIE +" }}</h1>
-                    <div style="font-size: 10px; color: #94a3b8; font-weight: bold;">{{ config.adresse }}</div>
+                <div class="pharmacie-nom">{{ config.nom|default:"Pharmacie +" }}</div>
+                <div class="pharmacie-contact">
+                    {{ config.adresse }}{% if config.adresse and config.telephone %} &middot; {% endif %}{{ config.telephone }}
                 </div>
             </div>
-            <div class="status-badge">
-                <div class="badge">{% if commande.payee %}PAYÉE{% else %}EN ATTENTE{% endif %}</div>
-                <div style="font-size: 12px; font-weight: bold; margin-top: 10px;">#FAC-{{ commande.id }}</div>
-            </div>
-        </div>
-
-        <div class="client-section">
-            <div style="display: table; width: 100%;">
-                <div style="display: table-cell;">
-                    <div class="label">Patient / Client</div>
-                    <div class="value">{{ commande.client.nom|default:"Client au Guichet" }}</div>
-                </div>
-                <div style="display: table-cell; text-align: right;">
-                    <div class="label">Émis le</div>
-                    <div class="value">{{ commande.date|date:"d/m/Y" }}</div>
+            <div class="header-right">
+                <div class="doc-titre">FACTURE</div>
+                <div class="doc-ref">N&deg; FAC-{{ commande.id }}</div>
+                <div class="badge {% if commande.payee %}badge-payee{% else %}badge-attente{% endif %}">
+                    {% if commande.payee %}Pay&eacute;e{% else %}En attente{% endif %}
                 </div>
             </div>
         </div>
 
-        <table>
+        <table class="infos-table">
+            <tr>
+                <td>
+                    <div class="info-label">Patient / Client</div>
+                    <div class="info-value">{{ nom_client|default:"Client au Guichet" }}</div>
+                    <div class="info-sub">{% if commande.type_vente == 'guichet' %}Vente directe (comptoir){% else %}Commande en ligne{% endif %}</div>
+                </td>
+                <td style="text-align: right;">
+                    <div class="info-label">&Eacute;mise le</div>
+                    <div class="info-value">{{ commande.date|date:"d/m/Y &agrave; H:i" }}</div>
+                    <div class="info-sub">R&eacute;f&eacute;rence : {{ commande.reference|default:commande.id }}</div>
+                </td>
+            </tr>
+        </table>
+
+        <table class="items">
             <thead>
                 <tr>
-                    <th>Désignation</th>
-                    <th style="text-align: center;">Qté</th>
-                    <th style="text-align: right;">Total</th>
+                    <th class="col-nom">D&eacute;signation</th>
+                    <th class="col-qte">Qt&eacute;</th>
+                    <th class="col-pu">P.U.</th>
+                    <th class="col-total">Total</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in items %}
                 <tr>
-                    <td><div class="item-nom">{{ item.produit.nom }}</div></td>
-                    <td style="text-align: center;" class="item-qty">x{{ item.quantite }}</td>
-                    <td style="text-align: right; font-weight: 900;">{{ item.total }} CFA</td>
+                    <td class="col-nom">
+                        <div class="item-nom">{{ item.produit.nom }}</div>
+                        {% if item.produit.ordonnance_obligatoire %}
+                            <div class="item-ordonnance">Sur ordonnance</div>
+                        {% endif %}
+                    </td>
+                    <td class="col-qte">{{ item.quantite }}</td>
+                    <td class="col-pu">{{ item.prix_facture|default:item.produit.prix }}</td>
+                    <td class="col-total">{{ item.total }} {{ config.devise_preferee|default:"CFA" }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
 
-        <div class="total-section">
-            TOTAL {{ commande.total }} <span style="font-size: 14px;">CFA</span>
+        <div class="total-wrap">
+            <div class="total-spacer"></div>
+            <div class="total-box">
+                <div class="total-row grand">
+                    <span class="lbl">TOTAL</span>
+                    <span class="val">{{ commande.total }} {{ config.devise_preferee|default:"CFA" }}</span>
+                </div>
+            </div>
         </div>
 
         <div class="footer">
             <div class="footer-note">
-                <strong>Note Pharmaceutique :</strong><br>
+                <strong>Note pharmaceutique :</strong><br>
                 {{ config.message_remerciement|default:"Merci de votre confiance. Respectez les doses prescrites." }}
             </div>
             <div class="qr-box">
                 {% if qr_code %}
-                    <img src="data:image/png;base64,{{ qr_code }}" class="qr-img" alt="QR Code" width="100">
+                    <img src="{{ qr_code }}" class="qr-img" alt="QR Code">
+                    <div class="qr-caption">V&eacute;rification {{ config.nom|default:"Pharmacie+" }}</div>
                 {% endif %}
-                <div style="font-size: 7px; color: #94a3b8; font-weight: 900; margin-top: 5px;">CERTIFICATION PHARMACIE +</div>
             </div>
         </div>
     </div>

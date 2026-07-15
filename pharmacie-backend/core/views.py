@@ -14,7 +14,7 @@ from io import BytesIO
 
 # Imports de tes modèles locaux requis pour les requêtes d'impression
 from .models import Commande, Produit, PharmacieConfig
-from .utils import generate_qr_base64
+from .utils import generate_qr_base64, obtenir_logo_base64_pour_pdf
 
 # --- 🛡️ SYSTÈME DE VÉRIFICATION DES RÔLES ---
 def is_staff_member(user):
@@ -86,12 +86,15 @@ def export_facture_pdf(request, commande_id):
     config = PharmacieConfig.objects.first()
 
     # 3. Génération du QR Code basé sur le total exact et figé
+    # 🔧 CORRECTIF : l'ancien champ Commande.client (modèle Client local au tenant) a été
+    # supprimé au profit de Commande.compte_client (CompteClient, marketplace globale) --
+    # cf. migration core.0009_remove_client_user_remove_commande_client_and_more. Cette
+    # branche `elif commande.client` restait dans le code et faisait planter (500) toute
+    # génération de facture pour une commande sans client_guichet ni compte_client.
     if commande.client_guichet:
         nom_client = commande.client_guichet.nom
     elif commande.compte_client:
         nom_client = commande.compte_client.nom
-    elif commande.client:
-        nom_client = commande.client.nom
     else:
         nom_client = "Client au Guichet"
     qr_data = f"FACTURE:{commande.id}|CLIENT:{nom_client}|TOTAL:{commande.total()} CFA"
@@ -107,7 +110,8 @@ def export_facture_pdf(request, commande_id):
         'items': commande.items.all(),
         'config': config,
         'qr_code': qr_base64,
-        'logo_url': request.build_absolute_uri(config.logo.url) if config and config.logo else None
+        'nom_client': nom_client,
+        'logo_url': obtenir_logo_base64_pour_pdf(config)
     }
 
     # 5. Rendu du fichier HTML vers le moteur de PDF
@@ -158,12 +162,11 @@ def export_pdf_financier(request):
         'moyenne': moyenne,
         'top_produits': top_produits,
         'date_heure': timezone.now(),
-        # 🖼️ BUG CORRIGÉ : le template utilisait auparavant {{ config.logo.path }}, qui
-        # renvoie le chemin DISQUE du serveur (ex: D:\...\media\logo.png sous Windows) --
-        # WeasyPrint ne peut pas charger ça comme une image, d'où le logo systématiquement
-        # cassé dans le PDF. On construit ici une vraie URL HTTP absolue, exactement comme
-        # le fait déjà export_facture_pdf() plus haut dans ce même fichier.
-        'logo_url': request.build_absolute_uri(config.logo.url) if config and config.logo else None,
+        # 🖼️ CORRECTIF LOGO (voir core/utils.py::obtenir_logo_base64_pour_pdf) : l'ancienne
+        # URL HTTP absolue ne fonctionnait qu'en DEBUG=True (seul mode où config/urls.py sert
+        # MEDIA_URL) -- en production le logo était systématiquement cassé. On lit maintenant
+        # l'image directement sur disque et on l'encode en base64, sans requête HTTP.
+        'logo_url': obtenir_logo_base64_pour_pdf(config),
     }
 
     # 3. Rendu du gabarit HTML vers le moteur WeasyPrint
@@ -210,8 +213,8 @@ def export_rapport_stock(request):
             'total_med': total_med,
             'stock_faible': stock_faible,
             'date_heure': timezone.now(),
-            # 🖼️ BUG CORRIGÉ : voir commentaire identique dans export_pdf_financier().
-            'logo_url': request.build_absolute_uri(config.logo.url) if config and config.logo else None,
+            # 🖼️ Voir core/utils.py::obtenir_logo_base64_pour_pdf (base64 direct, pas d'URL HTTP)
+            'logo_url': obtenir_logo_base64_pour_pdf(config),
         }
         
         html_string = render_to_string('core/Admin/pdf_stock.html', context)
@@ -256,9 +259,8 @@ def export_alertes_pdf(request):
         'nb_produits_critiques': nb_produits_critiques,
         'produits_expirant_bientot': produits_en_alerte,
         'date_heure': timezone.now(),
-        # 🖼️ Harmonisé avec les autres exports PDF (voir export_pdf_financier) : URL
-        # absolue plutôt que config.logo.url relative, pour un seul pattern cohérent.
-        'logo_url': request.build_absolute_uri(config.logo.url) if config and config.logo else None,
+        # 🖼️ Voir core/utils.py::obtenir_logo_base64_pour_pdf (base64 direct, pas d'URL HTTP)
+        'logo_url': obtenir_logo_base64_pour_pdf(config),
     }
 
     html_string = render_to_string('core/Admin/alertes.html', context)
