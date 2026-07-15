@@ -29,6 +29,7 @@ from .validators import valider_et_desinfecter_ordonnance, valider_et_desinfecte
 from .pagination import CataloguePagination
 from .throttles import LoginRateThrottle, SoumettrePaiementRateThrottle
 from .services_prediction import predire_pour_produit, predire_pour_tous_produits
+from .cache_utils import cache_get, cache_set, cache_delete_exact
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from clients_publics.models import CompteClient 
@@ -77,6 +78,15 @@ def infos_pharmacie(request):
     # doivent s'afficher pour n'importe quel visiteur (catalogue, page de connexion...),
     # pas seulement pour un admin déjà authentifié. Aucune donnée sensible n'est exposée
     # ici -- la modification de la config, elle, reste réservée aux admins (api_update_config).
+    #
+    # 🔴 CACHE REDIS : cette route est appelée à CHAQUE chargement de page (login, catalogue,
+    # panier...) mais son contenu ne change que lorsqu'un admin modifie sa config -- candidat
+    # idéal au cache. Clé UNIQUE par tenant (pas de variation par requête), invalidée
+    # immédiatement dans api_update_config -- jamais de logo/nom périmé affiché.
+    cached = cache_get("infos_pharmacie")
+    if cached is not None:
+        return Response(cached)
+
     config = PharmacieConfig.objects.first()
     if not config:
         config = PharmacieConfig.objects.create(
@@ -91,6 +101,7 @@ def infos_pharmacie(request):
     # `config.logo` est bien "truthy" côté React. Avec le contexte, DRF renvoie l'URL
     # absolue correcte (http://dupont.localhost:8000/media/config/logo.png).
     serializer = PharmacieConfigSerializer(config, context={'request': request})
+    cache_set("infos_pharmacie", serializer.data, timeout=3600)  # 1h : invalidé au besoin de toute façon
     return Response(serializer.data)
 
 @api_view(['POST','PUT', 'PATCH'])
@@ -129,6 +140,9 @@ def api_update_config(request):
         config.nom_titulaire_mtn_momo = request.data.get('nom_titulaire_mtn_momo', config.nom_titulaire_mtn_momo)
 
         config.save()
+        # 🔴 Invalidation IMMÉDIATE du cache (clé unique par tenant, cf. cache_utils.py) --
+        # sans ça, le nouveau logo/nom resterait invisible jusqu'à expiration du TTL (1h).
+        cache_delete_exact("infos_pharmacie")
         return Response({"message": "Paramètres mis à jour avec succès !"}, status=200)
     except Exception as e:
         # Parfait pour le développement : vous voyez exactement pourquoi ça plante
@@ -336,7 +350,20 @@ def api_catalogue(request):
     ce qui devenait lourd sur 3G/4G à mesure que le catalogue grossit). On utilise
     désormais CataloguePagination (20 produits/page par défaut, voir core/pagination.py).
     Le frontend doit envoyer ?page=N et peut envoyer ?page_size=N pour ajuster.
+
+    🔴 CACHE REDIS (60s) : c'est la route la plus sollicitée du site (chaque visiteur,
+    connecté ou non, la déclenche en boucle en filtrant/paginant). Clé = tenant + query
+    string exacte (cf. cache_utils.py) -- page 1 et page 2, ou "q=doliprane" et "q=..." 
+    n'écrasent jamais le cache l'un de l'autre. Pas d'invalidation manuelle sur les
+    écritures (vente, réappro, modif produit...) : le TTL court (60s) est un compromis
+    volontaire -- une minute de fraîcheur en moins sur un catalogue public est largement
+    acceptable face à la complexité et aux risques d'oubli d'une invalidation exhaustive
+    sur chaque point d'écriture du stock.
     """
+    cached = cache_get("catalogue", request)
+    if cached is not None:
+        return Response(cached)
+
     produits = Produit.objects.all().order_by('nom')
     query_cat = request.GET.get('cat')
     search_query = request.GET.get('q')
@@ -356,10 +383,12 @@ def api_catalogue(request):
     serializer = ProduitSerializer(page, many=True)
     categories_dict = dict(getattr(Produit, 'CATEGORIES', {}))
 
-    return paginator.get_paginated_response({
+    reponse = paginator.get_paginated_response({
         "produits": serializer.data,
         "categories": categories_dict # Envoie les labels pour les menus Next.js
     })
+    cache_set("catalogue", reponse.data, timeout=60, request=request)
+    return reponse
 
 
 # --- 🚀 MODE OFFLINE (session 12/07, brique 2/4) : SYNCHRO DELTA DU CATALOGUE ---
@@ -1073,12 +1102,24 @@ def api_predictions_stock(request):
 
     alerte_uniquement = request.query_params.get("alerte_uniquement") in ("1", "true", "True")
 
+    # 🔴 CACHE REDIS (15 min) : calcul statistique sur tout le catalogue -- coûteux (moyenne
+    # mobile + régression par produit) pour un résultat qui ne bouge en réalité qu'au rythme
+    # des ventes de la journée. Clé = tenant + query string exacte (chaque combinaison de
+    # lookback/lead_time/alerte a son propre cache). Pas d'invalidation manuelle : une
+    # recommandation de réapprovisionnement vieille de quelques minutes n'a aucune
+    # conséquence pratique (ce n'est pas une donnée transactionnelle).
+    cached = cache_get("predictions_stock", request)
+    if cached is not None:
+        return Response(cached)
+
     predictions = predire_pour_tous_produits(
         lookback_jours=lookback_jours,
         lead_time_jours=lead_time_jours,
         alerte_uniquement=alerte_uniquement,
     )
-    return Response({"count": len(predictions), "predictions": predictions}, status=200)
+    resultat = {"count": len(predictions), "predictions": predictions}
+    cache_set("predictions_stock", resultat, timeout=900, request=request)
+    return Response(resultat, status=200)
 
 
 @api_view(['GET'])
