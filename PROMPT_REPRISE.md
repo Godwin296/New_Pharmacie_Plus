@@ -98,6 +98,42 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 - Service worker réellement généré et servi
 - Icônes PNG générées (192/512 standard + maskable + apple-touch-icon 180px)
 
+### File d'attente panier hors-ligne (session 12/07 — brique 3/4)
+- `lib/offline/db.ts` : wrapper IndexedDB natif minimal (pas de dépendance ajoutée -- un seul
+  object store, `panier_queue`).
+- `lib/offline/panierQueue.ts` : enqueue/liste/suppression + évènement DOM custom
+  (`panier-file-attente-maj`) pour que plusieurs composants (badge nav + page /panier)
+  restent synchronisés sans state manager global.
+- `lib/offline/syncPanier.ts` : rejoue la file FIFO contre `POST /api/panier/`. Verrou
+  anti-réentrance `synchroEnCours` posé de façon SYNCHRONE (avant tout `await`) --
+  nécessaire car le hook peut être monté 2x en même temps (badge nav + page panier), et
+  l'évènement navigateur `online` déclenche leurs listeners synchrones l'un après l'autre.
+  Distingue clairement échec RÉSEAU (item remis `en_attente`, retenté plus tard) d'échec
+  MÉTIER (ex: stock insuffisant -> marqué `erreur`, PAS rejoué automatiquement en boucle).
+- `lib/hooks/useOfflinePanier.ts` : hook partagé (état réseau, file, synchro auto au retour
+  réseau ou changement d'onglet).
+- Intégré dans `catalogue/page.tsx::handleAddToCart` (bascule en file d'attente sur échec
+  réseau réel, jamais sur une erreur métier) et `panier/page.tsx` (affichage de la file +
+  bouton "Synchroniser maintenant" + auto-refresh du panier serveur après synchro) + badge
+  discret sur le bouton menu (`app/layout.tsx`).
+- **Bug bloquant trouvé ET CORRIGÉ EN TESTANT LE VRAI FLUX** (pas juste en lisant le code) :
+  `api_panier` n'avait plus aucune authentification client fonctionnelle depuis qu'un
+  correctif de sécurité d'une session précédente a rendu `StaffJWTAuthentication` la
+  classe PAR DÉFAUT de toute l'API. J'ai d'abord cru qu'il fallait juste ajouter
+  `@authentication_classes([ClientJWTAuthentication])` (pattern déjà utilisé sur
+  `api_client_whoami`) -- **mauvaise piste, annulée** : `ClientJWTAuthentication` authentifie
+  un `CompteClient` (schéma public, système de "compte client global/marketplace" listé plus
+  bas dans la TODO comme un chantier séparé et NON commencé), alors que `api_panier` utilise
+  en réalité `Client` (profil tenant lié à un `auth.User` par `OneToOneField`) -- deux
+  systèmes clients distincts et non connectés entre eux. Le VRAI flux client actuel de cet
+  endpoint est `/api/register/` + `/api/login/` (role=client), PAS `/api/client/register|login/`.
+  Testé de bout en bout avec ce bon flux : inscription, connexion, ajout au panier (200),
+  et cas stock insuffisant (400, message exploité correctement par `syncPanier.ts`).
+  ⚠️ Pas eu le temps de vérifier si d'autres endpoints client (historique commandes,
+  paiement...) ont le même trou d'authentification que j'ai initialement soupçonné sur
+  `api_panier` -- resté volontairement hors du périmètre de cette session (mode offline).
+- Reste : brique 4/4 (adapter `app/sw.ts` pour mettre en cache les réponses API catalogue).
+
 ### Indexation BDD (session offline, 12/07 — 1ère brique du chantier "Mode offline réel")
 - 15 nouveaux index PostgreSQL sur `Produit`, `Commande`, `Client`, `ClientGuichet`
   (`core/migrations/0006_...`), tous alignés sur des requêtes RÉELLES grepées dans `core/api.py`
@@ -229,7 +265,7 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 - [ ] **Mode offline réel (Service Worker + IndexedDB)** — synchronisation bidirectionnelle catalogue/panier. Découpé en 4 briques (session du 12/07) :
   - [x] **1/4 — Indexation BDD** — voir section "Indexation BDD" ci-dessus. Fait et testé (EXPLAIN ANALYZE, 8000 lignes).
   - [x] **2/4 — Cache catalogue en IndexedDB (côté backend)** — endpoint `/api/catalogue/sync/` avec synchro delta + curseur, testé (voir section "Synchro delta du catalogue" ci-dessus). ⚠️ Reste à faire : la partie FRONTEND (IndexedDB réel dans le navigateur, pas encore commencée).
-  - [ ] **3/4 — File d'attente panier hors-ligne** (ajout au panier en offline, sync auto au retour réseau) — Background Sync API + IndexedDB côté client.
+  - [x] **3/4 — File d'attente panier hors-ligne** — voir section "File d'attente panier hors-ligne" ci-dessus. Fait et testé de bout en bout (succès + cas stock insuffisant).
   - [ ] **4/4 — Adaptation du service worker** (`app/sw.ts`) pour mettre en cache les réponses API catalogue (actuellement volontairement minimal, ne cache que les assets statiques).
 - [ ] **Refonte UI/UX mobile-first complète** — maquettes disponibles (6 images, style vert émeraude, cartes arrondies, bottom nav avec bouton central flottant, splash screen avec halo radial). À attaquer APRÈS le compte client global.
 

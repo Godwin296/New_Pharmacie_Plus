@@ -13,6 +13,7 @@ import { ConfigPharmacieProvider } from '../lib/context/ConfigPharmacieContext';
 import { ThemeProvider } from '../lib/context/ThemeProvider';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { PharmacyBrandName } from '../components/PharmacyBrandName';
+import { useOfflinePanier } from '../lib/hooks/useOfflinePanier';
 
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     role: '', 
     name: 'Visiteur' 
   });
+
+  // 🚀 MODE OFFLINE (session 12/07, brique 3/4) : simple badge global (visible sur toutes
+  // les pages client, pas seulement /panier) signalant des ajouts au panier en attente de
+  // synchronisation -- rappel discret pour ne pas oublier de repasser en ligne, sans devoir
+  // se rendre sur /panier pour s'en rendre compte.
+  const { file: fileAttenteOffline } = useOfflinePanier();
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 3500);
@@ -129,8 +136,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         
                 <div className="flex items-center gap-3">
                   <ThemeToggleButton />
-                  <button aria-label="Ouvrir le menu" onClick={() => setIsMenuOpen(true)} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all shadow-inner outline-none">
+                  <button aria-label="Ouvrir le menu" onClick={() => setIsMenuOpen(true)} className="relative bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all shadow-inner outline-none">
                     <Menu size={20} />
+                    {fileAttenteOffline.length > 0 && (
+                      <span
+                        title={`${fileAttenteOffline.length} article(s) en attente de synchronisation`}
+                        className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-amber-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-emerald-600"
+                      >
+                        {fileAttenteOffline.length}
+                      </span>
+                    )}
                   </button>
                 </div>
               </div>
