@@ -12,8 +12,11 @@ servi sur le sous-domaine propre à chaque pharmacie (cf. config/urls.py).
 """
 from django.contrib import admin
 from django.urls import path, include
+from .health import healthz
 
 urlpatterns = [
+    path("healthz/", healthz, name="healthz_public"),
+
     # 🏥 Panneau d'administration de la plateforme : gestion des pharmacies clientes (tenants)
     path("admin/", admin.site.urls),
 
