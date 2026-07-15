@@ -10,7 +10,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
-from django.utils.dateparse import parse_datetime
+from django.utils.dateparse import parse_datetime, parse_date
 from django.contrib.auth import authenticate
 from django.db.models import Q, Sum, F
 from django.db.models.functions import TruncDate
@@ -19,10 +19,10 @@ from django.contrib.auth.models import User
 from datetime import timedelta
 from django.utils import timezone
 
-from .models import Produit, Commande, ItemCommande, Client, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog
+from .models import Produit, Commande, ItemCommande, Client, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog, LotProduit
 from .serializers import (
     ProduitSerializer, CommandeSerializer, CommandeClientSerializer, ClientRegisterSerializer, 
-    PharmacieConfigSerializer, FournisseurSerializer
+    PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer
 )
 from .validators import valider_et_desinfecter_ordonnance, valider_et_desinfecter_photo_produit
 from .pagination import CataloguePagination
@@ -964,7 +964,18 @@ def api_boss_dashboard(request):
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def api_update_stock(request, produit_id):
-    """Mise à jour rapide du stock par le BOSS avec traçabilité complète 🔄"""
+    """
+    Mise à jour rapide du stock par le BOSS avec traçabilité complète 🔄
+
+    🔧 CHANTIER LOTS/FEFO : ce endpoint reste un ajustement du TOTAL (contrat inchangé pour
+    ne pas casser app/admin/stocks/page.tsx, qui envoie un nombre absolu, pas une date de
+    péremption) -- mais l'écriture réelle passe désormais par les lots :
+    - hausse -> crée un nouveau lot "sans date de péremption connue" pour la différence
+      (consommé en dernier par le FEFO, cf. Produit.decrementer_stock_fefo) ;
+    - baisse -> consomme la différence en FEFO comme une sortie normale.
+    Une vraie UI de réception de lot DATÉ reste à construire (voir /admin/ Django en
+    attendant, où LotProduit est désormais gérable directement).
+    """
     produit = get_object_or_404(Produit, id=produit_id)
     
     # SÉCURITÉ : Validation de la quantité entrante
@@ -975,11 +986,62 @@ def api_update_stock(request, produit_id):
         return Response({"error": "La quantité doit être un entier positif"}, status=400)
     try:
         with transaction.atomic():
-            produit.quantite = nouvelle_qte
-            produit.save()
-            # 🔐 TRACABILITÉ : On passe l'auteur du mouvement via request.user (extrait du JWT)
-            Mouvement_stock.objects.create(produit=produit, quantite=nouvelle_qte, type="entree", auteur=request.user)
+            produit = Produit.objects.select_for_update().get(id=produit_id)
+            delta = nouvelle_qte - produit.quantite
+            if delta > 0:
+                produit.ajouter_lot(delta, date_peremption=None, auteur=request.user, note="Ajustement manuel (sans date de péremption)")
+            elif delta < 0:
+                produit.decrementer_stock_fefo(abs(delta), auteur=request.user, note="Ajustement manuel")
+            produit.refresh_from_db()
         return Response({"nouveau_statut": "OK", "quantite": produit.quantite}, status=200)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+
+# --- 📦 GESTION DES LOTS (FEFO) ---
+@api_view(['GET', 'POST'])
+@permission_classes([IsAdminUser])
+def api_lots_produit(request, produit_id):
+    """
+    GET  : historique des lots d'un produit (le plus proche de la péremption en premier -- ordre FEFO).
+    POST : réception d'un nouveau lot daté {quantite, date_peremption (optionnelle, "AAAA-MM-JJ"), numero_lot (optionnel)}.
+    Réservé au personnel (IsAdminUser, comme api_update_stock) -- jamais accessible à un CompteClient.
+    """
+    produit = get_object_or_404(Produit, id=produit_id)
+
+    if request.method == 'GET':
+        lots = produit.lots.all()  # déjà trié par date_peremption (Meta.ordering du modèle)
+        return Response(LotProduitSerializer(lots, many=True).data)
+
+    # POST : réception d'un nouveau lot
+    try:
+        quantite = int(request.data.get('quantite'))
+        if quantite <= 0: raise ValueError()
+    except (TypeError, ValueError):
+        return Response({"error": "La quantité doit être un entier strictement positif"}, status=400)
+
+    date_peremption_str = request.data.get('date_peremption') or None
+    date_peremption = None
+    if date_peremption_str:
+        # 🐛 CORRECTIF : request.data renvoie une chaîne brute ("AAAA-MM-JJ"), jamais un objet
+        # date -- l'assigner tel quel plantait dans LotProduit.save() (calendar.monthrange()
+        # sur un str). parse_date() la convertit proprement, ou renvoie None si mal formée.
+        date_peremption = parse_date(date_peremption_str)
+        if date_peremption is None:
+            return Response({"error": "Date de péremption invalide (format attendu : AAAA-MM-JJ)"}, status=400)
+    numero_lot = request.data.get('numero_lot') or None
+
+    try:
+        with transaction.atomic():
+            produit = Produit.objects.select_for_update().get(id=produit_id)
+            lot = produit.ajouter_lot(
+                quantite, date_peremption=date_peremption, numero_lot=numero_lot,
+                auteur=request.user, note="Réception lot",
+            )
+        return Response(LotProduitSerializer(lot).data, status=201)
+    except ValidationError as e:
+        error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
+        return Response({"error": error_message}, status=400)
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
@@ -1236,10 +1298,8 @@ def api_vente_directe(request):
                 
                 ItemCommande.objects.create(commande=commande, produit=produit, quantite=qte)
                 
-                produit.quantite -= qte
-                produit.save()
-                
-                Mouvement_stock.objects.create(produit=produit, quantite=qte, type="sortie", auteur=request.user)
+                # 📦 FEFO : consomme d'abord le(s) lot(s) dont la péremption est la plus proche
+                produit.decrementer_stock_fefo(qte, auteur=request.user, note=f"Vente guichet {commande.reference}")
 
             serializer = CommandeSerializer(commande, context={'request': request})
 

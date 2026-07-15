@@ -5,7 +5,7 @@ from django.db import models, transaction
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 from django.utils.html import format_html
-from django.db.models import Sum, F
+from django.db.models import Sum, F, Min
 from django.db.models.functions import Upper
 from django.utils import timezone
 from datetime import timedelta
@@ -195,6 +195,82 @@ class Produit(models.Model):
         return format_html('<span style="color: #16a34a;">VALIDE ✅</span>')
     statut_peremption.short_description = "État Péremption"
 
+    # --- 📦 GESTION DES LOTS (FEFO) --------------------------------------------------
+    # 🔧 CHANTIER LOTS/FEFO : `quantite` et `date_expiration` ci-dessus restent en place
+    # (ce ne sont PLUS des champs saisis directement, mais un CACHE dénormalisé, recalculé
+    # à partir des lignes LotProduit ci-dessous) -- volontaire, pour ne RIEN casser de ce
+    # qui les lit déjà (catalogue, panier, alertes péremption, admin, prédictions stock).
+    # Toute écriture de stock doit désormais passer par ajouter_lot() / decrementer_stock_fefo(),
+    # jamais par une affectation directe à self.quantite.
+
+    def recalculer_cache_stock(self):
+        """
+        Recalcule `quantite` (somme des lots actifs) et `date_expiration` (péremption du
+        lot actif le plus proche -- c'est justement celui que le FEFO consommera en premier)
+        à partir des LotProduit réels. À appeler après toute création/modification de lot,
+        À L'INTÉRIEUR d'une transaction où `self` est déjà verrouillé (select_for_update()).
+        """
+        agrégat = self.lots.filter(quantite_restante__gt=0).aggregate(
+            total=Sum('quantite_restante'), premiere_peremption=Min('date_peremption')
+        )
+        self.quantite = agrégat['total'] or 0
+        self.date_expiration = agrégat['premiere_peremption']
+        self.save(update_fields=['quantite', 'date_expiration', 'date_modification'])
+
+    def ajouter_lot(self, quantite, date_peremption=None, numero_lot=None, auteur=None, note=""):
+        """
+        📥 RÉCEPTION D'UN NOUVEAU LOT (livraison fournisseur, réapprovisionnement...).
+        Chaque réception crée une ligne LotProduit distincte -- même produit, même
+        fournisseur parfois, mais un lot physique différent avec sa propre péremption.
+        """
+        if quantite <= 0:
+            raise ValidationError("La quantité d'un lot doit être strictement positive.")
+        lot = LotProduit.objects.create(
+            produit=self, numero_lot=numero_lot, quantite_initiale=quantite,
+            quantite_restante=quantite, date_peremption=date_peremption, auteur=auteur, note=note,
+        )
+        Mouvement_stock.objects.create(
+            produit=self, lot=lot, quantite=quantite, type="entree", auteur=auteur, note=note,
+        )
+        self.recalculer_cache_stock()
+        return lot
+
+    def decrementer_stock_fefo(self, quantite, auteur=None, note=""):
+        """
+        📤 DÉCRÉMENTATION FEFO (First-Expired-First-Out) : consomme le stock en commençant
+        TOUJOURS par le(s) lot(s) dont la péremption est la plus proche, quel que soit
+        l'ordre d'arrivée -- c'est la règle métier standard en pharmacie pour minimiser la
+        casse liée aux produits périmés. Les lots sans date de péremption connue sont
+        consommés en dernier (PostgreSQL place déjà les NULL en fin de tri ASC par défaut).
+
+        ⚠️ PRÉREQUIS (comme avant ce chantier) : `self` doit déjà être verrouillé via
+        `Produit.objects.select_for_update().get(...)` par l'appelant, à l'intérieur d'un
+        `transaction.atomic()` -- cette méthode verrouille en plus les lots eux-mêmes, mais
+        pas le produit (déjà fait par l'appelant), pour rester cohérente avec le pattern
+        existant dans Commande.valider() et api_vente_directe.
+        """
+        if quantite <= 0:
+            raise ValidationError("La quantité à décrémenter doit être strictement positive.")
+
+        reste_a_consommer = quantite
+        lots_actifs = list(self.lots.select_for_update().filter(quantite_restante__gt=0).order_by('date_peremption'))
+        disponible = sum(l.quantite_restante for l in lots_actifs)
+        if disponible < quantite:
+            raise ValidationError(f"Stock insuffisant pour {self.nom} ({disponible} disponibles)")
+
+        for lot in lots_actifs:
+            if reste_a_consommer <= 0:
+                break
+            pris = min(lot.quantite_restante, reste_a_consommer)
+            lot.quantite_restante -= pris
+            lot.save(update_fields=['quantite_restante'])
+            Mouvement_stock.objects.create(
+                produit=self, lot=lot, quantite=pris, type="sortie", auteur=auteur, note=note,
+            )
+            reste_a_consommer -= pris
+
+        self.recalculer_cache_stock()
+
 
 class ProduitSupprimeLog(models.Model):
     """
@@ -219,6 +295,56 @@ class ProduitSupprimeLog(models.Model):
         return f"Produit #{self.produit_id} supprimé le {self.date_suppression:%d/%m/%Y %H:%M}"
 
 
+class LotProduit(models.Model):
+    """
+    📦 Un lot = une réception physique distincte d'un même Produit (livraison fournisseur),
+    avec sa propre péremption et sa propre quantité restante. Le stock total et la
+    "prochaine péremption" affichés sur Produit (`quantite`, `date_expiration`) sont
+    calculés à partir de ces lots -- voir Produit.recalculer_cache_stock().
+    """
+    produit = models.ForeignKey(Produit, on_delete=models.CASCADE, related_name="lots")
+    numero_lot = models.CharField(max_length=100, blank=True, null=True, verbose_name="Numéro de lot fabricant")
+    quantite_initiale = models.PositiveIntegerField()
+    quantite_restante = models.PositiveIntegerField()
+    date_peremption = models.DateField(null=True, blank=True, verbose_name="Date de péremption du lot")
+    date_reception = models.DateTimeField(auto_now_add=True)
+    # 🔐 SÉCURITÉ TRACABILITÉ : qui a réceptionné ce lot (même logique que Mouvement_stock.auteur)
+    auteur = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Réceptionné par")
+    note = models.CharField(max_length=255, blank=True, null=True)
+
+    class Meta:
+        constraints = [
+            # 🔐 SÉCURITÉ : mêmes garde-fous DB que sur Produit.quantite à l'époque -- bloque
+            # toute quantité restante négative OU supérieure à la quantité initiale reçue,
+            # même en cas de bug applicatif ou de requêtes concurrentes.
+            models.CheckConstraint(check=models.Q(quantite_restante__gte=0), name="lot_quantite_restante_positive"),
+            models.CheckConstraint(
+                check=models.Q(quantite_restante__lte=models.F('quantite_initiale')),
+                name="lot_quantite_restante_lte_initiale",
+            ),
+        ]
+        # 🎯 FEFO : la péremption la plus proche d'abord. PostgreSQL place les NULL en fin de
+        # tri ASC par défaut -- un lot sans date connue est donc consommé en dernier (prudent).
+        ordering = ['date_peremption']
+        indexes = [
+            models.Index(fields=['produit', 'date_peremption'], name='lot_produit_peremption_idx'),
+        ]
+
+    def save(self, *args, **kwargs):
+        # 📅 Même convention que Produit.save() historiquement : une péremption pharmaceutique
+        # est presque toujours imprimée en MM/AAAA (sans jour précis) -- on la normalise donc
+        # systématiquement au DERNIER jour du mois pour rester du côté prudent (le produit est
+        # considéré valide jusqu'à la fin du mois indiqué, jamais au-delà).
+        if self.date_peremption:
+            last_day = calendar.monthrange(self.date_peremption.year, self.date_peremption.month)[1]
+            self.date_peremption = self.date_peremption.replace(day=last_day)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        peremption = self.date_peremption.strftime('%d/%m/%Y') if self.date_peremption else "sans date"
+        return f"Lot {self.numero_lot or self.id} de {self.produit.nom} ({self.quantite_restante} restants, péremption {peremption})"
+
+
 class Mouvement_stock(models.Model):
     produit = models.ForeignKey(Produit, on_delete=models.CASCADE)
     # 🔐 SÉCURITÉ : PositiveIntegerField bloque l'injection de nombres négatifs à l'entrée
@@ -228,6 +354,12 @@ class Mouvement_stock(models.Model):
     
     # 🔐 SÉCURITÉ TRACABILITÉ : On lie chaque mouvement à l'utilisateur Django qui l'a opéré
     auteur = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Opérateur 👤")
+
+    # 📦 CHANTIER LOTS/FEFO : quel lot précis ce mouvement a-t-il affecté ? Nullable pour ne
+    # pas invalider l'historique des mouvements déjà enregistrés avant ce chantier (ceux-là
+    # n'ont jamais été rattachés à un lot -- ce champ reste vide pour eux, ce qui est correct).
+    lot = models.ForeignKey(LotProduit, on_delete=models.SET_NULL, null=True, blank=True, related_name="mouvements")
+    note = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):
         nom_auteur = self.auteur.username if self.auteur else "Système"
@@ -414,11 +546,10 @@ class Commande(models.Model):
         with transaction.atomic():
             for item in self.items.all():
                 p = Produit.objects.select_for_update().get(id=item.produit.id)
-                if item.quantite > p.quantite:
-                    raise ValidationError(f"Stock insuffisant pour {p.nom}")
-                p.quantite -= item.quantite
-                p.save()
-                Mouvement_stock.objects.create(produit=p, quantite=item.quantite, type="sortie", auteur=user_operateur)
+                # 📦 FEFO : consomme d'abord le(s) lot(s) dont la péremption est la plus proche
+                # (voir Produit.decrementer_stock_fefo -- lève ValidationError si stock insuffisant,
+                # même message qu'avant ce chantier pour ne pas casser la gestion d'erreur appelante).
+                p.decrementer_stock_fefo(item.quantite, auteur=user_operateur, note=f"Vente en ligne {self.reference}")
                 
             self.payee = True
             self.statut = "payee_a_retirer"

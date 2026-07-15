@@ -2,13 +2,26 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from rest_framework import serializers
-from .models import Client, Produit, Mouvement_stock, Commande, ItemCommande, Fournisseur, PharmacieConfig
+from .models import Client, Produit, Mouvement_stock, Commande, ItemCommande, Fournisseur, PharmacieConfig, LotProduit
 from .utils import generate_qr_base64
 
 class PharmacieConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = PharmacieConfig
         fields = '__all__'
+
+
+class LotProduitSerializer(serializers.ModelSerializer):
+    # 🔐 TRAÇABILITÉ : nom lisible plutôt que l'ID brut de l'utilisateur Django
+    auteur_nom = serializers.ReadOnlyField(source='auteur.username')
+
+    class Meta:
+        model = LotProduit
+        fields = [
+            'id', 'produit', 'numero_lot', 'quantite_initiale', 'quantite_restante',
+            'date_peremption', 'date_reception', 'auteur_nom', 'note',
+        ]
+        read_only_fields = ['id', 'quantite_restante', 'date_reception', 'auteur_nom']
 
 
 class ItemCommandeSerializer(serializers.ModelSerializer):

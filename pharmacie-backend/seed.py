@@ -33,7 +33,7 @@ from datetime import date, timedelta
 from tenants.models import Pharmacie, Domain
 from django_tenants.utils import schema_context
 from django.contrib.auth.models import User, Group
-from core.models import PharmacieConfig, Produit
+from core.models import PharmacieConfig, Produit, LotProduit
 
 random.seed(42)  # reproductible : deux exécutions du script donnent le même catalogue
 
@@ -155,7 +155,19 @@ def seeder_tenant(schema_name, nom_pharmacie, email, adresse, telephone, prefix_
         if supprimes:
             print(f"  ({supprimes} anciens produits de seed supprimés avant régénération)")
 
-        Produit.objects.bulk_create([Produit(**p) for p in generer_produits(prefix_produit, n=100)])
+        produits_crees = Produit.objects.bulk_create([Produit(**p) for p in generer_produits(prefix_produit, n=100)])
+        # 🔧 CHANTIER LOTS/FEFO : Produit.quantite est désormais un CACHE dérivé des lots --
+        # sans ce lot initial, les produits de seed auraient une quantite affichée non-nulle
+        # mais 0 lot réel, et toute vente échouerait avec "stock insuffisant (0 disponibles)"
+        # alors même que la fiche produit annonce du stock. Un lot par produit (même logique
+        # que la migration 0010_migrer_stock_vers_lots pour des données déjà existantes).
+        LotProduit.objects.bulk_create([
+            LotProduit(
+                produit=p, quantite_initiale=p.quantite, quantite_restante=p.quantite,
+                date_peremption=p.date_expiration, note="Lot de seed (données de test)",
+            )
+            for p in produits_crees if p.quantite > 0
+        ])
         print(f"  100 produits créés pour {schema_name} (catégories variées, stock/péremption variés)")
 
 
