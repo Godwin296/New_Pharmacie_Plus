@@ -1,12 +1,8 @@
 from django.contrib import admin
-from .models import Client, ClientGuichet, Produit, Commande, ItemCommande, Fournisseur
+from .models import ClientGuichet, Produit, Commande, ItemCommande, Fournisseur
 
-# --- 👤 GESTION DES CLIENTS EN LIGNE (SMARTPHONE) ---
-@admin.register(Client)
-class ClientAdmin(admin.ModelAdmin):
-    list_display = ("nom", "identifiant", "telephone")
-    search_fields = ("nom", "identifiant")
-    
+# 👤 Les comptes clients marketplace (CompteClient) sont gérés dans l'admin de
+# l'app clients_publics (schéma public) -- voir clients_publics/admin.py.
 
 # --- 🏪 GESTION DES CLIENTS DE PASSAGE (GUICHTET POS) ---
 @admin.register(ClientGuichet)
@@ -47,10 +43,10 @@ class ItemCommandeAdmin(admin.ModelAdmin):
 @admin.register(Commande)
 class CommandeAdmin(admin.ModelAdmin):
     # 🌟 STABLE : On ajoute 'client_guichet' et 'compte_client' pour voir immédiatement l'origine de la vente
-    list_display = ("id", "client", "compte_client", "client_guichet", "date", "type_vente", "statut", "payee", "ordonnance_valide")
+    list_display = ("id", "compte_client", "client_guichet", "date", "type_vente", "statut", "payee", "ordonnance_valide")
     list_filter = ("statut", "type_vente", "payee", "date")
     list_editable = ("ordonnance_valide", "statut") 
-    search_fields = ("client__nom", "compte_client__nom", "client_guichet__nom", "id")
+    search_fields = ("compte_client__nom", "client_guichet__nom", "id")
     actions = ['marquer_comme_valide_main_propre']
 
     def marquer_comme_valide_main_propre(self, request, queryset):

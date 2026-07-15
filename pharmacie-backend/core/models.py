@@ -19,42 +19,6 @@ from django.contrib.auth.hashers import make_password, check_password # 👈 Pou
 from django.contrib.postgres.indexes import GinIndex
 
 
-class Client(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="client_profile")
-    nom = models.CharField(max_length=100, verbose_name="Nom Complet")
-    identifiant = models.CharField(max_length=23, blank=True, unique=True, verbose_name="ID Client 🆔")
-    email = models.EmailField(blank=True, null=True)
-    telephone = models.CharField(max_length=20, unique=True, verbose_name="Téléphone 📞")
-    is_active = models.BooleanField(default=True)
-
-    class Meta:
-        # 🔍 Utilisés en __icontains dans api_commandes_a_retirer (recherche caisse par
-        # nom/téléphone client) -- un index B-Tree classique ne sert à rien pour ce type de
-        # recherche par sous-chaîne, d'où le trigram.
-        indexes = [
-            GinIndex(fields=['nom'], name='client_nom_trgm_idx', opclasses=['gin_trgm_ops']),
-            GinIndex(fields=['telephone'], name='client_tel_trgm_idx', opclasses=['gin_trgm_ops']),
-        ]
-
-    def save(self, *args, **kwargs):
-        # Génération de l'ID unique si absent
-        if not self.identifiant:
-            self.identifiant = f"CLI-{str(uuid.uuid4())[:6].upper()}"    
-        super().save(*args, **kwargs)
-
-    def check_my_password(self, raw_password):
-        """Vérifie si le mot de passe saisi est le bon"""
-        return self.user.check_password(raw_password)
-
-    def total_depense(self):
-        total = self.commandes.filter(payee=True).aggregate(
-            total_vente=Sum(F('items__quantite') * F('items__produit__prix'))
-        )['total_vente']
-        return total or 0
-
-    def __str__(self):
-        return f"{self.nom} ({self.identifiant})"
-
 class ClientGuichet(models.Model):
     nom = models.CharField(max_length=255, default="Client Passage")
     telephone = models.CharField(max_length=50, blank=True, null=True)
@@ -256,19 +220,15 @@ class Commande(models.Model):
         ("payee", "Payée (vente directe guichet)"),
         ("annulee", "Annulée"),
     ]
-    # 🕰️ ANCIEN SYSTÈME (par-tenant) -- conservé uniquement pour compatibilité descendante
-    # avec des commandes déjà existantes. Le nouveau flux d'inscription/connexion client
-    # n'alimente plus ce champ : voir `compte_client` ci-dessous.
-    client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name="commandes")
-
-    # 🌍 NOUVEAU SYSTÈME : compte client GLOBAL (marketplace), vivant dans le schéma
-    # public (app "clients_publics"). Référence déclarée via chaîne "app.Modele" car
+    # 🌍 COMPTE CLIENT GLOBAL (marketplace), vivant dans le schéma public (app
+    # "clients_publics"). Référence déclarée via chaîne "app.Modele" car
     # CompteClient vit dans une AUTRE app (SHARED_APPS) que Commande (TENANT_APPS) --
     # ça fonctionne car django-tenants garde "public" sur le search_path Postgres de
     # CHAQUE schéma tenant : la table clients_publics_compteclient est donc toujours
     # visible/joignable, même si Commande, elle, vit physiquement dans le schéma de
     # cette seule pharmacie. C'est ce champ que le cycle panier/paiement/historique
-    # utilise désormais pour tout nouveau client en ligne.
+    # utilise pour tout client en ligne (l'ancien modèle Client par-tenant a été
+    # entièrement retiré : aucune donnée réelle ne l'utilisait encore).
     compte_client = models.ForeignKey(
         "clients_publics.CompteClient", on_delete=models.SET_NULL, null=True, blank=True, related_name="commandes"
     )
@@ -325,8 +285,8 @@ class Commande(models.Model):
         #
         # - (statut, -date) : api_paiements_a_verifier / api_commandes_a_retirer
         #   -> filter(statut="...").order_by('-date')
-        # - (client, statut) : api_panier (panier courant) + api_historique_client
-        #   -> filter(client=..., statut__in=[...]) et filter(client=...).order_by('-date')
+        # - (compte_client, statut) : api_panier (panier courant) + api_historique_client
+        #   -> filter(compte_client=..., statut__in=[...]) et filter(compte_client=...).order_by('-date')
         # - (payee, -date) : dashboard (ventes 7 derniers jours) + ventes_recentes
         #   -> filter(payee=True, date__gte=...) et .order_by('-date')[:5]
         # - (payee, type_vente) : dashboard (ventilation CA cash / en ligne)
@@ -335,7 +295,7 @@ class Commande(models.Model):
         #   Q(reference__icontains=...) en plus du numéro exact.
         indexes = [
             models.Index(fields=['statut', '-date'], name='cmd_statut_date_idx'),
-            models.Index(fields=['client', 'statut'], name='cmd_client_statut_idx'),
+            models.Index(fields=['compte_client', 'statut'], name='cmd_ccli_statut_idx'),
             models.Index(fields=['payee', '-date'], name='cmd_payee_date_idx'),
             models.Index(fields=['payee', 'type_vente'], name='cmd_payee_type_idx'),
             GinIndex(fields=['reference'], name='cmd_ref_trgm_idx', opclasses=['gin_trgm_ops']),

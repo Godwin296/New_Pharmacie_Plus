@@ -13,7 +13,7 @@ import base64
 from io import BytesIO
 
 # Imports de tes modèles locaux requis pour les requêtes d'impression
-from .models import Commande, Client, Produit, PharmacieConfig
+from .models import Commande, Produit, PharmacieConfig
 from .utils import generate_qr_base64
 
 # --- 🛡️ SYSTÈME DE VÉRIFICATION DES RÔLES ---

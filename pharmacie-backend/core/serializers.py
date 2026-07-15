@@ -1,8 +1,5 @@
-from django.contrib.auth.models import User
-from django.contrib.auth.password_validation import validate_password
-from django.db import transaction
 from rest_framework import serializers
-from .models import Client, Produit, Mouvement_stock, Commande, ItemCommande, Fournisseur, PharmacieConfig
+from .models import Produit, Mouvement_stock, Commande, ItemCommande, Fournisseur, PharmacieConfig
 from .utils import generate_qr_base64
 
 class PharmacieConfigSerializer(serializers.ModelSerializer):
@@ -49,7 +46,7 @@ class CommandeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Commande
         fields = [
-            'id', 'client', 'compte_client', 'client_guichet', 'client_nom', 'client_telephone', 'client_email',
+            'id', 'compte_client', 'client_guichet', 'client_nom', 'client_telephone', 'client_email',
             'client_region', 'client_ville', 'client_quartier', 'date', 'payee', 'type_vente', 
             'agent_validateur_nom', 'statut', 'ordonnance', 'ordonnance_valide', 
             'motif_refus', 'date_limite', 'items', 'total_general', 'qr_code', 'est_perimee'
@@ -58,22 +55,18 @@ class CommandeSerializer(serializers.ModelSerializer):
     def get_total_general(self, obj):
         return obj.total()
 
-    # 🧠 Logique intelligente : guichet (ClientGuichet) > compte client global (CompteClient,
-    # marketplace, nouveau système) > ancien Client par-tenant (compatibilité descendante)
+    # 🧠 Logique intelligente : guichet (ClientGuichet) > compte client global (CompteClient)
     def get_client_nom(self, obj):
         if obj.client_guichet: return obj.client_guichet.nom
-        if obj.compte_client: return obj.compte_client.nom
-        return obj.client.nom if obj.client else "Client Anonyme"
+        return obj.compte_client.nom if obj.compte_client else "Client Anonyme"
 
     def get_client_telephone(self, obj):
         if obj.client_guichet: return obj.client_guichet.telephone
-        if obj.compte_client: return obj.compte_client.telephone
-        return obj.client.telephone if obj.client else ""
+        return obj.compte_client.telephone if obj.compte_client else ""
 
     def get_client_email(self, obj):
         if obj.client_guichet: return obj.client_guichet.email
-        if obj.compte_client: return obj.compte_client.email
-        return obj.client.email if obj.client else ""
+        return obj.compte_client.email if obj.compte_client else ""
 
     def get_client_region(self, obj):
         if obj.client_guichet: return obj.client_guichet.region
@@ -146,34 +139,6 @@ class ProduitSerializer(serializers.ModelSerializer):
         if obj.image and request:
             return request.build_absolute_uri(obj.image.url)
         return obj.image.url if obj.image else None
-
-class ClientRegisterSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(write_only=True, required=True)
-    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
-    total_depense = serializers.ReadOnlyField()
-
-    class Meta:
-        model = Client
-        fields = ['id', 'username', 'password', 'nom', 'telephone', 'email', 'total_depense']
-
-    def create(self, validated_data):
-        username = validated_data.pop('username')
-        password = validated_data.pop('password')
-        email = validated_data.get('email', '')
-
-        with transaction.atomic():
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                password=password
-            )
-            user.is_staff = False 
-            user.save()
-
-            client = Client.objects.create(user=user, **validated_data)
-            
-        return client
-
 
 class FournisseurSerializer(serializers.ModelSerializer):
     class Meta:

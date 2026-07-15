@@ -5,7 +5,7 @@ Deux cas d'usage, déclenchés à deux endroits différents du code :
 1. Commande en ligne validée par la caisse -> Commande.valider() (statut "payee_a_retirer")
 2. Vente directe au guichet -> api_vente_directe() dans api.py (statut "payee")
 
-Le destinataire dépend du type de vente : `commande.client` (compte en ligne) OU
+Le destinataire dépend du type de vente : `commande.compte_client` (compte en ligne) OU
 `commande.client_guichet` (client physique identifié au comptoir) -- jamais les deux à
 la fois sur une même commande.
 
@@ -33,7 +33,7 @@ def envoyer_email_confirmation_commande(commande):
     """
     from .models import PharmacieConfig  # import local : évite l'import circulaire avec models.py
 
-    destinataire = commande.client or commande.client_guichet
+    destinataire = commande.compte_client or commande.client or commande.client_guichet
     if not destinataire or not destinataire.email:
         return
 
@@ -140,9 +140,13 @@ def envoyer_email_bienvenue(client):
     nom_pharmacie = config.nom if config else "Pharmacie Plus"
 
     sujet = f"Bienvenue chez {nom_pharmacie} 🎉"
+    # `identifiant` n'existe que sur l'ancien modèle Client (par-tenant) -- absent sur
+    # CompteClient (marketplace, global). On l'inclut seulement quand il est disponible.
+    identifiant = getattr(client, "identifiant", None)
+    ligne_identifiant = f" (identifiant : {identifiant})" if identifiant else ""
     corps = (
         f"Bonjour {client.nom},\n\n"
-        f"Ton compte {nom_pharmacie} a bien été créé (identifiant : {client.identifiant}).\n\n"
+        f"Ton compte {nom_pharmacie} a bien été créé{ligne_identifiant}.\n\n"
         f"Tu peux dès maintenant parcourir le catalogue, passer commande en ligne et payer "
         f"par Orange Money ou MTN MoMo, pour venir récupérer directement au guichet.\n\n"
         f"À très vite !\n"
@@ -170,7 +174,7 @@ def envoyer_email_ordonnance_refusee(commande):
     refusée bloque sa commande, il est important qu'il le sache rapidement même hors ligne.
     Même logique défensive que les autres emails transactionnels : jamais bloquant.
     """
-    destinataire = commande.client
+    destinataire = commande.compte_client or commande.client
     if not destinataire or not destinataire.email:
         return
 

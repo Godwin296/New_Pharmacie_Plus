@@ -13,7 +13,6 @@ interface ClientRow {
   identifiant: string;
   telephone: string;
   email: string | null;
-  username: string;
   is_active: boolean;
 }
 
@@ -124,7 +123,7 @@ export default function AdminClientsPage() {
                     >
                       <td className="px-6 py-5">
                         <p className="font-black text-slate-800 dark:text-white text-sm">{c.nom}</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase">@{c.username}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">{c.email || "Pas d'email"}</p>
                       </td>
                       <td className="px-6 py-5 font-mono text-xs text-slate-500">{c.identifiant}</td>
                       <td className="px-6 py-5">
