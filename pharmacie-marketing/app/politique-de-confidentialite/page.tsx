@@ -31,17 +31,35 @@ export default function PolitiqueConfidentialite() {
                 1. Ce que ce site vitrine collecte
               </h2>
               <p>
-                Ce site (pharmacieplus, site vitrine) ne collecte aujourd&apos;hui aucune
-                donnée personnelle via un formulaire. Si vous nous contactez par
-                WhatsApp ou par e-mail, nous recevons les informations que vous
-                choisissez de nous transmettre (nom, numéro, message) dans le seul but
-                de vous répondre.
+                Ce site (vitrine) ne collecte aucune donnée personnelle via un
+                formulaire de manière automatisée : le formulaire de contact ouvre
+                WhatsApp avec un message pré-rempli, que vous choisissez ou non
+                d&apos;envoyer. Si vous nous contactez par WhatsApp ou par e-mail, nous
+                recevons les informations que vous transmettez (nom, numéro,
+                message) dans le seul but de vous répondre.
               </p>
             </section>
 
             <section>
               <h2 className="font-display font-semibold text-[var(--color-ink)] dark:text-white text-lg mb-2">
-                2. Mesure d&apos;audience
+                2. Cadre légal applicable
+              </h2>
+              <p>
+                Le traitement des données à caractère personnel au Cameroun est
+                encadré par la <strong>loi n° 2024/017 du 23 décembre 2024</strong>{" "}
+                relative à la protection des données à caractère personnel, qui
+                instaure une Autorité de protection des données à caractère
+                personnel et impose, notamment pour les traitements à grande
+                échelle ou portant sur des données sensibles (dont les données de
+                santé), une autorisation préalable de cette Autorité. Les
+                entreprises disposent d&apos;un délai de mise en conformité expirant le{" "}
+                23 juin 2026.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="font-display font-semibold text-[var(--color-ink)] dark:text-white text-lg mb-2">
+                3. Mesure d&apos;audience
               </h2>
               <p>
                 [À compléter dès qu&apos;un outil de mesure d&apos;audience sera mis en place —
@@ -52,7 +70,7 @@ export default function PolitiqueConfidentialite() {
 
             <section>
               <h2 className="font-display font-semibold text-[var(--color-ink)] dark:text-white text-lg mb-2">
-                3. Cookies
+                4. Cookies
               </h2>
               <p>
                 Ce site utilise uniquement une préférence technique locale (mode clair
@@ -63,23 +81,29 @@ export default function PolitiqueConfidentialite() {
 
             <section>
               <h2 className="font-display font-semibold text-[var(--color-ink)] dark:text-white text-lg mb-2">
-                4. Application Pharmacie+ (produit)
+                5. Application Pharmacie+ (produit)
               </h2>
               <p>
-                Cette page concerne uniquement le site vitrine. Le traitement des
-                données au sein de l&apos;application Pharmacie+ (dossiers clients,
-                ordonnances, ventes) fera l&apos;objet d&apos;une politique de confidentialité
-                dédiée et plus détaillée, publiée avant l&apos;ouverture aux premières
-                pharmacies pilotes.
+                Cette page concerne uniquement le site vitrine. L&apos;application
+                Pharmacie+ traite des données plus sensibles (dossiers clients,
+                ordonnances, ventes), certaines pouvant être qualifiées de données
+                de santé au sens de la loi n° 2024/017. Une politique de
+                confidentialité dédiée, ainsi que les démarches d&apos;autorisation
+                requises auprès de l&apos;Autorité de protection des données à
+                caractère personnel, seront finalisées avant l&apos;ouverture aux
+                premières pharmacies pilotes.
               </p>
             </section>
 
             <section>
               <h2 className="font-display font-semibold text-[var(--color-ink)] dark:text-white text-lg mb-2">
-                5. Vos droits
+                6. Vos droits
               </h2>
               <p>
-                Pour toute question sur vos données ou pour demander leur suppression,
+                La loi n° 2024/017 vous reconnaît le droit d&apos;être informé du
+                traitement de vos données, de donner votre consentement préalable,
+                et de saisir l&apos;Autorité en cas de violation de vos droits. Pour
+                toute question sur vos données ou pour demander leur suppression,
                 contactez-nous : <a href={`mailto:${CONTACT.email}`} className="text-emerald-600 no-underline">{CONTACT.email}</a>.
               </p>
             </section>
@@ -87,7 +111,8 @@ export default function PolitiqueConfidentialite() {
             <p className="text-[13px] text-slate-400 italic pt-4 border-t border-slate-200 dark:border-white/10">
               Document à finaliser avec un professionnel du droit avant mise en ligne
               publique, en particulier pour la politique de confidentialité de
-              l&apos;application (données de santé indirectes via les ordonnances).
+              l&apos;application et les démarches d&apos;autorisation auprès de l&apos;Autorité
+              de protection des données à caractère personnel du Cameroun.
             </p>
           </div>
         </div>

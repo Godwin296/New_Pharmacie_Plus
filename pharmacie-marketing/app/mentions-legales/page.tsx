@@ -80,7 +80,14 @@ export default function MentionsLegales() {
               <h2 className="font-display font-semibold text-[var(--color-ink)] dark:text-white text-lg mb-2">
                 5. Droit applicable
               </h2>
-              <p>Les présentes mentions légales sont soumises au droit camerounais.</p>
+              <p>
+                Les présentes mentions légales sont soumises au droit camerounais,
+                notamment la loi n° 2024/017 du 23 décembre 2024 relative à la
+                protection des données à caractère personnel — voir notre{" "}
+                <Link href="/politique-de-confidentialite" className="text-emerald-600 no-underline">
+                  politique de confidentialité
+                </Link>.
+              </p>
             </section>
 
             <p className="text-[13px] text-slate-400 italic pt-4 border-t border-slate-200 dark:border-white/10">
