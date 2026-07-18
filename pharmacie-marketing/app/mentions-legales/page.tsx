@@ -23,7 +23,7 @@ export default function MentionsLegales() {
           <h1 className="mt-6 font-display font-bold text-[var(--color-ink)] dark:text-white text-4xl tracking-tight">
             Mentions légales
           </h1>
-          <p className="mt-3 text-[13px] text-slate-400">Dernière mise à jour : à compléter</p>
+          <p className="mt-3 text-[13px] text-slate-400">Dernière mise à jour : juillet 2026</p>
 
           <div className="mt-10 space-y-8 text-[15px] leading-relaxed text-slate-600 dark:text-slate-400">
             <section>
@@ -31,13 +31,14 @@ export default function MentionsLegales() {
                 1. Éditeur du site
               </h2>
               <p>
-                Le site Pharmacie+ est édité par : <strong>[raison sociale à compléter]</strong>,
-                [forme juridique, ex. entreprise individuelle / SARL — à compléter],
-                immatriculée sous le numéro [à compléter], dont le siège est situé à
-                [adresse à compléter], Cameroun.
+                Le site Pharmacie+ est édité, à titre individuel et dans le cadre d&apos;un
+                projet personnel en cours de formalisation juridique, par :{" "}
+                <strong>SIGNING DONGMO Marc Godwin</strong>, étudiant, Cameroun.
+                Aucune société n&apos;est constituée à ce jour ; ce site ne doit pas être
+                interprété comme émanant d&apos;une entreprise immatriculée.
               </p>
               <p className="mt-2">
-                Directeur de la publication : [nom à compléter].
+                Directeur de la publication : SIGNING DONGMO Marc Godwin.
               </p>
               <p className="mt-2">
                 Contact : <a href={`mailto:${CONTACT.email}`} className="text-emerald-600 no-underline">{CONTACT.email}</a> — {CONTACT.whatsappDisplay}

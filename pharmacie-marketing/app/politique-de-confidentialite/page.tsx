@@ -23,7 +23,7 @@ export default function PolitiqueConfidentialite() {
           <h1 className="mt-6 font-display font-bold text-[var(--color-ink)] dark:text-white text-4xl tracking-tight">
             Politique de confidentialité
           </h1>
-          <p className="mt-3 text-[13px] text-slate-400">Dernière mise à jour : à compléter</p>
+          <p className="mt-3 text-[13px] text-slate-400">Dernière mise à jour : juillet 2026</p>
 
           <div className="mt-10 space-y-8 text-[15px] leading-relaxed text-slate-600 dark:text-slate-400">
             <section>

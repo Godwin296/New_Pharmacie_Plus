@@ -94,12 +94,8 @@ export function LiveStatusWidget() {
             Activité de l&apos;officine
           </span>
         </div>
-        <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-          </span>
-          En direct
+        <span className="text-[11px] font-medium text-slate-400">
+          Aperçu
         </span>
       </div>
 
@@ -142,7 +138,7 @@ export function LiveStatusWidget() {
             />
           ))}
         </div>
-        <span className="text-[11px] text-slate-400">Pharmacie Dupont</span>
+        <span className="text-[11px] text-slate-400">Exemple illustratif</span>
       </div>
     </div>
   );

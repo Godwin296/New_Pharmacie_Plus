@@ -35,7 +35,7 @@ const points = [
   {
     icon: Languages,
     title: "Pensé et développé au Cameroun",
-    text: "Une équipe qui connaît le terrain : les ruptures de stock, les ordonnances manuscrites, les réalités d'une officine en Afrique Centrale.",
+    text: "Conçu par un développeur camerounais qui a observé le terrain de près : les ruptures de stock, les ordonnances manuscrites, les réalités d'une officine en Afrique Centrale.",
   },
 ];
 
