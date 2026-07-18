@@ -52,10 +52,7 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 ## 📋 CE QUI RESTE À FAIRE — priorisé
 
 ### 🔴 Urgent (bug bloquant en production)
-- [ ] **POS : la finalisation d'une vente au guichet échoue.** `core/api.py`, flux vente directe guichet : `Commande.objects.create(client=None, ...)` référence encore un champ `client` supprimé de `Commande` lors du retrait de l'ancien modèle `Client` (commentaire en place : *"Laissé vide car c'est une vente physique comptoir"*). Il suffit normalement de retirer cette ligne (le champ `client_guichet` juste en dessous suffit déjà) — **mais vérifier qu'aucune autre ligne du même genre n'a été oubliée ailleurs** dans le même flux avant de considérer que c'est réglé.
-
-### 🟡 Directement lié à un chantier en cours
-- [ ] **Mode offline — brique 4/4 : cache catalogue dans le Service Worker.** Les 3 premières briques (indexation BDD, synchro delta `/api/v1/catalogue/sync/`, file d'attente panier IndexedDB) sont faites et testées. Reste à adapter `app/sw.ts` pour mettre en cache les réponses côté navigateur (actuellement le SW ne cache que les assets statiques) — c'est la pièce qui manque pour que le catalogue soit réellement consultable hors-ligne, pas seulement le panier.
+- [ ] **POS : la finalisation d'une vente au guichet échoue.** `core/api.py`, flux vente directe guichet : `Commande.objects.create(client=None, ...)` référence encore un champ `client` supprimé de `Commande` lors du retrait de l'ancien modèle `Client` (commentaire en place : *"Laissé vide car c'est une vente physique comptoir"*). Il suffit normalement de retirer cette ligne (le champ `client_guichet` juste en dessous suffit déjà) — **mais vérifier qu'aucune autre ligne du même genre n'a été oubliée ailleurs** dans le même flux avant de considérer que c'est réglé. (⚠️ Session du 18/07 : une autre session en parallèle gère ce chantier, ne pas y toucher en même temps.)
 
 ### 🟡 Effort moyen
 - [ ] **Toggle vérification ordonnance par tenant** — champ booléen sur `PharmacieConfig`

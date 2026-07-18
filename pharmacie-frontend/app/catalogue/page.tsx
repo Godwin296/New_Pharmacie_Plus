@@ -1,12 +1,13 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Pill, ShoppingCart, Info, Loader2, Filter, Plus, Minus, AlertCircle, X, Check, Camera } from 'lucide-react';
+import { Search, Pill, ShoppingCart, Info, Loader2, Filter, Plus, Minus, AlertCircle, X, Check, Camera, WifiOff } from 'lucide-react';
 
 // 🌟 CONFIGURATION : Utilisation de l'instance unifiée apiClient (Gère l'URL de base et le JWT)
 import apiClient from '../../lib/apiClient';
 import Prix from '../../lib/components/Prix';
 import { ajouterAuPanierHorsLigne } from '../../lib/offline/panierQueue';
+import { chargerCatalogueLocal, catalogueLocalDisponible } from '../../lib/offline/syncCatalogue';
 
 interface Produit {
   id: number;
@@ -42,6 +43,11 @@ export default function CataloguePage() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [quantites, setQuantites] = useState<Record<number, number>>({});
+  // 🚀 MODE OFFLINE (brique 4/4) : true quand les données affichées viennent de la copie
+  // locale IndexedDB (réseau indisponible) plutôt que du serveur -- pilote le bandeau
+  // d'avertissement ci-dessous. Ne concerne QUE l'affichage : le panier/paiement restent de
+  // toute façon impossibles à finaliser sans réseau (brique 3/4, file d'attente).
+  const [modeHorsLigne, setModeHorsLigne] = useState(false);
 
   // 📄 PAGINATION SERVEUR : avant, le catalogue entier était chargé une seule fois puis
   // filtré côté client (useMemo). Sur un catalogue qui grossit (centaines de produits),
@@ -86,8 +92,28 @@ export default function CataloguePage() {
         setTotalCount(res.data.count);
         setHasNext(Boolean(res.data.next));
         setHasPrevious(Boolean(res.data.previous));
-      } catch (err) {
-        console.error("Erreur Catalogue:", err);
+        setModeHorsLigne(false);
+      } catch (err: any) {
+        // 🚀 MODE OFFLINE (brique 4/4) : `!err.response` = échec réseau réel (pas d'internet,
+        // ou serveur injoignable), PAS une erreur métier renvoyée par le serveur -- même
+        // distinction que syncPanier.ts. Dans ce cas seulement, on bascule sur la copie
+        // locale du catalogue plutôt que de simplement afficher une erreur.
+        if (!err?.response && (await catalogueLocalDisponible())) {
+          const local = await chargerCatalogueLocal({
+            search,
+            categorie: activeCat,
+            page,
+            pageSize: PAGE_SIZE,
+          });
+          setProduits(local.produits as any);
+          setCategories(local.categories);
+          setTotalCount(local.count);
+          setHasNext(local.hasNext);
+          setHasPrevious(local.hasPrevious);
+          setModeHorsLigne(true);
+        } else {
+          console.error("Erreur Catalogue:", err);
+        }
       } finally {
         setLoading(false);
         setHasLoadedOnce(true);
@@ -181,7 +207,24 @@ export default function CataloguePage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 min-h-screen">
-      
+
+      {/* 🚀 MODE OFFLINE (brique 4/4) : bandeau discret, visible seulement quand les données
+          affichées viennent de la copie locale (réseau indisponible). Pas bloquant : on laisse
+          consulter le catalogue normalement, juste prévenir que les prix/stocks affichés
+          peuvent dater un peu (dernière synchro réussie). */}
+      {modeHorsLigne && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 flex items-center gap-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 px-5 py-3 text-amber-700 dark:text-amber-400"
+        >
+          <WifiOff size={18} className="shrink-0" />
+          <p className="text-sm font-bold">
+            Mode hors-ligne — catalogue affiché depuis la dernière synchronisation. Le paiement nécessite une connexion.
+          </p>
+        </motion.div>
+      )}
+
       {/* 🎯 HEADER & RECHERCHE */}
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-16">
         <h1 className="text-5xl font-black text-slate-800 dark:text-white tracking-tighter mb-4">

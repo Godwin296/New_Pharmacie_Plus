@@ -14,6 +14,7 @@ import { ThemeProvider } from '../lib/context/ThemeProvider';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { PharmacyBrandName } from '../components/PharmacyBrandName';
 import { useOfflinePanier } from '../lib/hooks/useOfflinePanier';
+import { useOfflineCatalogue } from '../lib/hooks/useOfflineCatalogue';
 
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -42,6 +43,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // synchronisation -- rappel discret pour ne pas oublier de repasser en ligne, sans devoir
   // se rendre sur /panier pour s'en rendre compte.
   const { file: fileAttenteOffline } = useOfflinePanier();
+
+  // 🚀 MODE OFFLINE (brique 4/4) : synchronise silencieusement la copie locale du catalogue
+  // en arrière-plan (montage + retour réseau) -- purement un effet de fond ici, pas de rendu ;
+  // c'est app/catalogue/page.tsx qui consulte cette copie locale en repli si le réseau manque.
+  useOfflineCatalogue();
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 3500);

@@ -216,8 +216,7 @@ New_Pharmacie_Plus/
 - [x] Backups PostgreSQL — `manage.py backup_db` / `restore_db` (pg_dump/pg_restore)
 - [x] Cache Redis multi-tenant (infos pharmacie, catalogue, prédictions) + `/healthz/`
 - [x] Suivi d'erreurs Sentry (backend) — frontend en attente du support Next.js 16 par `@sentry/nextjs`
-- [x] Mode offline — indexation BDD + synchro delta catalogue + file d'attente panier (3/4 briques)
-- [ ] Mode offline — cache catalogue réel dans le Service Worker (4/4)
+- [x] Mode offline — indexation BDD + synchro delta catalogue + cache catalogue local (IndexedDB) + file d'attente panier (4/4 briques)
 - [ ] Gestion des lots (`LotProduit`) avec décrémentation FEFO
 - [ ] Page marketplace (client global multi-pharmacies)
 - [ ] Dashboard analytics avancé
