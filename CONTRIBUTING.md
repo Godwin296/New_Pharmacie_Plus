@@ -151,23 +151,25 @@ Cela signifie concrètement :
 
 ## 🗺️ Feuille de route — Où contribuer
 
-Consulte les [Issues GitHub](https://github.com/Godwin296/New_Pharmacie_Plus/issues) pour les tâches ouvertes. Les priorités actuelles :
+Détail complet et priorisé : [PROMPT_REPRISE.md](PROMPT_REPRISE.md).
+
+**🔴 Urgent**
+- [ ] Bug POS : la finalisation d'une vente au guichet échoue — `Commande.objects.create(client=None, ...)` référence encore un champ `client` supprimé lors du retrait de l'ancien modèle `Client` (`core/api.py`, flux vente directe guichet, ligne avec le commentaire "Laissé vide car c'est une vente physique comptoir")
 
 **Haute priorité**
+- [ ] Mode offline — cache catalogue réel dans le Service Worker (dernière des 4 briques)
 - [ ] Gestion des lots (`LotProduit`) avec décrémentation FEFO
-- [ ] Backups automatiques PostgreSQL
-- [ ] Compte client global (`CompteClient` dans le schéma public) + marketplace
 
 **Priorité normale**
 - [ ] Dashboard analytics avancé (comparaison périodes, marge réelle)
-- [ ] Notifications email transactionnelles
-- [ ] Mode offline réel (Service Worker + IndexedDB)
+- [ ] Page marketplace (compte client global multi-pharmacies)
 - [ ] Refonte UI/UX mobile-first complète
 
 **Contributions bienvenues**
+- [ ] Notifications SMS (Africa's Talking)
 - [ ] Logs d'accès aux ordonnances
 - [ ] Internationalisation (next-intl)
-- [ ] Page de paramètres compte client (thème, langue)
+- [ ] Sentry frontend (bloqué : `@sentry/nextjs` ne supporte pas encore Next.js 16)
 
 ---
 
