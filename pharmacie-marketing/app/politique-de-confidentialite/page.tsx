@@ -62,9 +62,15 @@ export default function PolitiqueConfidentialite() {
                 3. Mesure d&apos;audience
               </h2>
               <p>
-                [À compléter dès qu&apos;un outil de mesure d&apos;audience sera mis en place —
-                préciser l&apos;outil utilisé, les données collectées et la durée de
-                conservation.]
+                Ce site utilise <strong>Umami</strong>, un outil de mesure d&apos;audience
+                open source et respectueux de la vie privée : il ne dépose aucun
+                cookie, ne collecte aucune donnée personnelle identifiable
+                (adresse IP non stockée, aucun identifiant unique persistant) et
+                ne partage rien avec des tiers publicitaires. Il nous permet
+                uniquement de savoir combien de personnes visitent le site,
+                quelles pages elles consultent et quels boutons elles utilisent
+                (ex. « Demander une démo »), afin d&apos;améliorer le site. Les
+                données sont hébergées par Umami (cloud.umami.is).
               </p>
             </section>
 

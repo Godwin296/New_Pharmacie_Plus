@@ -83,6 +83,7 @@ export function QualifiedLeadForm() {
 
       <button
         type="submit"
+        data-umami-event="qualified-form-submit"
         className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-5 py-3 text-[14px] font-bold text-white border-none cursor-pointer transition-colors"
       >
         <Send size={15} />

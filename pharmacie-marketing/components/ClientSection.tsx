@@ -39,24 +39,26 @@ export function ClientSection() {
               Pour vous
             </span>
             <h2 className="mt-4 font-display font-bold text-[var(--color-ink)] dark:text-white text-4xl sm:text-5xl leading-[1.1] tracking-tight">
-              Commandez vos médicaments sans faire la queue.
+              Bientôt, commandez vos médicaments sans faire la queue.
             </h2>
             <p className="mt-5 text-[17px] leading-relaxed text-slate-600 dark:text-slate-400">
-              Si votre pharmacie utilise déjà Pharmacie+, vous pouvez consulter
-              son catalogue, envoyer votre ordonnance et suivre votre commande
-              depuis chez vous.
+              Pharmacie+ est en phase de lancement : aucune pharmacie n&apos;est
+              encore connectée pour l&apos;instant. Dites-nous quelle officine vous
+              voulez voir équipée, et vous serez parmi les premiers informés
+              quand ce sera disponible près de chez vous.
             </p>
 
             <div className="mt-8 rounded-2xl bg-[var(--color-mist)] dark:bg-[#050e0c] border border-emerald-100 p-6">
               <p className="text-[14px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                <strong className="text-[var(--color-ink)] dark:text-white">Votre pharmacie n&apos;est pas encore
-                équipée ?</strong> Parlez-lui de Pharmacie+, ou contactez-nous et
+                <strong className="text-[var(--color-ink)] dark:text-white">Faites équiper votre
+                pharmacie.</strong> Parlez-lui de Pharmacie+, ou contactez-nous et
                 nous nous en chargeons.
               </p>
               <a
                 href={CLIENT_WHATSAPP_LINK}
                 target="_blank"
                 rel="noreferrer"
+                data-umami-event="client-section-recommander-pharmacie"
                 className="mt-4 inline-flex items-center gap-2 text-[14px] font-bold text-emerald-700 no-underline"
               >
                 <MessageCircle size={16} />
@@ -71,6 +73,9 @@ export function ClientSection() {
               aria-hidden
               className="hidden sm:block absolute left-[27px] top-10 bottom-10 w-px bg-gradient-to-b from-blue-200 via-emerald-200 to-transparent"
             />
+            <span className="mb-4 block text-[12px] font-mono uppercase tracking-[0.15em] text-slate-400">
+              Comment ça fonctionnera
+            </span>
             <div className="space-y-4">
               {steps.map((step, i) => (
                 <Reveal key={step.n} delay={i * 0.08}>

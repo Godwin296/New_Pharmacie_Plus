@@ -115,6 +115,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const umamiWebsiteId = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID;
+
   return (
     <html lang="fr" className="h-full antialiased" suppressHydrationWarning>
       <head>
@@ -123,6 +125,13 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        {umamiWebsiteId && (
+          <script
+            defer
+            src="https://cloud.umami.is/script.js"
+            data-website-id={umamiWebsiteId}
+          />
+        )}
       </head>
       <body className="min-h-full flex flex-col bg-white text-[var(--color-ink)] font-sans">
         {children}
