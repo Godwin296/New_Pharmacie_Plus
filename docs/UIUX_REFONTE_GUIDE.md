@@ -8,6 +8,28 @@
 > Basé sur un audit réel du code (pas une supposition) mené le 18/07/2026, qui approfondit
 > une première analyse. Direction visuelle (couleurs, style de cartes...) : voir
 > [PROMPT_REPRISE.md](../PROMPT_REPRISE.md#-direction-stylistique-maquettes-reçues-pour-la-refonte-uiux).
+> Recherche externe approfondie (réglementation, standards du secteur, méthodologie
+> mobile-first) : voir [docs/RECHERCHE_FONCTIONNALITES_PHARMACIE.md](RECHERCHE_FONCTIONNALITES_PHARMACIE.md).
+
+## ⚠️ Principe directeur non-négociable : MOBILE-FIRST, pas "aussi disponible sur mobile"
+
+**Toute page de cette refonte se conçoit et se code en partant du plus petit écran
+(téléphone, ~375px de large), jamais l'inverse.** Le rendu PC n'est pas une conception
+séparée : c'est un élargissement progressif de la base mobile, avec de l'espace en plus,
+jamais une mise en page repensée puis "rétrécie" pour mobile.
+
+Concrètement dans ce codebase Tailwind CSS :
+- Chaque classe **sans préfixe** (`flex`, `p-4`, `text-sm`, `flex-col`...) décrit
+  l'affichage MOBILE — c'est la valeur par défaut du projet.
+- Les préfixes `md:`/`lg:` servent UNIQUEMENT à ajouter des ajustements pour les grands
+  écrans (ex: `flex-col md:flex-row`), jamais à définir le mobile en repli d'un desktop
+  déjà posé.
+- Les actions principales (valider un panier, confirmer une vente...) restent dans la
+  zone accessible au pouce (moitié basse de l'écran) — cohérent avec la bottom nav déjà
+  actée dans `PROMPT_REPRISE.md`.
+
+Détail et sources de cette méthodologie : voir
+[docs/RECHERCHE_FONCTIONNALITES_PHARMACIE.md §4](RECHERCHE_FONCTIONNALITES_PHARMACIE.md#4-méthodologie-mobile-first--correction-importante-sur-le-guide-précédent).
 
 ---
 

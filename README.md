@@ -198,7 +198,7 @@ New_Pharmacie_Plus/
 
 ## 📋 Feuille de route
 
-> Détail complet des tâches restantes, priorisées : voir [PROMPT_REPRISE.md](PROMPT_REPRISE.md). Stratégie de versionnement API : [docs/API_VERSIONING.md](docs/API_VERSIONING.md). Sauvegarde/restauration : [docs/BACKUP_POSTGRESQL.md](docs/BACKUP_POSTGRESQL.md). Guide fonctionnel de la refonte UI/UX (pages, gaps par rôle) : [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md). Sujets infra documentés mais différés (PostgreSQL, HTTPS, Docker, CDN) : [docs/INFRASTRUCTURE_ROADMAP.md](docs/INFRASTRUCTURE_ROADMAP.md).
+> Détail complet des tâches restantes, priorisées : voir [PROMPT_REPRISE.md](PROMPT_REPRISE.md). Stratégie de versionnement API : [docs/API_VERSIONING.md](docs/API_VERSIONING.md). Sauvegarde/restauration : [docs/BACKUP_POSTGRESQL.md](docs/BACKUP_POSTGRESQL.md). Guide fonctionnel de la refonte UI/UX (pages, gaps par rôle, méthodologie mobile-first) : [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md), approfondi par la recherche externe [docs/RECHERCHE_FONCTIONNALITES_PHARMACIE.md](docs/RECHERCHE_FONCTIONNALITES_PHARMACIE.md) (dont un point réglementaire camerounais important sur l'ordonnance obligatoire). Sujets infra documentés mais différés (PostgreSQL, HTTPS, Docker, CDN) : [docs/INFRASTRUCTURE_ROADMAP.md](docs/INFRASTRUCTURE_ROADMAP.md).
 
 - [x] Architecture multi-tenant par schéma PostgreSQL
 - [x] Cycle de vie commande complet (en_cours → retiree)
