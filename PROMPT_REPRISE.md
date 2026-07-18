@@ -59,16 +59,23 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 
 ### 🟡 Effort moyen
 - [ ] **Toggle vérification ordonnance par tenant** — champ booléen sur `PharmacieConfig`
-- [ ] **Dashboard analytics avancé** — comparaison période/période, marge réelle (ajouter `prix_achat` sur `Produit`)
+- [ ] **Dashboard analytics avancé** — comparaison période/période, marge réelle (ajouter `prix_achat` sur `Produit`) ; détail complet (ce qui est faisable immédiatement vs bloqué par le modèle de données) dans [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md#4-côté-admin-par-pharmacie--réponse-à-ta-question--dashboard-réellement-basique-tu-as-raison)
 - [ ] **Chiffrement au repos des ordonnances**
 - [ ] **Internationalisation (next-intl)**
 - [ ] **Détection d'interactions médicamenteuses** — table de règles statiques, pas d'IA
 - [ ] **Sentry frontend** — bloqué tant que `@sentry/nextjs` ne supporte pas Next.js 16 ; réévaluer périodiquement (une v10.x avec support officiel via `instrumentation.ts` était annoncée — vérifier son état actuel avant de re-tenter, ne pas supposer)
 
+### 🔵 Documenté, implémentation volontairement différée (voir [docs/INFRASTRUCTURE_ROADMAP.md](docs/INFRASTRUCTURE_ROADMAP.md) pour le détail et le déclencheur de chaque point)
+- [ ] Index PostgreSQL sur `Commande.statut`/`payee`/`date` — attendre que le modèle de données soit stable (fin de refonte)
+- [ ] HTTPS/HSTS (`SECURE_SSL_REDIRECT` etc.) — attendre le choix de l'hébergement de production
+- [ ] Docker + Docker Compose (backend + frontend + postgres + redis) — squelette prêt dans la doc, peut se faire relativement tôt sans risque
+- [ ] CDN pour les images produits — pas urgent tant que le trafic reste local/faible
+
 ### 🔴 Effort élevé / risque architectural
 - [ ] **Gestion des lots (`LotProduit`) + FEFO** — nouveau modèle, migration des données existantes, décrémentation FEFO sans casser `select_for_update()`
 - [ ] **Page marketplace** (sélection de pharmacie par le client global `CompteClient`)
-- [ ] **Refonte UI/UX mobile-first complète** — voir maquettes ci-dessous. À attaquer une fois le bug POS réglé (priorité à la stabilité avant l'esthétique)
+- [ ] **Refonte UI/UX mobile-first complète** — voir maquettes ci-dessous ET le guide fonctionnel détaillé [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md) (pages manquantes par rôle, gaps identifiés côté caisse/dashboard admin). À attaquer une fois le bug POS réglé (priorité à la stabilité avant l'esthétique)
+- [ ] **Admin plateforme "Pharmacie Plus"** — n'existe pas du tout aujourd'hui (seulement le Django admin brut sur le schéma public) ; nécessite sa propre authentification (comptes staff plateforme, séparés des comptes par-tenant) ; détail complet dans [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md#5-admin-plateforme-pharmacie-plus--confirmé--ça-nexiste-pas-du-tout)
 - [ ] **Notifications SMS (Africa's Talking)**
 
 ---
