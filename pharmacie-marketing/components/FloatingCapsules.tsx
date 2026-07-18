@@ -123,6 +123,24 @@ export function FloatingCapsules({ className = "" }: { className?: string }) {
     if (!el) return;
     let last: { x: number; y: number; t: number } | null = null;
     let raf = 0;
+    let running = false;
+
+    function decay() {
+      const next = Math.max(0, energy.get() - 0.014);
+      energy.set(next);
+      if (next > 0) {
+        raf = requestAnimationFrame(decay);
+      } else {
+        running = false;
+      }
+    }
+
+    function ensureLoop() {
+      if (!running) {
+        running = true;
+        raf = requestAnimationFrame(decay);
+      }
+    }
 
     function handleMove(e: MouseEvent) {
       const now = performance.now();
@@ -132,17 +150,12 @@ export function FloatingCapsules({ className = "" }: { className?: string }) {
         const dy = e.clientY - last.y;
         const speed = Math.sqrt(dx * dx + dy * dy) / dt;
         energy.set(Math.min(1, energy.get() + speed * 3.2));
+        ensureLoop();
       }
       last = { x: e.clientX, y: e.clientY, t: now };
     }
 
-    function decay() {
-      energy.set(Math.max(0, energy.get() - 0.014));
-      raf = requestAnimationFrame(decay);
-    }
-
     el.addEventListener("mousemove", handleMove);
-    raf = requestAnimationFrame(decay);
     return () => {
       el.removeEventListener("mousemove", handleMove);
       cancelAnimationFrame(raf);
