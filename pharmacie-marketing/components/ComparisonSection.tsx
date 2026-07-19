@@ -51,23 +51,23 @@ export function ComparisonSection() {
 
         <Reveal delay={0.1} className="mt-12">
           <div className="rounded-[28px] border border-slate-200/70 dark:border-white/10 overflow-hidden bg-white dark:bg-[#0b1a16]">
-            <div className="grid grid-cols-[1fr_auto_auto] items-center px-6 sm:px-8 py-4 bg-[var(--color-mist)] dark:bg-white/[0.03] border-b border-slate-200/70 dark:border-white/10">
-              <span className="text-[12px] font-semibold text-slate-400 uppercase tracking-wide">Fonctionnalité</span>
-              <span className="text-[12px] font-semibold text-slate-400 uppercase tracking-wide text-center w-20">Cahier / Excel</span>
-              <span className="text-[12px] font-semibold text-emerald-600 uppercase tracking-wide text-center w-20">Pharmacie+</span>
+            <div className="grid grid-cols-[1fr_auto_auto] items-center px-4 sm:px-8 py-4 bg-[var(--color-mist)] dark:bg-white/[0.03] border-b border-slate-200/70 dark:border-white/10">
+              <span className="text-[11px] sm:text-[12px] font-semibold text-slate-400 uppercase tracking-wide">Fonctionnalité</span>
+              <span className="text-[10px] sm:text-[12px] font-semibold text-slate-400 uppercase tracking-wide text-center w-14 sm:w-20">Cahier / Excel</span>
+              <span className="text-[10px] sm:text-[12px] font-semibold text-emerald-600 uppercase tracking-wide text-center w-14 sm:w-20">Pharmacie+</span>
             </div>
             {rows.map((row, i) => (
               <div
                 key={row.label}
-                className={`grid grid-cols-[1fr_auto_auto] items-center px-6 sm:px-8 py-4 ${
+                className={`grid grid-cols-[1fr_auto_auto] items-center px-4 sm:px-8 py-4 ${
                   i % 2 === 1 ? "bg-slate-50/50 dark:bg-white/[0.015]" : ""
                 }`}
               >
-                <span className="text-[14px] text-slate-700 dark:text-slate-300 pr-4">{row.label}</span>
-                <span className="flex justify-center w-20">
+                <span className="text-[13px] sm:text-[14px] text-slate-700 dark:text-slate-300 pr-2 sm:pr-4">{row.label}</span>
+                <span className="flex justify-center w-14 sm:w-20">
                   <CellIcon value={row.manual} />
                 </span>
-                <span className="flex justify-center w-20">
+                <span className="flex justify-center w-14 sm:w-20">
                   <CellIcon value={row.app} />
                 </span>
               </div>

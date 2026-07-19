@@ -8,218 +8,29 @@ Je reprends le développement de mon SaaS de gestion de pharmacie multi-tenant p
 
 > ⚠️ Mon dépôt est **privé par défaut**. Je l'ouvre uniquement quand j'ai besoin que tu pousses du travail. Si tu n'arrives pas à cloner, dis-le-moi clairement et j'ouvrirai l'accès.
 
-Clone ce dépôt et lis le code réel (pas juste le README) pour retrouver le contexte exact.
+**Ce que ce document contient :** uniquement ce qu'il **reste à faire**, priorisé. Pour ce qui est déjà fait, regarde le [README.md](README.md) (feuille de route à jour), le dossier [docs/](docs/) (versionnement API, backups) et l'historique `git log` — un travail déjà poussé sur `main` a déjà été testé avant d'être commité (voir [CONTRIBUTING.md](CONTRIBUTING.md), règle "tester réellement").
+
+> ⚠️ **Ce dépôt évolue en parallèle par plusieurs sessions/agents.** Avant de supposer qu'une fonctionnalité n'existe pas, vérifie toujours dans le code actuel (`grep`, lecture directe) plutôt que de te fier à un TODO potentiellement déjà obsolète — y compris celui-ci. Un `git pull`/`fetch` avant de commencer, et une revue rapide des derniers commits, évite de refaire un travail déjà fait ailleurs (vécu le 12/07 : suppression du modèle `Client` faite deux fois en parallèle, en pure perte de temps sur l'une des deux).
 
 **Mon objectif :** vendre ce SaaS à des pharmacies clientes en zone CEMAC. Je suis étudiant en informatique à l'Université de Dschang, je communique en français, et je préfère un guidage pas à pas avec des tests réels.
 
 ---
 
-## 🛠️ ENVIRONNEMENT TECHNIQUE — À INSTALLER AVANT TOUT TEST
+## 🛠️ ENVIRONNEMENT TECHNIQUE
 
-Ces outils NE SONT PAS dans requirements.txt ni package.json — ce sont des dépendances système.
+Voir [CONTRIBUTING.md](CONTRIBUTING.md) pour la procédure complète d'installation (PostgreSQL, Redis, libmagic, DNS local multi-tenant, `seed.py`).
 
-```bash
-# 1. PostgreSQL 16 (obligatoire)
-apt-get update && apt-get install -y postgresql postgresql-contrib
-service postgresql start
-su postgres -c "psql -c \"ALTER USER postgres PASSWORD 'postgres';\""
+> ⚠️ **Dans un environnement sandbox/agent** : PostgreSQL, Redis et les process Daphne/Next.js ne survivent PAS entre deux appels d'outils séparés. Toujours relancer les services ET lancer le test dans la MÊME invocation de commande.
 
-# 2. Redis (obligatoire pour Channels/WebSocket et rate limiting)
-apt-get install -y redis-server
-service redis-server start
-redis-cli ping   # doit répondre PONG
-
-# 3. libmagic (obligatoire pour core/validators.py)
-dpkg -l | grep libmagic1t64   # vérifier si présent
-# si absent : apt-get install -y libmagic1
-
-# 4. DNS local multi-tenant
-echo "127.0.0.1 dupont.localhost martin.localhost" >> /etc/hosts
-
-# 5. Backend Python
-cd pharmacie-backend
-python3 -m venv venv_test
-venv_test/bin/pip install -r requirements.txt
-
-# 6. Frontend Node
-cd pharmacie-frontend
-npm install
-
-# 7. Lancer le backend (ASGI obligatoire, pas runserver)
-cd pharmacie-backend
-venv_test/bin/daphne -b 0.0.0.0 -p 8000 config.asgi:application
-```
-
-> ⚠️ **Problème récurrent :** PostgreSQL, Redis et les process Daphne/Next.js NE SURVIVENT PAS entre deux appels d'outils séparés. Toujours relancer les services ET lancer le test dans la MÊME invocation de commande.
-
----
-
-## 💾 STRATÉGIE DE SAUVEGARDE GIT
-
-L'environnement de fichiers NE SURVIT PAS entre deux conversations. Seul un push GitHub effectif garantit que le travail n'est pas perdu.
-
-**Procédure de push (token temporaire fourni par moi à chaque session) :**
+## 💾 PROCÉDURE DE PUSH GIT
 
 ```bash
+git fetch origin && git log --oneline main..origin/main   # voir ce qui a changé côté distant avant de commencer
 git remote set-url origin https://Godwin296:LE_TOKEN@github.com/Godwin296/New_Pharmacie_Plus.git
 git add -A && git commit -m "message clair"
-git push origin main
+git push origin main   # si rejeté (non-fast-forward) : git rebase origin/main, résoudre les conflits réels, puis repush
 git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  # retirer le token
 ```
-
----
-
-## ✅ CE QUI EST FAIT ET TESTÉ (ne pas refaire)
-
-### Architecture & Sécurité
-- Multi-tenant par schéma PostgreSQL (django-tenants) — isolation testée et prouvée
-- WebSocket temps réel (Django Channels + Redis) — middleware tenant-aware + auth JWT custom
-- Rate limiting DRF (login 5/min, paiement 10/min) — `core/throttles.py`
-- Compression GZip activée
-- Upload ordonnance sécurisé (`core/validators.py`) : magic bytes, anti-stéganographie (Pillow), JS strippé (pikepdf), **resize max 1600px avant compression JPEG** (ajouté session 1)
-- SECRET_KEY depuis variables d'environnement (.env)
-
-### Cycle métier complet
-- Modèle Commande avec référence lisible (format PHC-AAAA-NNNNN)
-- Cycle de vie complet : `en_cours → attente_validation → paiement_a_verifier → payee_a_retirer → retiree` (ou `annulee`)
-- Paiement manuel mobile money (Orange Money/MTN MoMo) — vérification caissière avant décrémentation stock
-- Numéros mobile money configurables par tenant (PharmacieConfig)
-- Page caisse `/caisse/paiements` avec recherche et confirmation de retrait
-- Vente au guichet (`api_vente_directe`) avec case ordonnance vérifiée visuellement
-- Anti race-condition : `select_for_update()` sur toutes les opérations critiques
-- Dashboard admin : ventilation CA cash/en ligne
-
-### Performance
-- **Pagination du catalogue** (ajouté session 2) : `CataloguePagination` DRF, 20 produits/page, filtre `?cat=` et recherche `?q=` côté serveur — `core/pagination.py` + frontend adapté avec debounce 400ms
-- **Composant `<Prix>` centralisé** (ajouté session 3) : `lib/components/Prix.tsx` + `ConfigPharmacieProvider` dans `layout.tsx` — plus aucun "FCFA" codé en dur dans les 12 fichiers frontend, devise lue depuis `PharmacieConfig.devise_preferee`
-
-### PWA
-- Migré de `@ducanh2912/next-pwa` (incompatible Turbopack) vers `@serwist/turbopack`
-- Service worker réellement généré et servi
-- Icônes PNG générées (192/512 standard + maskable + apple-touch-icon 180px)
-
-### File d'attente panier hors-ligne (session 12/07 — brique 3/4)
-- `lib/offline/db.ts` : wrapper IndexedDB natif minimal (pas de dépendance ajoutée -- un seul
-  object store, `panier_queue`).
-- `lib/offline/panierQueue.ts` : enqueue/liste/suppression + évènement DOM custom
-  (`panier-file-attente-maj`) pour que plusieurs composants (badge nav + page /panier)
-  restent synchronisés sans state manager global.
-- `lib/offline/syncPanier.ts` : rejoue la file FIFO contre `POST /api/panier/`. Verrou
-  anti-réentrance `synchroEnCours` posé de façon SYNCHRONE (avant tout `await`) --
-  nécessaire car le hook peut être monté 2x en même temps (badge nav + page panier), et
-  l'évènement navigateur `online` déclenche leurs listeners synchrones l'un après l'autre.
-  Distingue clairement échec RÉSEAU (item remis `en_attente`, retenté plus tard) d'échec
-  MÉTIER (ex: stock insuffisant -> marqué `erreur`, PAS rejoué automatiquement en boucle).
-- `lib/hooks/useOfflinePanier.ts` : hook partagé (état réseau, file, synchro auto au retour
-  réseau ou changement d'onglet).
-- Intégré dans `catalogue/page.tsx::handleAddToCart` (bascule en file d'attente sur échec
-  réseau réel, jamais sur une erreur métier) et `panier/page.tsx` (affichage de la file +
-  bouton "Synchroniser maintenant" + auto-refresh du panier serveur après synchro) + badge
-  discret sur le bouton menu (`app/layout.tsx`).
-- **Bug bloquant trouvé ET CORRIGÉ EN TESTANT LE VRAI FLUX** (pas juste en lisant le code) :
-  `api_panier` n'avait plus aucune authentification client fonctionnelle depuis qu'un
-  correctif de sécurité d'une session précédente a rendu `StaffJWTAuthentication` la
-  classe PAR DÉFAUT de toute l'API. J'ai d'abord cru qu'il fallait juste ajouter
-  `@authentication_classes([ClientJWTAuthentication])` (pattern déjà utilisé sur
-  `api_client_whoami`) -- **mauvaise piste, annulée** : `ClientJWTAuthentication` authentifie
-  un `CompteClient` (schéma public, système de "compte client global/marketplace" listé plus
-  bas dans la TODO comme un chantier séparé et NON commencé), alors que `api_panier` utilise
-  en réalité `Client` (profil tenant lié à un `auth.User` par `OneToOneField`) -- deux
-  systèmes clients distincts et non connectés entre eux. Le VRAI flux client actuel de cet
-  endpoint est `/api/register/` + `/api/login/` (role=client), PAS `/api/client/register|login/`.
-  Testé de bout en bout avec ce bon flux : inscription, connexion, ajout au panier (200),
-  et cas stock insuffisant (400, message exploité correctement par `syncPanier.ts`).
-  ⚠️ Pas eu le temps de vérifier si d'autres endpoints client (historique commandes,
-  paiement...) ont le même trou d'authentification que j'ai initialement soupçonné sur
-  `api_panier` -- resté volontairement hors du périmètre de cette session (mode offline).
-- Reste : brique 4/4 (adapter `app/sw.ts` pour mettre en cache les réponses API catalogue).
-
-### Indexation BDD (session offline, 12/07 — 1ère brique du chantier "Mode offline réel")
-- 15 nouveaux index PostgreSQL sur `Produit`, `Commande`, `Client`, `ClientGuichet`
-  (`core/migrations/0006_...`), tous alignés sur des requêtes RÉELLES grepées dans `core/api.py`
-  (pas d'index spéculatif) : `categorie`, `nom`, `date_expiration`, `(statut,-date)`,
-  `(client,statut)`, `(payee,-date)`, `(payee,type_vente)`.
-- Extension PostgreSQL `pg_trgm` activée (GIN trigram) pour accélérer les recherches
-  `__icontains` (nom produit, laboratoire, nom/téléphone client, référence commande) qu'un
-  index B-Tree classique ne peut PAS servir. **Piège rencontré et documenté** : `pg_trgm`
-  doit être activée dans une migration SHARED_APP (schéma `public`), PAS dans `core`
-  (TENANT_APP) — sinon l'extension se retrouve installée dans le schéma du 1er tenant migré
-  et casse tous les tenants suivants (`operator class gin_trgm_ops does not exist`). Voir
-  `tenants/migrations/0002_enable_pg_trgm.py` pour le détail.
-- Index fonctionnel `Upper('identifiant')` : le code utilise `identifiant__iexact`, qui sous
-  Postgres devient `UPPER(identifiant) = UPPER(%s)` — l'index unique standard n'est pas
-  utilisé par ce type de requête sans cet index dédié.
-- **Validé avec `EXPLAIN ANALYZE` sur un catalogue de test à 8000 lignes** (pas juste "ça
-  migre sans erreur") : `prod_ident_upper_idx` et `prod_nom_idx` bien utilisés (Index Scan),
-  `prod_nom_trgm_idx` bien utilisé (Bitmap Index Scan) sur une recherche sélective réaliste
-  (9 résultats/8010 lignes, 0.37ms vs Seq Scan sur motif peu sélectif où Postgres a raison de
-  préférer le Seq Scan — comportement attendu, pas un bug).
-- ⚠️ À vérifier avant déploiement prod sur hébergeur managé : `pg_trgm` doit faire partie des
-  extensions autorisées (cas de la quasi-totalité des offres PostgreSQL managées modernes).
-
-### Synchro delta du catalogue (session offline, 12/07 — brique 2/4)
-- Nouveau champ `Produit.date_modification` (`auto_now=True`, indexé) : curseur de la synchro.
-- Nouveau modèle `ProduitSupprimeLog` (tombstone) + signal `post_delete` (`core/signals.py`,
-  branché via `CoreConfig.ready()`) : trace les suppressions pour que le cache offline
-  (IndexedDB, brique 3/4 à venir) sache retirer un produit supprimé côté serveur.
-- Nouvel endpoint `GET /api/catalogue/sync/?since=<ISO8601>` (`api_catalogue_sync` dans
-  `core/api.py`) : renvoie UNIQUEMENT les produits créés/modifiés + supprimés depuis `since`
-  (au lieu de tout le catalogue à chaque appel — coûteux sur 3G/4G instable). Batché à 300
-  produits/appel (`CATALOGUE_SYNC_BATCH_SIZE`), avec curseur `has_more`/`next_since` pour
-  enchaîner les pages si un tenant a un très gros catalogue à synchroniser d'un coup.
-- **Bug de pagination trouvé ET corrigé en testant réellement avec 350 produits générés en
-  `bulk_create()`** (donc partageant le même `date_modification` à la milliseconde près) :
-  un curseur `date_modification >= since` simple réintroduisait en double le dernier produit
-  de la page précédente à la frontière (360 produits récupérés au lieu de 359 attendus). Fixé
-  avec un curseur composé `(date_modification, id)` (`since` au format `"<ISO8601>|<id>"` en
-  cours de pagination) — retesté : 359/359, zéro doublon, zéro perte.
-- Frontend (IndexedDB, brique 3/4) : pas encore commencé.
-
-### Correctifs UX remontés en test (session offline, 12/07)
-- **Perte de focus dans la recherche du catalogue** (`app/catalogue/page.tsx`) : `if (loading)
-  return <spinner plein écran>` démontait TOUT le composant -- input inclus -- à CHAQUE
-  nouvelle recherche (pas seulement au 1er chargement), puisque `setLoading(true)` était
-  appelé à chaque fetch. Corrigé avec un état `hasLoadedOnce` : le plein écran ne s'affiche
-  plus qu'au tout premier chargement ; les recherches/pages/catégories suivantes gardent le
-  champ de recherche monté en permanence et affichent juste un indicateur "Recherche..."
-  inline dans la grille (même pattern que `/caisse/pos`, qui n'avait jamais eu ce bug).
-- **Pagination manquante sur le POS** (`app/caisse/pos/page.tsx`) : la grille demandait
-  toujours `?page_size=30` sans jamais envoyer `page` -- plafonnée en silence aux 30 premiers
-  produits (ordre alphabétique) dès qu'aucune recherche n'était tapée, sans aucun moyen de
-  voir le reste. Ajout d'une vraie pagination (page/hasNext/hasPrevious + boutons Précédent/
-  Suivant), même pattern que `/catalogue`, avec reset à la page 1 à chaque nouvelle recherche.
-- Validé : `npx tsc --noEmit` propre, `next build` complet sans erreur (30 pages), et
-  pagination testée en réel côté backend (page 1 = 30/100, page 4 = 10/100 restants,
-  recherche paginée correcte). ⚠️ Le fix de focus repose sur la sémantique React
-  (unmount/remount) et n'a PAS pu être testé avec un vrai navigateur headless (Playwright/
-  Puppeteer téléchargent leurs binaires depuis des domaines hors de la liste réseau
-  autorisée dans ce sandbox) -- à confirmer visuellement côté utilisateur.
-
-### Scripts de seed (session offline, 12/07)
-- `seed.py` et `mise_a_jour.py` fusionnés en un seul `seed.py` (l'ancien `mise_a_jour.py`
-  a été supprimé) : plus simple à maintenir, un seul point d'entrée `python seed.py`.
-- Catalogue de test passé de 10 à **100 produits par tenant** (générés, catégories/stock/
-  dates de péremption variés) pour pouvoir tester la pagination catalogue (5 pages de 20) et
-  le curseur de synchro offline en conditions réalistes.
-- Rejouable sans risque : `python seed.py` peut être relancé à volonté, il régénère
-  proprement le catalogue de test (supprime puis recrée uniquement les produits qu'IL a
-  générés, préfixe `DUP-`/`MAR-`) sans toucher aux tenants/comptes/config déjà en place ni
-  aux produits saisis manuellement par un vrai utilisateur.
-- Corrigé au passage : l'ancien seed utilisait des codes de catégorie (`antipaludeen`,
-  `autre`) absents de `Produit.CATEGORIES` — invisibles dans les filtres catalogue du
-  frontend bien qu'enregistrés en base (Django ne valide les `choices` qu'au `full_clean()`,
-  pas au `.save()`).
-- ⚠️ Reset complet d'un tenant (DROP du schéma PostgreSQL) reste volontairement une action
-  MANUELLE, jamais automatisée dans ce script — cf. `tenants/models.py`,
-  `auto_drop_schema = False` ("on ne supprime jamais un schéma automatiquement").
-
-### Bugs corrigés (historique)
-- `generate_qr_base64` importé depuis le mauvais module
-- `agent_validateur` recevait un username au lieu d'un objet User
-- `requirements.txt` encodé en UTF-16 + `djangorestframework-simplejwt` manquant
-- `Produit.ordonnance_obligatoire` absent en base (faille réglementaire)
-- `CommandeSerializer` exposait le nom de l'agent au client final
-- `get_or_create()` dans le panier pouvait provoquer `MultipleObjectsReturned`
 
 ---
 
@@ -227,53 +38,57 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 
 | Décision | Statut |
 |---|---|
-| Isolation multi-tenant PAR SCHÉMA (pas tenant_id) | ✅ Implémenté |
-| Compte client global (`CompteClient` dans schéma public) | 🔜 À faire — confirmé absent du code (grep `CompteClient` : 0 résultat). Prochain chantier choisi (session du 05/07), avant le test de la vente en ligne. |
-| Marketplace de sélection de pharmacie | 🔜 À faire (lié à CompteClient) |
-| Paiement manuel (option A) comme fallback permanent | ✅ Implémenté |
+| Isolation multi-tenant PAR SCHÉMA (pas `tenant_id`) | ✅ Implémenté |
+| Compte client global (`CompteClient`, schéma public) remplace l'ancien `Client` par-tenant | ✅ Implémenté — `Client` entièrement retiré du code (16/07) |
+| Versionnement API par préfixe d'URL (`/api/v1/`, jamais casser une version en place) | ✅ Implémenté — voir [docs/API_VERSIONING.md](docs/API_VERSIONING.md) |
+| Paiement manuel (mobile money vérifié par la caisse) comme fallback permanent | ✅ Implémenté |
 | OCR uniquement aide visuelle, jamais automatisé | Décision ferme |
-| Africa's Talking pour SMS (pas Twilio) | Décision ferme |
-| Prédiction stock = statistiques classiques, PAS LLM | Décision ferme |
+| Africa's Talking pour SMS (pas Twilio) | Décision ferme, pas encore implémenté |
+| Prédiction stock = statistiques classiques, PAS LLM | ✅ Implémenté (`core/services_prediction.py`) |
+| Cache Redis : TTL courts plutôt qu'invalidation manuelle par motif | ✅ Implémenté (`core/cache_utils.py`) — `django-redis` (avec `delete_pattern`) volontairement pas ajouté, voir le docstring du fichier |
 
 ---
 
-## 📋 TODO-LIST COMPLÈTE (par difficulté croissante)
+## 📋 CE QUI RESTE À FAIRE — priorisé
 
-### 🟢 Facile (quelques heures, périmètre limité)
-- [x] **Lazy loading images catalogue** — vérifié : `loading="lazy"` bien présent dans `app/catalogue/page.tsx`
-- [x] **Toggle thème clair/sombre** — vérifié : `ThemeToggleButton.tsx` + `next-themes` + `.dark` sur `<html>`, fonctionnel
-- [x] **Email transactionnel basique** — vérifié : `core/emails.py`, déclenché depuis `Commande.valider()`, échec non bloquant
-- [ ] **Logs centralisés Sentry** — ⚠️ RETIRÉ le 04/07 (`@sentry/nextjs` 9.x incompatible Next.js 16). À noter : Sentry propose désormais une v10.x avec support officiel Next.js 16 (`instrumentation.ts` + `onRequestError`) — à réévaluer et RE-TESTER isolément avant réintégration, pas de suppositions sur la compatibilité actuelle sans un vrai `npm install` + build.
-- [ ] **Retrait de `app/page.tsx`** — toujours en attente (refonte prévue en toute dernière session). En attendant, `app/layout.tsx` exclut désormais `/` de son nav/footer générique (fix session du 05/07) pour éviter le double bandeau visible tant que cette page n'est pas refaite.
+### 🔴 Urgent (bug bloquant en production)
+- [ ] **POS : la finalisation d'une vente au guichet échoue.** `core/api.py`, flux vente directe guichet : `Commande.objects.create(client=None, ...)` référence encore un champ `client` supprimé de `Commande` lors du retrait de l'ancien modèle `Client` (commentaire en place : *"Laissé vide car c'est une vente physique comptoir"*). Il suffit normalement de retirer cette ligne (le champ `client_guichet` juste en dessous suffit déjà) — **mais vérifier qu'aucune autre ligne du même genre n'a été oubliée ailleurs** dans le même flux avant de considérer que c'est réglé. (⚠️ Session du 18/07 : une autre session en parallèle gère ce chantier, ne pas y toucher en même temps.)
 
-### 🐞 Bugs trouvés lors de l'audit du 05/07 (corrigés cette session)
-- [x] **Double bandeau sur `/`** — `layout.tsx` affichait son propre nav+footer (texte "Pharmacie +" codé en dur) EN PLUS de celui, dynamique, de `page.tsx`. Fix : `/` exclu du nav générique.
-- [x] **Logo cassé dès qu'il est uploadé** — `infos_pharmacie` (core/api.py) sérialisait `PharmacieConfig` sans `context={'request': request}` → l'`ImageField` `logo` aurait renvoyé un chemin relatif (`/media/config/...`), inutilisable par le frontend qui tourne sur un autre port/domaine. Fix : contexte ajouté, l'API renvoie maintenant une URL absolue.
-- [ ] **Accès multi-tenant simultané (2 onglets)** — PAS un bug de code : `lib/apiClient.ts` déduit déjà dynamiquement le tenant depuis `window.location.hostname` si `NEXT_PUBLIC_API_URL` n'est pas défini. Ton `.env.local` local fige cette valeur sur `dupont.localhost:8000`, ce qui bloque tout autre tenant. Solution : retirer `NEXT_PUBLIC_API_URL` de `.env.local` et redémarrer `npm run dev` (voir message de chat pour le détail).
+### 🟡 Effort moyen
+- [ ] **Toggle vérification ordonnance par tenant** — champ booléen sur `PharmacieConfig`
+- [ ] **Dashboard analytics avancé** — comparaison période/période, marge réelle (ajouter `prix_achat` sur `Produit`) ; détail complet (ce qui est faisable immédiatement vs bloqué par le modèle de données) dans [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md#4-côté-admin-par-pharmacie--réponse-à-ta-question--dashboard-réellement-basique-tu-as-raison)
+- [ ] **Chiffrement au repos des ordonnances**
+- [ ] **Internationalisation (next-intl)**
+- [ ] **Détection d'interactions médicamenteuses** — table de règles statiques, pas d'IA
+- [ ] **Sentry frontend** — bloqué tant que `@sentry/nextjs` ne supporte pas Next.js 16 ; réévaluer périodiquement (une v10.x avec support officiel via `instrumentation.ts` était annoncée — vérifier son état actuel avant de re-tenter, ne pas supposer)
 
-### 🟡 Effort moyen (plusieurs sessions)
-- [ ] **Backups automatiques PostgreSQL** — cron + pg_dump ou Railway/Render managé, critique (actuellement zéro backup)
-- [ ] **Toggle vérification ordonnance par tenant** — champ booléen sur `PharmacieConfig` + clause CGU
-- [ ] **Dashboard analytics avancé** — comparaison période/période, marge réelle (ajouter `prix_achat` sur `Produit`), export multi-format
-- [ ] **Chiffrement au repos des ordonnances** — stockage chiffré applicatif ou niveau filesystem
-- [ ] **Internationalisation (next-intl)** — extraction de tout le texte FR en dur, gros volume mécanique
-- [ ] **Détection d'interactions médicamenteuses** — table de règles métier statiques, pas d'IA
+### 🔵 Documenté, implémentation volontairement différée (voir [docs/INFRASTRUCTURE_ROADMAP.md](docs/INFRASTRUCTURE_ROADMAP.md) pour le détail et le déclencheur de chaque point)
+- [ ] Index PostgreSQL sur `Commande.statut`/`payee`/`date` — attendre que le modèle de données soit stable (fin de refonte)
+- [ ] HTTPS/HSTS (`SECURE_SSL_REDIRECT` etc.) — attendre le choix de l'hébergement de production
+- [ ] Docker + Docker Compose (backend + frontend + postgres + redis) — squelette prêt dans la doc, peut se faire relativement tôt sans risque
+- [ ] CDN pour les images produits — pas urgent tant que le trafic reste local/faible
 
 ### 🔴 Effort élevé / risque architectural
-- [ ] **Gestion des lots (`LotProduit`) + FEFO** — nouveau modèle, migration données existantes (`Produit.lot`/`date_expiration` → lots individuels), décrémentation FEFO dans tout le cycle de vente sans casser `select_for_update()`
-- [ ] **Compte client global (`CompteClient`) + marketplace** — modèle dans schéma public, nouveau JWT clients (distinct personnel), migration clients existants, page marketplace
-- [ ] **Mode offline réel (Service Worker + IndexedDB)** — synchronisation bidirectionnelle catalogue/panier. Découpé en 4 briques (session du 12/07) :
-  - [x] **1/4 — Indexation BDD** — voir section "Indexation BDD" ci-dessus. Fait et testé (EXPLAIN ANALYZE, 8000 lignes).
-  - [x] **2/4 — Cache catalogue en IndexedDB (côté backend)** — endpoint `/api/catalogue/sync/` avec synchro delta + curseur, testé (voir section "Synchro delta du catalogue" ci-dessus). ⚠️ Reste à faire : la partie FRONTEND (IndexedDB réel dans le navigateur, pas encore commencée).
-  - [x] **3/4 — File d'attente panier hors-ligne** — voir section "File d'attente panier hors-ligne" ci-dessus. Fait et testé de bout en bout (succès + cas stock insuffisant).
-  - [ ] **4/4 — Adaptation du service worker** (`app/sw.ts`) pour mettre en cache les réponses API catalogue (actuellement volontairement minimal, ne cache que les assets statiques).
-- [ ] **Refonte UI/UX mobile-first complète** — maquettes disponibles (6 images, style vert émeraude, cartes arrondies, bottom nav avec bouton central flottant, splash screen avec halo radial). À attaquer APRÈS le compte client global.
+- [ ] **Gestion des lots (`LotProduit`) + FEFO** — nouveau modèle, migration des données existantes, décrémentation FEFO sans casser `select_for_update()`
+- [ ] **Page marketplace** (sélection de pharmacie par le client global `CompteClient`)
+- [ ] **Refonte UI/UX mobile-first complète** — voir maquettes ci-dessous ET le guide fonctionnel détaillé [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md) (pages manquantes par rôle, gaps identifiés côté caisse/dashboard admin). À attaquer une fois le bug POS réglé (priorité à la stabilité avant l'esthétique)
+- [ ] **Admin plateforme "Pharmacie Plus"** — n'existe pas du tout aujourd'hui (seulement le Django admin brut sur le schéma public) ; nécessite sa propre authentification (comptes staff plateforme, séparés des comptes par-tenant) ; détail complet dans [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md#5-admin-plateforme-pharmacie-plus--confirmé--ça-nexiste-pas-du-tout)
+- [ ] **Notifications SMS (Africa's Talking)**
 
 ---
 
-## 🎨 DIRECTION STYLISTIQUE (maquettes reçues)
+## 💬 Mon avis sur l'ordre à suivre (à discuter)
 
-Des maquettes ont été fournies et analysées. Points clés à respecter lors de la refonte :
+1. **Le bug POS d'abord, sans discussion** — une caisse qui ne peut plus encaisser une vente est un incident de production, pas une tâche de roadmap.
+2. **Finir le mode offline (brique 4/4)** — puisque 3 briques sur 4 sont déjà faites et testées, terminer maintenant coûte moins cher que d'y revenir plus tard après avoir perdu le contexte.
+3. Le reste (lots/FEFO, marketplace, refonte UI/UX, SMS, i18n) peut attendre — ce sont des fonctionnalités d'expansion, pas des risques. Les vrais risques identifiés au départ (pas de backup, pas de versioning API) sont déjà réglés.
+
+Je n'ai pas d'avis tranché sur l'ordre entre lots/FEFO et marketplace — ça dépend surtout de ce qui te rapproche le plus vite d'un premier client payant, ce que je ne peux pas juger à ta place.
+
+---
+
+## 🎨 DIRECTION STYLISTIQUE (maquettes reçues, pour la refonte UI/UX)
+
 - Vert émeraude dominant (`emerald-500/600`), fond blanc/gris-vert très pâle
 - Cartes très arrondies (`rounded-2xl`/`3xl`), ombres douces, beaucoup d'espace blanc
 - Bannières dégradées vert foncé→clair avec icônes flottantes décoratives
@@ -291,47 +106,7 @@ Des maquettes ont été fournies et analysées. Points clés à respecter lors d
 - Ne jamais me restituer le code dans le chat — travailler dans l'environnement de fichiers
 - Me prévenir clairement quand il est temps de pousser vers GitHub
 - Ne pas remettre en question les décisions d'architecture sans bonne raison documentée
-
----
-
-## 💻 TESTER EN LOCAL SUR TON PC
-
-Pour tester le projet sur ta machine personnelle :
-
-### Prérequis minimum
-- Python 3.11+, Node.js 20+, PostgreSQL (déjà installé selon toi), Git
-
-### Ce qui manque sur ton PC
-- **Redis** — obligatoire pour les WebSockets. Installation : [https://redis.io/docs/install/](https://redis.io/docs/install/) ou via Docker : `docker run -d -p 6379:6379 redis`
-- **Daphne** — installé automatiquement via `pip install -r requirements.txt`
-- **libmagic** — `brew install libmagic` sur Mac, `apt install libmagic1` sur Linux
-
-### Commandes
-```bash
-git clone https://github.com/Godwin296/New_Pharmacie_Plus.git
-cd New_Pharmacie_Plus
-
-# Backend
-cd pharmacie-backend
-python3 -m venv venv && venv/bin/pip install -r requirements.txt
-cp .env.example .env   # remplir DB_NAME, DB_USER, DB_PASSWORD
-venv/bin/python manage.py migrate_schemas --shared
-venv/bin/daphne -b 127.0.0.1 -p 8000 config.asgi:application
-
-# Frontend (autre terminal)
-cd pharmacie-frontend
-npm install && npm run dev
-# → ouvre http://localhost:3000
-```
-
-### DNS local (multi-tenant obligatoire)
-```bash
-# Sur Mac/Linux :
-sudo echo "127.0.0.1 dupont.localhost" >> /etc/hosts
-# Sur Windows : éditer C:\Windows\System32\drivers\etc\hosts
-```
-
-Ensuite accède à `http://dupont.localhost:3000` (pas `localhost:3000` — le sous-domaine détermine quel tenant est servi).
+- Vérifier l'état réel du code avant de supposer qu'une tâche reste à faire (voir avertissement en haut de ce document)
 
 ---
 

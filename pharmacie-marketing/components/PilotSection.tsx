@@ -62,6 +62,7 @@ export function PilotSection() {
             href={DEMO_WHATSAPP_LINK}
             target="_blank"
             rel="noreferrer"
+            data-umami-event="pilot-section-candidater"
             className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 hover:bg-emerald-500 px-7 py-4 text-[15px] font-bold text-white no-underline transition-colors"
           >
             Candidater comme pharmacie pilote

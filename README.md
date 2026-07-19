@@ -166,31 +166,39 @@ echo "127.0.0.1 mapharmacietest.localhost" | sudo tee -a /etc/hosts
 ```
 New_Pharmacie_Plus/
 ├── pharmacie-backend/
-│   ├── config/           # Settings, URLs, ASGI
+│   ├── config/           # Settings, URLs (api/v1/), ASGI, health.py (/healthz/)
 │   ├── core/             # App principale
 │   │   ├── api.py        # Endpoints REST
 │   │   ├── models.py     # Produit, Commande, PharmacieConfig...
 │   │   ├── validators.py # Upload sécurisé ordonnances
 │   │   ├── pagination.py # CataloguePagination DRF (20/page)
+│   │   ├── cache_utils.py # Cache Redis multi-tenant (préfixe par schéma)
 │   │   ├── throttles.py  # Rate limiting
+│   │   ├── management/commands/backup_db.py   # pg_dump
+│   │   ├── management/commands/restore_db.py  # pg_restore
 │   │   └── consumers.py  # WebSocket consumers
+│   ├── clients_publics/  # CompteClient (schéma public, compte client global)
 │   └── tenants/          # Pharmacie + Domain (django-tenants)
 └── pharmacie-frontend/
     ├── app/              # Pages Next.js App Router
     │   ├── catalogue/    # Catalogue paginé + recherche debounce
-    │   ├── panier/       # Panier + paiement mobile money
+    │   ├── panier/       # Panier + paiement mobile money + file d'attente offline
     │   ├── caisse/       # POS, paiements, ordonnances
     │   └── admin/        # Dashboard, stocks, historique, rapports
     └── lib/
         ├── apiClient.ts                      # Axios + JWT auto
         ├── wsClient.ts                       # WebSocket reconnexion auto
         ├── components/Prix.tsx               # Devise centralisée
-        └── context/ConfigPharmacieContext.tsx # Config pharmacie partagée
+        ├── context/ConfigPharmacieContext.tsx # Config pharmacie partagée
+        ├── offline/                          # File d'attente panier hors-ligne (IndexedDB)
+        └── hooks/useOfflinePanier.ts          # État réseau + synchro auto
 ```
 
 ---
 
 ## 📋 Feuille de route
+
+> Détail complet des tâches restantes, priorisées : voir [PROMPT_REPRISE.md](PROMPT_REPRISE.md). Stratégie de versionnement API : [docs/API_VERSIONING.md](docs/API_VERSIONING.md). Sauvegarde/restauration : [docs/BACKUP_POSTGRESQL.md](docs/BACKUP_POSTGRESQL.md). Guide fonctionnel de la refonte UI/UX (pages, gaps par rôle, méthodologie mobile-first) : [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md), approfondi par la recherche externe [docs/RECHERCHE_FONCTIONNALITES_PHARMACIE.md](docs/RECHERCHE_FONCTIONNALITES_PHARMACIE.md) (dont un point réglementaire camerounais important sur l'ordonnance obligatoire). Sujets infra documentés mais différés (PostgreSQL, HTTPS, Docker, CDN) : [docs/INFRASTRUCTURE_ROADMAP.md](docs/INFRASTRUCTURE_ROADMAP.md).
 
 - [x] Architecture multi-tenant par schéma PostgreSQL
 - [x] Cycle de vie commande complet (en_cours → retiree)
@@ -198,15 +206,23 @@ New_Pharmacie_Plus/
 - [x] WebSocket temps réel (caisse + suivi client)
 - [x] Upload ordonnance sécurisé (magic bytes + anti-stéganographie + resize)
 - [x] PWA installable Android (Serwist)
-- [x] Pagination catalogue (DRF + debounce frontend)
+- [x] Pagination catalogue et POS (DRF + debounce frontend)
 - [x] Composant `<Prix>` centralisé (devise configurable par tenant)
+- [x] Compte client global (`CompteClient`, schéma public) — inscription, connexion, panier, paiement, facture, gestion admin ; ancien modèle `Client` par-tenant entièrement retiré
+- [x] Emails transactionnels (Brevo) — bienvenue, confirmation commande, ordonnance refusée
+- [x] Prédiction de stock (moyenne mobile, régression, Holt amorti, z-score)
+- [x] Mode clair/sombre
+- [x] Versionnement de l'API — `/api/v1/` canonique (`/api/` conservé pour compatibilité)
+- [x] Backups PostgreSQL — `manage.py backup_db` / `restore_db` (pg_dump/pg_restore)
+- [x] Cache Redis multi-tenant (infos pharmacie, catalogue, prédictions) + `/healthz/`
+- [x] Suivi d'erreurs Sentry (backend) — frontend en attente du support Next.js 16 par `@sentry/nextjs`
+- [x] Mode offline — indexation BDD + synchro delta catalogue + cache catalogue local (IndexedDB) + file d'attente panier (4/4 briques)
 - [ ] Gestion des lots (`LotProduit`) avec décrémentation FEFO
-- [ ] Compte client global cross-tenant + marketplace
-- [ ] Backups automatiques PostgreSQL
+- [ ] Page marketplace (client global multi-pharmacies)
 - [ ] Dashboard analytics avancé
 - [ ] Refonte UI/UX mobile-first
-- [ ] Mode offline réel (Service Worker + IndexedDB)
 - [ ] Notifications SMS (Africa's Talking)
+- [ ] Internationalisation (next-intl)
 
 ---
 

@@ -84,26 +84,22 @@ export function LiveStatusWidget() {
   const tone = toneClasses[current.tone];
 
   return (
-    <div className="relative w-full max-w-md rounded-[28px] bg-white/95 backdrop-blur-xl p-6 shadow-2xl shadow-emerald-950/30 border border-white/60">
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-emerald-500">
-            <Plus className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+    <div className="relative w-full max-w-lg rounded-[28px] bg-white/95 backdrop-blur-xl p-8 shadow-2xl shadow-emerald-950/30 border border-white/60">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center justify-center h-7 w-7 rounded-full bg-emerald-500">
+            <Plus className="h-4 w-4 text-white" strokeWidth={3} />
           </div>
-          <span className="text-[12px] font-semibold text-slate-500">
+          <span className="text-[13px] font-semibold text-slate-500">
             Activité de l&apos;officine
           </span>
         </div>
-        <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-          </span>
-          En direct
+        <span className="text-[12px] font-medium text-slate-400">
+          Aperçu
         </span>
       </div>
 
-      <div className="relative h-[100px] overflow-hidden">
+      <div className="relative h-[118px] overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={index}
@@ -111,19 +107,19 @@ export function LiveStatusWidget() {
             animate={{ opacity: 1, y: 0 }}
             exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -14 }}
             transition={{ duration: 0.45, ease: "easeOut" }}
-            className="absolute inset-0 flex items-start gap-4"
+            className="absolute inset-0 flex items-start gap-5"
           >
-            <div className={`shrink-0 rounded-2xl p-3 ring-4 ${tone.bg} ${tone.ring}`}>
-              <Icon className={`h-6 w-6 ${tone.text}`} />
+            <div className={`shrink-0 rounded-2xl p-3.5 ring-4 ${tone.bg} ${tone.ring}`}>
+              <Icon className={`h-7 w-7 ${tone.text}`} />
             </div>
             <div className="min-w-0">
-              <div className={`text-[11px] font-semibold mb-1 ${tone.text}`}>
+              <div className={`text-[12px] font-semibold mb-1.5 ${tone.text}`}>
                 {current.label}
               </div>
-              <div className="font-display font-semibold text-[var(--color-ink)] text-[15px] leading-snug truncate">
+              <div className="font-display font-semibold text-[var(--color-ink)] text-[17px] leading-snug truncate">
                 {current.title}
               </div>
-              <div className="text-slate-500 text-[13px] mt-1 leading-snug">
+              <div className="text-slate-500 text-[14px] mt-1.5 leading-snug">
                 {current.detail}
               </div>
             </div>
@@ -131,18 +127,18 @@ export function LiveStatusWidget() {
         </AnimatePresence>
       </div>
 
-      <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+      <div className="mt-5 pt-5 border-t border-slate-100 flex items-center justify-between">
         <div className="flex gap-1.5">
           {EVENTS.map((_, i) => (
             <span
               key={i}
-              className={`h-1 rounded-full transition-all duration-300 ${
-                i === index ? "w-5 bg-emerald-500" : "w-1.5 bg-slate-200"
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                i === index ? "w-6 bg-emerald-500" : "w-2 bg-slate-200"
               }`}
             />
           ))}
         </div>
-        <span className="text-[11px] text-slate-400">Pharmacie Dupont</span>
+        <span className="text-[12px] text-slate-400">Exemple illustratif</span>
       </div>
     </div>
   );

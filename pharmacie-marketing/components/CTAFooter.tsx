@@ -82,6 +82,7 @@ export function CTAFooter() {
                 href={DEMO_WHATSAPP_LINK}
                 target="_blank"
                 rel="noreferrer"
+                data-umami-event="footer-demander-demo"
                 className="mt-5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-emerald-300 no-underline"
               >
                 Demander une démo

@@ -19,10 +19,16 @@ const serwist = new Serwist({
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
-  // 🔧 Stratégies de cache de base (fichiers statiques, polices, images). Le cache des
-  // DONNÉES dynamiques de l'API (catalogue, panier...) sera ajouté dans une étape ultérieure
-  // dédiée -- ce service worker est volontairement minimal pour l'instant : son seul objectif
-  // ici est de rendre l'app installable (condition technique obligatoire pour l'invite PWA).
+  // 🚀 MODE OFFLINE (brique 4/4, terminée) : `defaultCache` gère déjà la mise en cache de la
+  // COQUILLE de l'app (assets statiques, ET pages/RSC via ses caches "pages"/"pages-rsc") --
+  // une page déjà visitée en ligne (ex: /catalogue) reste donc chargeable hors-ligne par ce
+  // seul mécanisme. Le cache des DONNÉES dynamiques du catalogue (produits, stock, prix) est
+  // volontairement géré ICI PAS via une règle Workbox/Serwist classique : l'endpoint de sync
+  // (`/api/v1/catalogue/sync/`) répond par DELTA (son URL change à chaque appel via `?since=`),
+  // un cache HTTP par URL ne rejouerait donc jamais qu'un fragment figé, pas le catalogue
+  // complet à jour. La vraie copie locale vit dans IndexedDB, tenue à jour par
+  // lib/offline/syncCatalogue.ts (déclenché en tâche de fond par useOfflineCatalogue.ts) et
+  // consultée en repli par app/catalogue/page.tsx quand le réseau manque.
   runtimeCaching: defaultCache,
   fallbacks: {
     entries: [
