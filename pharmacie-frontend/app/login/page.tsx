@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import apiClient from '../../lib/apiClient';
+import { PharmacyIcon } from '../../components/PharmacyIcon';
 
 export default function LoginPage() {
   // --- STATES LOGIQUE ---
@@ -108,7 +109,10 @@ export default function LoginPage() {
           <div className="relative inline-block mb-6">
             <div className="absolute inset-0 bg-emerald-500 rounded-full blur-3xl opacity-30 animate-pulse" />
             <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(16,185,129,0.4)] relative border-2 border-emerald-400 mx-auto p-3.5">
-              <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+              {/* 🔧 FIX LOGO (bug remonté en test, session du 19/07) : icône générique
+                  codée en dur, jamais le vrai logo du tenant -- même correctif que
+                  app/layout.tsx et app/admin/layout.tsx. */}
+              <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
             </div>
           </div>
           <h1 className="text-4xl font-black text-white tracking-tighter italic uppercase">Pharmacie +</h1>

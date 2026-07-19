@@ -72,12 +72,24 @@ def _notifier_client(commande_id, **payload):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-@authentication_classes([StaffJWTAuthentication])
+@authentication_classes([])
 def infos_pharmacie(request):
     # 🌍 Volontairement PUBLIC (AllowAny) : nom, logo, devise, adresse de la pharmacie
     # doivent s'afficher pour n'importe quel visiteur (catalogue, page de connexion...),
     # pas seulement pour un admin déjà authentifié. Aucune donnée sensible n'est exposée
     # ici -- la modification de la config, elle, reste réservée aux admins (api_update_config).
+    #
+    # 🔴 CORRECTIF CRITIQUE (bug remonté en test, session du 19/07) : `@authentication_classes`
+    # était fixé à `[StaffJWTAuthentication]`, qui REJETTE explicitement (AuthenticationFailed,
+    # donc 401 immédiat, AVANT même que `permission_classes([AllowAny])` soit évalué) tout
+    # jeton portant `"type": "client"`. Résultat : tout visiteur connecté en tant que CLIENT
+    # recevait un 401 sur cette route pourtant censée être publique -- appelée à CHAQUE
+    # chargement de page via ConfigPharmacieContext. Combiné au bug de rotation de refresh
+    # token côté frontend (cf. apiClient.ts), ça provoquait une déconnexion en boucle des
+    # comptes clients (redirection systématique vers /login). Cette vue n'utilise JAMAIS
+    # `request.user` (juste de la config publique) -- `authentication_classes([])` est donc
+    # la correction la plus sûre : aucun jeton, quel qu'il soit, ne peut faire échouer cette
+    # route.
     #
     # 🔴 CACHE REDIS : cette route est appelée à CHAQUE chargement de page (login, catalogue,
     # panier...) mais son contenu ne change que lorsqu'un admin modifie sa config -- candidat
@@ -196,6 +208,11 @@ def check_role(user, role_requested):
 # ============================================================================
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])
+# 🔴 CORRECTIF (même bug que infos_pharmacie, cf. son commentaire) : sans cette ligne,
+# un visiteur qui a DÉJÀ un jeton (client ou périmé) attaché par apiClient recevait un
+# 401 avant même que la logique d'inscription ne s'exécute. L'inscription ne dépend
+# jamais de request.user -- aucun risque à désactiver l'authentification ici.
 def api_client_register(request):
     email = (request.data.get('email') or '').strip().lower()
     password = request.data.get('password') or ''
@@ -223,6 +240,7 @@ def api_client_register(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])  # 🔴 même correctif que api_client_register ci-dessus
 @throttle_classes([LoginRateThrottle])
 def api_client_login(request):
     email = (request.data.get('email') or '').strip().lower()
@@ -325,6 +343,7 @@ def api_client_changer_mot_de_passe(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])  # 🔴 même correctif que api_client_register ci-dessus
 @throttle_classes([LoginRateThrottle])
 def api_login(request):
     """Connexion Next.js avec génération de jetons JWT 🎭"""
@@ -400,6 +419,10 @@ def api_get_current_user(request):
 # --- 💊 CATALOGUE & RECHERCHE (Remplace HTMX) ---
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@authentication_classes([])
+# 🔴 CORRECTIF CRITIQUE (bug remonté en test, session du 19/07 -- même famille que
+# infos_pharmacie) : sans cette ligne, un CLIENT connecté recevait 401 sur le catalogue
+# lui-même. Cette vue n'utilise jamais request.user.
 def api_catalogue(request):
     """Catalogue réactif pour Next.js 🚀
 
@@ -455,6 +478,11 @@ CATALOGUE_SYNC_BATCH_SIZE = 300  # cf. docstring api_catalogue_sync : compromis 
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@authentication_classes([])
+# 🔴 CORRECTIF CRITIQUE (bug remonté en test, session du 19/07) : c'est CET endpoint
+# précis qui a été observé en 401 dans les logs du porteur du projet, provoquant la
+# déconnexion en boucle des comptes clients (mode offline appelé à chaque chargement de
+# page). Même correctif que infos_pharmacie/api_catalogue ci-dessus.
 def api_catalogue_sync(request):
     """
     🌐 Endpoint dédié au cache offline (IndexedDB côté frontend) -- DIFFÉRENT de api_catalogue

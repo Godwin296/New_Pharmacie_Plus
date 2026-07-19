@@ -51,6 +51,41 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// 🔐 Un SEUL rafraîchissement de jeton à la fois pour tout le site.
+//
+// 🔴 CORRECTIF CRITIQUE (bug remonté en test, session du 19/07) : au chargement d'une
+// page, PLUSIEURS requêtes partent en parallèle (ex: infos-pharmacie + catalogue/sync).
+// Si le jeton d'accès est périmé, elles échouent TOUTES en 401 quasi simultanément.
+// Avant ce correctif, CHACUNE déclenchait sa propre tentative de rafraîchissement,
+// indépendamment. Or le backend a ROTATE_REFRESH_TOKENS=True + BLACKLIST_AFTER_ROTATION=True
+// (voir config/settings.py) : un refresh_token n'est utilisable qu'UNE SEULE fois. La
+// première requête à rafraîchir réussissait et obtenait un nouveau refresh_token, mais la
+// deuxième était déjà partie avec l'ANCIEN (lu en mémoire avant que le premier n'ait fini
+// d'écrire le nouveau) -- ce deuxième essai échouait donc systématiquement, déclenchant la
+// déconnexion complète (localStorage.clear() + redirection /login) alors que la session
+// était en réalité tout à fait valide. C'est la cause de la boucle de déconnexion observée
+// sur les comptes clients (mode offline + config publique chargées en parallèle à chaque page).
+//
+// La solution : une seule promesse de rafraîchissement partagée. La première requête à
+// échouer en 401 lance le rafraîchissement ; toute requête suivante qui échoue PENDANT que
+// ce rafraîchissement est en cours attend la MÊME promesse au lieu d'en déclencher une
+// nouvelle -- une seule consommation du refresh_token, peu importe le nombre de requêtes
+// parallèles qui en avaient besoin.
+let refreshEnCours: Promise<string> | null = null;
+
+async function rafraichirToken(refreshToken: string): Promise<string> {
+  const res = await axios.post(
+    `${resolveApiUrl()}/api/token/refresh/`,
+    { refresh: refreshToken },
+    { timeout: 10000 }
+  );
+  localStorage.setItem('access_token', res.data.access);
+  if (res.data.refresh) {
+    localStorage.setItem('refresh_token', res.data.refresh);
+  }
+  return res.data.access;
+}
+
 // Intercepteur réponse : refresh automatique du token JWT si 401
 apiClient.interceptors.response.use(
   (response) => response,
@@ -75,19 +110,19 @@ apiClient.interceptors.response.use(
 
       originalRequest._retry = true;
       try {
-        const res = await axios.post(
-          `${resolveApiUrl()}/api/token/refresh/`,
-          { refresh: refreshToken },
-          { timeout: 10000 }
-        );
-
-        if (res.status === 200) {
-          localStorage.setItem('access_token', res.data.access);
-          originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
-          return apiClient(originalRequest);
+        // Rejoint le rafraîchissement déjà en cours s'il y en a un, sinon en démarre un
+        // nouveau. `finally` libère le verrou une fois résolu (succès OU échec), pour que
+        // la prochaine expiration de jeton puisse déclencher un nouveau cycle.
+        if (!refreshEnCours) {
+          refreshEnCours = rafraichirToken(refreshToken).finally(() => {
+            refreshEnCours = null;
+          });
         }
+        const nouvelAccessToken = await refreshEnCours;
+        originalRequest.headers.Authorization = `Bearer ${nouvelAccessToken}`;
+        return apiClient(originalRequest);
       } catch (refreshError) {
-        // Refresh token expiré : session vraiment terminée.
+        // Refresh token expiré (ou déjà utilisé/blacklisté) : session vraiment terminée.
         // On redirige sauf si on est déjà sur /login (évite la boucle).
         if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
           localStorage.clear();
