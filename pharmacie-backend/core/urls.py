@@ -6,7 +6,6 @@ app_name = 'core'
 urlpatterns = [
     # --- 🔐 SYSTÈME ET AUTHENTIFICATION (NEXT.JS) ---
     path("login/", api.api_login, name="api_login"),
-    path("register/", api.api_register, name="api_register"),
     path("infos-pharmacie/", api.infos_pharmacie, name="api_infos_pharmacie"),
     path("update-config/", api.api_update_config, name="api_update_config"),
     path("current-user/", api.api_get_current_user, name="api_get_current_user"),

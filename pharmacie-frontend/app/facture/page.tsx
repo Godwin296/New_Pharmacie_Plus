@@ -70,7 +70,7 @@ function FactureContent() {
       {/* Wrapper de centrage pour l'impression */}
       <div className="print-wrapper">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="invoice-container max-w-212.5 mx-auto bg-white dark:bg-slate-900 p-10 md:p-16 rounded-[3rem] shadow-2xl border border-slate-100 dark:border-slate-800 print:shadow-none print:border-none print:m-0 print:p-4 print:w-[80mm]"
+          className="invoice-container max-w-212.5 mx-auto bg-white dark:bg-slate-900 p-10 md:p-16 rounded-[3rem] shadow-2xl border border-slate-100 dark:border-slate-800 print:shadow-none print:border-none print:m-0 print:p-5 print:w-[80mm]"
         >
           {/* 🔝 EN-TÊTE */}
           <div className="flex flex-col md:flex-row justify-between items-start border-b-2 border-slate-50 dark:border-slate-800 pb-10 mb-10 gap-8">
@@ -79,7 +79,7 @@ function FactureContent() {
                 <img src={config.logo} alt="Logo" className="w-20 h-20 object-contain rounded-2xl" />
               ) : (
                 <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center p-2.5">
-                  <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+                  <img src="/branding/logo-full.png" alt="Pharmacie+" className="w-full h-full object-contain" />
                 </div>
               )}
               <div>
@@ -102,7 +102,7 @@ function FactureContent() {
           </div>
 
           {/* 👤 INFOS CLIENT */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50 dark:bg-slate-950 p-8 rounded-[2.5rem] mb-12 border border-slate-100 dark:border-slate-800 print:mb-6 print:p-4 print:rounded-2xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50 dark:bg-slate-950 p-8 rounded-[2.5rem] mb-12 border border-slate-100 dark:border-slate-800 print:mb-7 print:p-5 print:rounded-2xl">
             <div>
               <span className="text-[9px] font-black text-slate-400 uppercase block mb-2 underline decoration-emerald-500">Patient / Client</span>
               <h4 className="text-xl font-black text-slate-800 dark:text-white uppercase italic tracking-tighter print:text-sm">
@@ -124,25 +124,25 @@ function FactureContent() {
           </div>
 
           {/* 🛒 ARTICLES */}
-          <div className="overflow-x-auto mb-12 print:mb-6">
+          <div className="overflow-x-auto mb-12 print:mb-7">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800">
-                  <th className="py-6 px-4 print:py-2">Désignation</th>
-                  <th className="py-6 px-4 text-center print:py-2">Qté</th>
-                  <th className="py-6 px-4 text-right print:py-2 print:hidden">P.U</th>
-                  <th className="py-6 px-4 text-right print:py-2">Total</th>
+                  <th className="py-6 px-4 print:py-3">Désignation</th>
+                  <th className="py-6 px-4 text-center print:py-3">Qté</th>
+                  <th className="py-6 px-4 text-right print:py-3 print:hidden">P.U</th>
+                  <th className="py-6 px-4 text-right print:py-3">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
                 {data.items?.map((item: any, i: number) => (
                   <tr key={i}>
-                    <td className="py-6 px-4 print:py-2">
-                      <div className="font-black text-slate-800 dark:text-white text-sm uppercase italic print:text-[10px]">{item.produit_nom}</div>
+                    <td className="py-6 px-4 print:py-3">
+                      <div className="font-black text-slate-800 dark:text-white text-sm uppercase italic print:text-[11px]">{item.produit_nom}</div>
                     </td>
-                    <td className="py-6 px-4 text-center font-black text-slate-500 text-sm print:py-2 print:text-[10px]">x{item.quantite}</td>
+                    <td className="py-6 px-4 text-center font-black text-slate-500 text-sm print:py-3 print:text-[11px]">x{item.quantite}</td>
                     <td className="py-6 px-4 text-right font-bold text-slate-600 dark:text-slate-400 text-sm print:hidden">{parseFloat(item.prix_unitaire).toLocaleString()}</td>
-                    <td className="py-6 px-4 text-right font-black text-slate-800 dark:text-white text-base print:py-2 print:text-[10px]">
+                    <td className="py-6 px-4 text-right font-black text-slate-800 dark:text-white text-base print:py-3 print:text-[11px]">
                       {parseFloat(item.total_item).toLocaleString()}
                     </td>
                   </tr>
@@ -152,8 +152,8 @@ function FactureContent() {
           </div>
 
           {/* 💰 TOTAL GLOBAL */}
-          <div className="flex justify-end mb-16 px-4 print:mb-6">
-            <div className="w-full md:w-80 pt-6 border-t-4 border-emerald-500/20 flex justify-between items-end text-4xl font-black text-emerald-600 dark:text-emerald-400 print:text-xl print:pt-2">
+          <div className="flex justify-end mb-16 px-4 print:mb-7">
+            <div className="w-full md:w-80 pt-6 border-t-4 border-emerald-500/20 flex justify-between items-end text-4xl font-black text-emerald-600 dark:text-emerald-400 print:text-xl print:pt-3">
                 <span className="tracking-tighter italic">TOTAL</span>
                 <span className="tracking-tighter">
                   {parseFloat(data.total_general).toLocaleString()}
@@ -163,12 +163,12 @@ function FactureContent() {
           </div>
 
           {/* 🛰️ FOOTER & QR CODE */}
-          <div className="flex flex-col md:flex-row justify-between items-center gap-12 border-t-2 border-slate-50 dark:border-slate-800 pt-12 print:pt-4 print:gap-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-12 border-t-2 border-slate-50 dark:border-slate-800 pt-12 print:pt-5 print:gap-5">
             <div className="max-w-md text-center md:text-left">
               <h5 className="text-[10px] font-black text-slate-800 dark:text-white mb-3 uppercase tracking-widest flex items-center justify-center md:justify-start gap-2">
                 <ShieldCheck size={14} className="text-emerald-500" /> Note Pharmaceutique
               </h5>
-              <p className="text-xs text-slate-500 italic leading-relaxed font-medium print:text-[8px]">
+              <p className="text-xs text-slate-500 italic leading-relaxed font-medium print:text-[9.5px]">
                 {config?.message_remerciement || "Merci de votre confiance. Respectez les doses."}
               </p>
             </div>
@@ -179,7 +179,7 @@ function FactureContent() {
                   <img
                     src={data.qr_code}
                     alt="QR Code"
-                    className="w-24 h-24 object-contain print:w-16 print:h-16"
+                    className="w-24 h-24 object-contain print:w-20 print:h-20"
                   />
                 ) : (
                   <div className="text-[10px] text-slate-400 font-bold text-center p-2">QR</div>
@@ -222,7 +222,7 @@ function FactureContent() {
             width: 80mm !important;
             max-width: 80mm !important;
             margin: 0 auto !important;
-            padding: 5mm !important;
+            padding: 7mm !important;
             border-radius: 0 !important; /* Pour le ticket de caisse, on aplatit */
             box-shadow: none !important;
             border: none !important;
@@ -236,12 +236,13 @@ function FactureContent() {
             color: black !important;
           }
 
-          /* On réduit les espaces trop grands du design desktop */
-          .pb-10, .mb-10, .mb-12, .mb-16 { margin-bottom: 4mm !important; padding-bottom: 4mm !important; }
-          .p-8, .p-10, .md\:p-16 { padding: 2mm !important; }
+          /* On réduit les espaces trop grands du design desktop, sans les écraser
+             complètement -- un ticket doit rester lisible et respirer un minimum. */
+          .pb-10, .mb-10, .mb-12, .mb-16 { margin-bottom: 6mm !important; padding-bottom: 6mm !important; }
+          .p-8, .p-10, .md\:p-16 { padding: 4mm !important; }
           
           /* Forcer la visibilité du logo */
-          img { max-width: 15mm !important; }
+          img { max-width: 20mm !important; }
         }
       `}</style>
     </div>

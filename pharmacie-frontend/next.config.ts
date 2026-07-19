@@ -3,6 +3,16 @@ import { withSerwist } from "@serwist/turbopack";
 
 const nextConfig: NextConfig = {
   turbopack: {},
+  // 🔧 FIX "impossible d'ouvrir dupont.localhost:3000 / martin.localhost:3000" :
+  // depuis mi-mars 2026, Next.js bloque PAR DÉFAUT les requêtes dev dont le Host
+  // ne correspond pas à "localhost" (protection anti-DNS-rebinding). Comme chaque
+  // pharmacie est visitée via un sous-domaine (dupont.localhost, martin.localhost...),
+  // il faut les autoriser explicitement, sinon le serveur répond mais le navigateur
+  // voit une requête bloquée (page blanche / erreur "Blocked request").
+  // Le backend Django (port 8000) n'est pas concerné par cette protection, d'où
+  // le fait que /admin fonctionne alors que le frontend (port 3000) semble muet.
+  // Doc: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+  allowedDevOrigins: ["*.localhost"],
   // ⚠️ ANCIEN FIX RETIRÉ (invalide) : on avait tenté de déplacer distDir vers C:\
   // via NEXT_DIST_DIR pour contourner un disque D:\ lent. Erreur constatée en le
   // testant réellement : "distDir should not leave your project directory" est une

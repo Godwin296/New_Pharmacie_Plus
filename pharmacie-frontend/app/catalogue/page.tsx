@@ -6,6 +6,7 @@ import { Search, Pill, ShoppingCart, Info, Loader2, Filter, Plus, Minus, AlertCi
 // 🌟 CONFIGURATION : Utilisation de l'instance unifiée apiClient (Gère l'URL de base et le JWT)
 import apiClient from '../../lib/apiClient';
 import Prix from '../../lib/components/Prix';
+import { ajouterAuPanierHorsLigne } from '../../lib/offline/panierQueue';
 
 interface Produit {
   id: number;
@@ -127,8 +128,24 @@ export default function CataloguePage() {
   };
 
   // 3. AJOUT SÉCURISÉ AU PANIER CLIENT (Le token est injecté par apiClient)
+  // 🚀 MODE OFFLINE (session 12/07, brique 3/4) : si le serveur est injoignable (pas de
+  // réponse HTTP du tout -- `!err.response`, cf. apiClient.ts qui distingue déjà ce cas),
+  // ce n'est pas une erreur "à afficher et oublier" : on met l'ajout en file d'attente
+  // locale (IndexedDB) pour le rejouer automatiquement dès le retour du réseau, plutôt que
+  // de faire perdre le geste au client. Une vraie erreur MÉTIER (ex: 400 "Stock
+  // insuffisant") reste affichée immédiatement -- le serveur A répondu, il n'y a rien à
+  // mettre en attente, l'info est déjà à jour et définitive.
   const handleAddToCart = async (produitId: number) => {
     const qte = quantites[produitId] || 1;
+    const produit = produits.find((p) => p.id === produitId);
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      // Hors-ligne détecté AVANT même de tenter la requête : inutile d'attendre un timeout.
+      if (produit) await ajouterAuPanierHorsLigne(produitId, produit.nom, produit.prix, qte);
+      alert(`Hors-ligne : ${qte} unité(s) mise(s) en attente, sera synchronisé au retour du réseau 📡`);
+      return;
+    }
+
     try {
       await apiClient.post('/api/panier/', { 
         produit_id: produitId, 
@@ -136,6 +153,12 @@ export default function CataloguePage() {
       });
       alert(`Ajouté : ${qte} unité(s) au panier ! ✅`);
     } catch (err: any) {
+      if (!err.response) {
+        // Réseau injoignable au moment de la requête (timeout, coupure en cours de frappe...)
+        if (produit) await ajouterAuPanierHorsLigne(produitId, produit.nom, produit.prix, qte);
+        alert(`Réseau injoignable : ${qte} unité(s) mise(s) en attente, sera synchronisé au retour du réseau 📡`);
+        return;
+      }
       alert(err.response?.data?.error || "Erreur lors de l'ajout. Veuillez vérifier votre session.");
     }
   };

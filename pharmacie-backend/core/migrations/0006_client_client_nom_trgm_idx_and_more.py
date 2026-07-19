@@ -30,6 +30,17 @@ class Migration(migrations.Migration):
     dependencies = [
         ('core', '0005_commande_ordonnance_verifiee_visuellement'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+        # 🐛 CORRECTIF (bug préexistant, sans rapport avec CompteClient/lots) : cette
+        # migration crée des index GIN avec opclasses=['gin_trgm_ops'], qui n'existe que
+        # si l'extension pg_trgm a déjà été activée par tenants.0002_enable_pg_trgm.
+        # Sans dépendance EXPLICITE ici, ces deux migrations appartiennent à des branches
+        # indépendantes du graphe Django -- leur ordre relatif n'est alors PAS garanti et
+        # dépend de l'ordre d'itération interne de l'exécuteur de migrations (non
+        # déterministe d'un process Python à l'autre, à cause du hash randomization).
+        # Constaté en conditions réelles : sur une base entièrement neuve, `migrate_schemas
+        # --shared` échouait environ 1 fois sur 2 avec "operator class gin_trgm_ops does
+        # not exist for access method gin", selon l'ordre où l'exécuteur tombait ce jour-là.
+        ('tenants', '0002_enable_pg_trgm'),
     ]
 
     operations = [

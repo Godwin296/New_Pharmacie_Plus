@@ -14,6 +14,9 @@ import { useRouter } from 'next/navigation';
 import apiClient from '../../lib/apiClient';
 import { ReconnectingSocket } from '../../lib/wsClient';
 import Prix from '../../lib/components/Prix';
+import { useOfflinePanier } from '../../lib/hooks/useOfflinePanier';
+import { supprimerDeFileAttente } from '../../lib/offline/panierQueue';
+import { WifiOff, RotateCw } from 'lucide-react';
 
 export default function PanierPage() {
   const router = useRouter();
@@ -21,6 +24,21 @@ export default function PanierPage() {
   const [commande, setCommande] = useState<any>(null);
   const [status, setStatus] = useState<'REFUSED' | 'MISSING_DOC' | 'PENDING_VAL' | 'VALIDATED' | 'PAIEMENT_SOUMIS' | 'PRETE_A_RETIRER' | 'EMPTY'>('EMPTY');
   const socketRef = useRef<ReconnectingSocket | null>(null);
+
+  // 🚀 MODE OFFLINE (session 12/07, brique 3/4) : file d'attente des ajouts faits hors-ligne
+  // depuis /catalogue (voir handleAddToCart là-bas). `syncing` sert ici à détecter la fin
+  // d'une synchro (déclenchée automatiquement par le hook au retour du réseau, ou
+  // manuellement via le bouton plus bas) pour rafraîchir le panier SERVEUR affiché --
+  // sans ça, un item synchronisé avec succès resterait invisible tant que la page n'est
+  // pas rechargée manuellement.
+  const { file: fileAttente, isOnline, syncing, synchroniser, rafraichirFile } = useOfflinePanier();
+  const syncingPrecedent = useRef(false);
+  useEffect(() => {
+    if (syncingPrecedent.current && !syncing) {
+      fetchPanier(); // la synchro vient de se terminer -> le panier serveur a peut-être changé
+    }
+    syncingPrecedent.current = syncing;
+  }, [syncing]);
 
   // 💰 État du modal de paiement manuel
   const [showPaiementModal, setShowPaiementModal] = useState(false);
@@ -150,6 +168,59 @@ export default function PanierPage() {
         </div>
         <h2 className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter italic uppercase">Mon Panier</h2>
       </div>
+
+      {/* 🚀 MODE OFFLINE (session 12/07, brique 3/4) : items ajoutés au panier sans réseau,
+          en attente d'être rejoués contre le serveur (voir catalogue/page.tsx::handleAddToCart
+          et lib/offline/syncPanier.ts). Complètement indépendant du panier serveur affiché
+          plus bas -- tant qu'un item est ici, il n'existe PAS encore côté serveur. */}
+      {fileAttente.length > 0 && (
+        <div className="mb-8 bg-amber-50 dark:bg-amber-500/10 rounded-[2rem] border border-amber-200 dark:border-amber-900/30 p-6">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <WifiOff size={18} />
+              <span className="font-black text-xs uppercase tracking-widest">
+                {fileAttente.length} article{fileAttente.length > 1 ? 's' : ''} en attente de synchronisation
+              </span>
+            </div>
+            <button
+              onClick={synchroniser}
+              disabled={syncing || !isOnline}
+              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-[10px] uppercase tracking-widest px-4 py-2 rounded-xl border-none cursor-pointer transition-colors"
+            >
+              <RotateCw size={14} className={syncing ? "animate-spin" : ""} />
+              {syncing ? "Synchronisation..." : isOnline ? "Synchroniser maintenant" : "Hors-ligne"}
+            </button>
+          </div>
+          <div className="space-y-2">
+            {fileAttente.map((item) => (
+              <div key={item.localId} className="flex items-center justify-between bg-white/60 dark:bg-slate-900/40 rounded-xl px-4 py-3">
+                <div>
+                  <p className="font-bold text-sm text-slate-800 dark:text-white">{item.nom} <span className="text-slate-400 font-medium">× {item.quantite}</span></p>
+                  {item.statut === 'erreur' && (
+                    <p className="text-[11px] text-red-500 font-semibold mt-0.5">⚠ {item.erreur || "Échec de la synchronisation"}</p>
+                  )}
+                  {item.statut === 'en_cours' && (
+                    <p className="text-[11px] text-amber-500 font-semibold mt-0.5">Synchronisation en cours...</p>
+                  )}
+                </div>
+                {item.statut === 'erreur' && (
+                  <button
+                    onClick={async () => { await supprimerDeFileAttente(item.localId); rafraichirFile(); }}
+                    className="text-[10px] font-black uppercase tracking-widest text-red-500 hover:text-red-600 bg-transparent border-none cursor-pointer"
+                  >
+                    Retirer
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          {!isOnline && (
+            <p className="mt-4 text-[11px] text-amber-600 dark:text-amber-500 italic">
+              Toujours hors-ligne : la synchronisation reprendra automatiquement dès que la connexion reviendra.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
         

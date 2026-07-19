@@ -1,9 +1,7 @@
-from django.shortcuts import get_object_or_404
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import AuthenticationFailed, InvalidToken
 
 from clients_publics.models import CompteClient
-from .models import Client
 
 
 class StaffJWTAuthentication(JWTAuthentication):
@@ -93,25 +91,18 @@ class ClientOrStaffJWTAuthentication(JWTAuthentication):
 
 def resoudre_identite_client(user):
     """
-    🌍 Résout l'identité "client" (jamais personnel) portée par `user`, qu'elle
-    provienne du nouveau système global (CompteClient, schéma public, marketplace)
-    ou de l'ancien système par-tenant (Client, lié en OneToOne à un auth.User) --
-    conservé uniquement pour compatibilité descendante avec d'éventuelles données
-    déjà existantes, le nouveau flux d'inscription/connexion ne produit plus que
-    des CompteClient.
+    🌍 Résout l'identité "client" (jamais personnel) portée par `user`. Depuis le retrait
+    complet de l'ancien modèle Client (par-tenant, OneToOne vers auth.User), toute
+    identité client passe par CompteClient (marketplace, schéma public) -- cette
+    fonction reste utile comme point d'entrée unique (garde-fou is_staff) et pour garder
+    le même contrat d'appel (instance, nom_du_champ_fk) dans le reste du code.
 
-    Renvoie un tuple (instance, nom_du_champ_fk) où nom_du_champ_fk vaut
-    "compte_client" ou "client" -- directement utilisable comme clé de filtre
-    (ex: Commande.objects.filter(**{nom_du_champ_fk: instance})).
+    Renvoie un tuple (instance, "compte_client") -- "compte_client" est directement
+    utilisable comme clé de filtre (ex: Commande.objects.filter(compte_client=instance)).
 
-    Renvoie (None, None) si `user` est un membre du personnel (is_staff=True),
-    qui n'a par définition aucune identité client.
+    Renvoie (None, None) si `user` est un membre du personnel (is_staff=True), qui n'a
+    par définition aucune identité client.
     """
     if not user or getattr(user, "is_staff", False):
         return None, None
-    if isinstance(user, CompteClient):
-        return user, "compte_client"
-    # 🕰️ Ancien système : le "profil client" est une ligne à part, liée par
-    # OneToOne à l'auth.User authentifié.
-    client_profile = get_object_or_404(Client, user=user)
-    return client_profile, "client"
+    return user, "compte_client"

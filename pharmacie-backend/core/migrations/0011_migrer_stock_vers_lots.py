@@ -38,7 +38,7 @@ def revenir_en_arriere(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0009_mouvement_stock_note_lotproduit_mouvement_stock_lot_and_more'),
+        ('core', '0010_mouvement_stock_note_lotproduit_mouvement_stock_lot_and_more'),
     ]
 
     operations = [

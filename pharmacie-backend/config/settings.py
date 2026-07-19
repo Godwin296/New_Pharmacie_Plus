@@ -185,6 +185,22 @@ CSRF_COOKIE_HTTPONLY = False
 ROOT_URLCONF = 'config.urls'
 PUBLIC_SCHEMA_URLCONF = 'config.urls_public'  # Routes du schéma "public" (gestion des tenants)
 
+# 🔴 CORRECTIF (bug remonté en test, session du 16/07) : par défaut, django-tenants
+# renvoie un 404 BRUT -- avant même que l'URL routing s'exécute -- pour tout hostname qui
+# ne correspond à AUCUN Domain enregistré (cf. tenants.models.Domain). Concrètement :
+# taper sur "localhost:8000/..." au lieu de "dupont.localhost:8000/..." (oubli fréquent en
+# dev, ou un outil de monitoring qui ping par IP/hostname générique en prod) déclenchait un
+# 404 systématique sur TOUTES les routes -- y compris des routes qui n'ont rien à voir avec
+# un tenant précis (health check, futur site marketing sur le domaine racine...). Ce
+# comportement ressemblait à un bug applicatif alors que c'était le middleware
+# django-tenants qui coupait la requête avant même d'atteindre nos vues.
+# Avec ce flag à True : un hostname non reconnu retombe sur le schéma "public" (et sa
+# urlconf dédiée, config.urls_public) au lieu d'un 404 immédiat -- exactement ce qu'on
+# veut pour /healthz/ (monitoring externe) et pour la future page d'accueil marketing du
+# SaaS. Les VRAIS tenants (dupont.localhost, martin.localhost...) continuent de router
+# normalement vers core.urls dès que leur Domain est enregistré -- ce flag ne les affecte pas.
+SHOW_PUBLIC_IF_NO_TENANT_FOUND = True
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -450,4 +466,77 @@ if not DEBUG and SENTRY_DSN:
         # ou données personnelles dans les payloads Sentry.
         send_default_pii=False,
     )
+
+
+# ============================================================
+# 📋 LOGGING — sortie structurée, niveaux cohérents
+# ============================================================
+# Sans ce bloc, Django utilise sa config par défaut : les erreurs 500 s'affichent bien
+# dans le terminal (cf. les tracebacks vus en session de test), mais SANS horodatage ni
+# nom de module -- difficile de savoir QUAND une erreur a eu lieu ou QUEL fichier l'a
+# levée en scrollant un long log. Ce bloc structure la sortie et fixe des niveaux
+# raisonnables par logger, sans rien changer au comportement de Sentry ci-dessus (les
+# deux systèmes sont complémentaires : Sentry pour l'alerting/agrégation en prod,
+# ce LOGGING pour la lecture humaine immédiate du terminal/fichier).
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{asctime}] {levelname:<8} {name} — {message}",
+            "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose" if not DEBUG else "simple",
+        },
+        # 📁 Fichier de logs applicatif (erreurs + avertissements uniquement) : utile en
+        # PROD quand Sentry n'est pas configuré (SENTRY_DSN vide), ou simplement pour
+        # garder un historique local consultable sans quitter le serveur. Rotation à 5 Mo
+        # x 5 fichiers : suffisant pour ne jamais remplir le disque silencieusement.
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "pharmacie.log",
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "verbose",
+            "level": "WARNING",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.request": {
+            # Erreurs 500 : toujours au niveau ERROR, jamais noyées par le bruit INFO.
+            "handlers": ["console", "file"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        # Nos propres logger.exception(...) dans core/api.py, core/emails.py... utilisent
+        # logging.getLogger(__name__), donc "core.api", "core.emails", etc. -- ce logger
+        # parent "core" les capte tous sans avoir à les déclarer un par un.
+        "core": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+
+import os as _os
+_os.makedirs(BASE_DIR / "logs", exist_ok=True)
 

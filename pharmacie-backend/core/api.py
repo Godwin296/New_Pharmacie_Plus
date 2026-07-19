@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime, parse_date
+from django.utils.crypto import get_random_string
 from django.contrib.auth import authenticate
 from django.db.models import Q, Sum, F
 from django.db.models.functions import TruncDate
@@ -19,15 +20,16 @@ from django.contrib.auth.models import User
 from datetime import timedelta
 from django.utils import timezone
 
-from .models import Produit, Commande, ItemCommande, Client, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog, LotProduit
+from .models import Produit, Commande, ItemCommande, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog, LotProduit
 from .serializers import (
-    ProduitSerializer, CommandeSerializer, CommandeClientSerializer, ClientRegisterSerializer, 
+    ProduitSerializer, CommandeSerializer, CommandeClientSerializer,
     PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer
 )
 from .validators import valider_et_desinfecter_ordonnance, valider_et_desinfecter_photo_produit
 from .pagination import CataloguePagination
 from .throttles import LoginRateThrottle, SoumettrePaiementRateThrottle
 from .services_prediction import predire_pour_produit, predire_pour_tous_produits
+from .cache_utils import cache_get, cache_set, cache_delete_exact
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from clients_publics.models import CompteClient 
@@ -76,6 +78,15 @@ def infos_pharmacie(request):
     # doivent s'afficher pour n'importe quel visiteur (catalogue, page de connexion...),
     # pas seulement pour un admin déjà authentifié. Aucune donnée sensible n'est exposée
     # ici -- la modification de la config, elle, reste réservée aux admins (api_update_config).
+    #
+    # 🔴 CACHE REDIS : cette route est appelée à CHAQUE chargement de page (login, catalogue,
+    # panier...) mais son contenu ne change que lorsqu'un admin modifie sa config -- candidat
+    # idéal au cache. Clé UNIQUE par tenant (pas de variation par requête), invalidée
+    # immédiatement dans api_update_config -- jamais de logo/nom périmé affiché.
+    cached = cache_get("infos_pharmacie")
+    if cached is not None:
+        return Response(cached)
+
     config = PharmacieConfig.objects.first()
     if not config:
         config = PharmacieConfig.objects.create(
@@ -90,6 +101,7 @@ def infos_pharmacie(request):
     # `config.logo` est bien "truthy" côté React. Avec le contexte, DRF renvoie l'URL
     # absolue correcte (http://dupont.localhost:8000/media/config/logo.png).
     serializer = PharmacieConfigSerializer(config, context={'request': request})
+    cache_set("infos_pharmacie", serializer.data, timeout=3600)  # 1h : invalidé au besoin de toute façon
     return Response(serializer.data)
 
 @api_view(['POST','PUT', 'PATCH'])
@@ -128,6 +140,9 @@ def api_update_config(request):
         config.nom_titulaire_mtn_momo = request.data.get('nom_titulaire_mtn_momo', config.nom_titulaire_mtn_momo)
 
         config.save()
+        # 🔴 Invalidation IMMÉDIATE du cache (clé unique par tenant, cf. cache_utils.py) --
+        # sans ça, le nouveau logo/nom resterait invisible jusqu'à expiration du TTL (1h).
+        cache_delete_exact("infos_pharmacie")
         return Response({"message": "Paramètres mis à jour avec succès !"}, status=200)
     except Exception as e:
         # Parfait pour le développement : vous voyez exactement pourquoi ça plante
@@ -197,6 +212,12 @@ def api_client_register(request):
     client = CompteClient.objects.create_user(
         email=email, password=password, nom=nom, telephone=telephone or None
     )
+
+    # 📧 Hors du cœur de la transaction d'inscription : un échec d'envoi ne doit jamais
+    # faire échouer une création de compte déjà validée en base.
+    from .emails import envoyer_email_bienvenue
+    envoyer_email_bienvenue(client)
+
     return Response({"message": "Compte créé avec succès ! 🎉", "email": client.email}, status=201)
 
 
@@ -243,30 +264,6 @@ def api_client_whoami(request):
         "nom": client.nom,
         "telephone": client.telephone,
     })
-
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def api_register(request):
-    """Inscription sécurisée d'un Client (Zéro compte fantôme) 🛡️"""
-    # Notre sérialiseur s'occupe de TOUT : validation de la force du password,
-    # vérification des doublons, et création simultanée dans User et Client.
-    serializer = ClientRegisterSerializer(data=request.data)
-    if serializer.is_valid():
-        nouveau_client = serializer.save()
-
-        # 📧 Hors du cœur de la transaction d'inscription : un échec d'envoi ne doit jamais
-        # faire échouer une création de compte déjà validée en base.
-        from .emails import envoyer_email_bienvenue
-        envoyer_email_bienvenue(nouveau_client)
-
-        return Response({
-            "message": "Compte créé avec succès ! 🎉",
-            "id_client": nouveau_client.identifiant
-        }, status=201)
-    
-    # En cas d'erreur (mot de passe trop faible, téléphone doublon), DRF répond proprement
-    return Response(serializer.errors, status=400)
 
 
 @api_view(['POST'])
@@ -353,7 +350,20 @@ def api_catalogue(request):
     ce qui devenait lourd sur 3G/4G à mesure que le catalogue grossit). On utilise
     désormais CataloguePagination (20 produits/page par défaut, voir core/pagination.py).
     Le frontend doit envoyer ?page=N et peut envoyer ?page_size=N pour ajuster.
+
+    🔴 CACHE REDIS (60s) : c'est la route la plus sollicitée du site (chaque visiteur,
+    connecté ou non, la déclenche en boucle en filtrant/paginant). Clé = tenant + query
+    string exacte (cf. cache_utils.py) -- page 1 et page 2, ou "q=doliprane" et "q=..." 
+    n'écrasent jamais le cache l'un de l'autre. Pas d'invalidation manuelle sur les
+    écritures (vente, réappro, modif produit...) : le TTL court (60s) est un compromis
+    volontaire -- une minute de fraîcheur en moins sur un catalogue public est largement
+    acceptable face à la complexité et aux risques d'oubli d'une invalidation exhaustive
+    sur chaque point d'écriture du stock.
     """
+    cached = cache_get("catalogue", request)
+    if cached is not None:
+        return Response(cached)
+
     produits = Produit.objects.all().order_by('nom')
     query_cat = request.GET.get('cat')
     search_query = request.GET.get('q')
@@ -373,10 +383,12 @@ def api_catalogue(request):
     serializer = ProduitSerializer(page, many=True)
     categories_dict = dict(getattr(Produit, 'CATEGORIES', {}))
 
-    return paginator.get_paginated_response({
+    reponse = paginator.get_paginated_response({
         "produits": serializer.data,
         "categories": categories_dict # Envoie les labels pour les menus Next.js
     })
+    cache_set("catalogue", reponse.data, timeout=60, request=request)
+    return reponse
 
 
 # --- 🚀 MODE OFFLINE (session 12/07, brique 2/4) : SYNCHRO DELTA DU CATALOGUE ---
@@ -495,10 +507,8 @@ def api_panier(request):
     """
     🔧 CORRECTIF JONCTION COMPTECLIENT : cette vue utilisait auparavant l'authentification
     par défaut (StaffJWTAuthentication), qui rejette tout jeton "type": "client" -- un client
-    marketplace connecté ne pouvait donc ni consulter, ni modifier son panier. Elle utilisait
-    aussi exclusivement l'ancien modèle Client (OneToOne vers auth.User) ; resoudre_identite_client()
-    route désormais vers CompteClient pour tout nouveau client, tout en restant compatible avec
-    d'éventuels anciens comptes Client existants.
+    marketplace connecté ne pouvait donc ni consulter, ni modifier son panier. resoudre_identite_client()
+    route vers CompteClient (l'ancien modèle Client par-tenant a depuis été entièrement retiré).
     """
     facture_id = request.GET.get('id')
     
@@ -1154,12 +1164,24 @@ def api_predictions_stock(request):
 
     alerte_uniquement = request.query_params.get("alerte_uniquement") in ("1", "true", "True")
 
+    # 🔴 CACHE REDIS (15 min) : calcul statistique sur tout le catalogue -- coûteux (moyenne
+    # mobile + régression par produit) pour un résultat qui ne bouge en réalité qu'au rythme
+    # des ventes de la journée. Clé = tenant + query string exacte (chaque combinaison de
+    # lookback/lead_time/alerte a son propre cache). Pas d'invalidation manuelle : une
+    # recommandation de réapprovisionnement vieille de quelques minutes n'a aucune
+    # conséquence pratique (ce n'est pas une donnée transactionnelle).
+    cached = cache_get("predictions_stock", request)
+    if cached is not None:
+        return Response(cached)
+
     predictions = predire_pour_tous_produits(
         lookback_jours=lookback_jours,
         lead_time_jours=lead_time_jours,
         alerte_uniquement=alerte_uniquement,
     )
-    return Response({"count": len(predictions), "predictions": predictions}, status=200)
+    resultat = {"count": len(predictions), "predictions": predictions}
+    cache_set("predictions_stock", resultat, timeout=900, request=request)
+    return Response(resultat, status=200)
 
 
 @api_view(['GET'])
@@ -1270,8 +1292,11 @@ def api_vente_directe(request):
                 )
 
             # 2. Création de la commande liée au ClientGuichet (ou totalement anonyme)
+            # 🐛 CORRECTIF (bug préexistant, introduit par le retrait du modèle Client) :
+            # Commande.client n'existe plus depuis la suppression complète de l'ancien
+            # modèle Client -- passer "client=None" ici levait TypeError ("unexpected
+            # keyword argument 'client'") et faisait planter TOUTE vente au guichet.
             commande = Commande.objects.create(
-                client=None, # Laissé vide car c'est une vente physique comptoir
                 client_guichet=client_pos, # 🌟 None si vente anonyme sans coordonnées
                 type_vente='guichet',
                 payee=True,
@@ -1362,15 +1387,18 @@ def api_admin_liste_clients(request):
     if not request.user.is_superuser:
         return Response({"error": "Accès réservé à l'administrateur."}, status=403)
 
-    clients = Client.objects.select_related('user').order_by('nom')
+    # 🌍 CompteClient est global (schéma public) : on ne peut pas filtrer par tenant via
+    # une colonne, mais Commande.compte_client vit lui dans CE schéma tenant précis --
+    # donc "avoir au moins une commande ici" restreint naturellement la liste aux clients
+    # réellement pertinents pour CETTE pharmacie, sans avoir besoin d'un champ dédié.
+    clients = CompteClient.objects.filter(commandes__isnull=False).distinct().order_by('nom')
     data = [{
         "id": c.id,
         "nom": c.nom,
         "identifiant": c.identifiant,
         "telephone": c.telephone,
         "email": c.email,
-        "username": c.user.username,
-        "is_active": c.user.is_active,
+        "is_active": c.is_active,
     } for c in clients]
     return Response(data)
 
@@ -1392,7 +1420,7 @@ def api_admin_reset_password_client(request, client_id):
     if not request.user.is_superuser:
         return Response({"error": "Accès réservé à l'administrateur."}, status=403)
 
-    client_obj = get_object_or_404(Client, id=client_id)
+    client_obj = get_object_or_404(CompteClient, id=client_id)
     if not client_obj.email:
         return Response({
             "error": "Ce client n'a pas d'adresse email enregistrée -- impossible de lui "
@@ -1417,9 +1445,8 @@ def api_admin_reset_password_client(request, client_id):
 
     # 🔐 On ne change réellement le mot de passe qu'APRÈS confirmation que l'email est parti.
     with transaction.atomic():
-        user = client_obj.user
-        user.set_password(nouveau_mdp)
-        user.save()
+        client_obj.set_password(nouveau_mdp)
+        client_obj.save()
 
     return Response({
         "message": f"Nouveau mot de passe généré et envoyé à {client_obj.email}. ✅"

@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0008_commande_compte_client'),
+        ('core', '0009_remove_client_user_remove_commande_client_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
