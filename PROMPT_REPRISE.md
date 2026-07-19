@@ -46,15 +46,17 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 | Africa's Talking pour SMS (pas Twilio) | Décision ferme, pas encore implémenté |
 | Prédiction stock = statistiques classiques, PAS LLM | ✅ Implémenté (`core/services_prediction.py`) |
 | Cache Redis : TTL courts plutôt qu'invalidation manuelle par motif | ✅ Implémenté (`core/cache_utils.py`) — `django-redis` (avec `delete_pattern`) volontairement pas ajouté, voir le docstring du fichier |
+| Gestion du stock par lots datés (`LotProduit`) + décrémentation FEFO | ✅ Implémenté (19/07) — `Produit.quantite`/`date_expiration` restent des champs cache dénormalisés (recalculés depuis les lots), pour ne rien casser de ce qui les lit déjà |
 
 ---
 
 ## 📋 CE QUI RESTE À FAIRE — priorisé
 
 ### 🔴 Urgent (bug bloquant en production)
-- [ ] **POS : la finalisation d'une vente au guichet échoue.** `core/api.py`, flux vente directe guichet : `Commande.objects.create(client=None, ...)` référence encore un champ `client` supprimé de `Commande` lors du retrait de l'ancien modèle `Client` (commentaire en place : *"Laissé vide car c'est une vente physique comptoir"*). Il suffit normalement de retirer cette ligne (le champ `client_guichet` juste en dessous suffit déjà) — **mais vérifier qu'aucune autre ligne du même genre n'a été oubliée ailleurs** dans le même flux avant de considérer que c'est réglé. (⚠️ Session du 18/07 : une autre session en parallèle gère ce chantier, ne pas y toucher en même temps.)
+- [x] **POS : la finalisation d'une vente au guichet échouait.** ✅ Corrigé (19/07, cette session) — `Commande.objects.create(client=None, ...)` référençait encore le champ `client` supprimé de `Commande`. La ligne a été retirée (`client_guichet` juste en dessous suffit). ⚠️ **Deux autres régressions du même retrait de `Client` ont été trouvées et corrigées au passage, ailleurs dans le code** (pas seulement le POS) : `core/emails.py` référençait encore `commande.client` à deux endroits, ce qui faisait planter TOUT email de confirmation de commande et l'email d'ordonnance refusée, pour absolument toutes les commandes. Si une autre session a corrigé le même bug POS en parallèle sur une autre branche, le conflit de fusion devrait être trivial (même ligne supprimée), mais vérifier qu'aucune correction concurrente n'a réintroduit `client=None` ou une variante.
 
-### 🟡 Effort moyen
+### 🟡 Effort moyen (bugs découverts, sans rapport avec ce qui précède)
+- [x] **Migrations `core.0006` et `clients_publics.0002` (index GIN trigram) ✅ Corrigé (19/07)** — ces deux migrations créent des index avec `opclasses=['gin_trgm_ops']` sans dépendance Django EXPLICITE vers `tenants.0002_enable_pg_trgm` (qui active l'extension). Sur une base entièrement neuve, `migrate_schemas --shared` échouait avec `operator class "gin_trgm_ops" does not exist` environ 1 fois sur 2 (l'ordre entre ces branches indépendantes du graphe de migrations n'était pas garanti, dépendait de l'ordre d'itération interne du process Python). Dépendances explicites ajoutées, stable sur 4 essais consécutifs après correctif.
 - [ ] **Toggle vérification ordonnance par tenant** — champ booléen sur `PharmacieConfig`
 - [ ] **Dashboard analytics avancé** — comparaison période/période, marge réelle (ajouter `prix_achat` sur `Produit`) ; détail complet (ce qui est faisable immédiatement vs bloqué par le modèle de données) dans [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md#4-côté-admin-par-pharmacie--réponse-à-ta-question--dashboard-réellement-basique-tu-as-raison)
 - [ ] **Chiffrement au repos des ordonnances**
@@ -69,7 +71,7 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 - [ ] CDN pour les images produits — pas urgent tant que le trafic reste local/faible
 
 ### 🔴 Effort élevé / risque architectural
-- [ ] **Gestion des lots (`LotProduit`) + FEFO** — nouveau modèle, migration des données existantes, décrémentation FEFO sans casser `select_for_update()`
+- [x] **Gestion des lots (`LotProduit`) + FEFO** — ✅ Implémenté (19/07, cette session). Nouveau modèle `LotProduit` (numéro de lot, quantité initiale/restante, péremption, réception). Migration de données non-destructive (chaque produit ayant déjà du stock devient un lot initial). `Produit.decrementer_stock_fefo()` centralise la consommation (toujours le lot périmant le plus tôt en premier), utilisée par `Commande.valider()` ET `api_vente_directe`, en conservant le `select_for_update()` déjà en place. Nouveaux endpoints `GET/POST /api/produits/<id>/lots/`. `api/boss/update-stock/<id>/` garde son contrat exact (ajustement du total) mais devient lot-aware en interne. Reste à faire : vraie UI Next.js de réception de lot daté (le formulaire admin/stocks actuel n'a qu'un champ quantité ; en attendant, `LotProduit` est gérable directement via `/admin/`, inline sur la fiche produit).
 - [ ] **Page marketplace** (sélection de pharmacie par le client global `CompteClient`)
 - [ ] **Refonte UI/UX mobile-first complète** — voir maquettes ci-dessous ET le guide fonctionnel détaillé [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md) (pages manquantes par rôle, gaps identifiés côté caisse/dashboard admin). À attaquer une fois le bug POS réglé (priorité à la stabilité avant l'esthétique)
 - [ ] **Admin plateforme "Pharmacie Plus"** — n'existe pas du tout aujourd'hui (seulement le Django admin brut sur le schéma public) ; nécessite sa propre authentification (comptes staff plateforme, séparés des comptes par-tenant) ; détail complet dans [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md#5-admin-plateforme-pharmacie-plus--confirmé--ça-nexiste-pas-du-tout)
