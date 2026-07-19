@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Menu, X, House,  
-  Power, ShoppingCart, LogIn, Pill, History, LayoutDashboard
+  Power, ShoppingCart, LogIn, Pill, History, LayoutDashboard, User
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
@@ -201,6 +201,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                               <Link href="/catalogue" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all no-underline"><Pill size={20} /> Catalogue Produits</Link>
                               <Link href="/panier" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all no-underline"><ShoppingCart size={20} /> Mon Panier</Link>
                               <Link href="/commandes" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all no-underline"><History size={20} /> Mes Commandes</Link>
+                              <Link href="/profil" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all no-underline"><User size={20} /> Mon Profil</Link>
                             </>
                           )}
                         </>

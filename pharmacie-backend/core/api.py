@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime, parse_date
 from django.utils.crypto import get_random_string
 from django.contrib.auth import authenticate
-from django.db.models import Q, Sum, F
+from django.db.models import Q, Sum, F, Count
 from django.db.models.functions import TruncDate
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
@@ -253,17 +253,74 @@ def api_client_login(request):
     }, status=200)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'PATCH'])
 @authentication_classes([ClientJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def api_client_whoami(request):
+    """
+    🚀 REFONTE UI/UX (18/07) : sert la page /profil (image 4 des maquettes -- bannière avec
+    nombre de commandes + montant dépensé, tuiles "Mon profil"). Étendu au-delà du simple
+    GET whoami d'origine :
+    - GET : identité + statistiques -- UNIQUEMENT sur le tenant courant (le sous-domaine
+      actif). CompteClient est global (schéma public), mais Commande vit par-tenant : une
+      vraie vue "toutes pharmacies confondues" demanderait d'agréger sur tous les schémas où
+      ce client a commandé -- hors de portée ici (chantier "page marketplace", phase 2
+      distincte, cf. PROMPT_REPRISE.md). Ce que cette page affiche est donc concrètement
+      "mes commandes THIS pharmacie", pas encore une vue globale multi-tenant.
+    - PATCH : mise à jour libre-service de nom/telephone (jamais l'email, qui est
+      l'identifiant de connexion -- le changer nécessiterait une revérification, hors
+      scope ici).
+    """
     client = request.user
+
+    if request.method == 'PATCH':
+        nom = request.data.get('nom', '').strip()
+        telephone = request.data.get('telephone', '').strip()
+        if nom:
+            client.nom = nom
+        if telephone:
+            client.telephone = telephone
+        client.save(update_fields=['nom', 'telephone'] if nom and telephone else (['nom'] if nom else ['telephone']))
+
+    stats = Commande.objects.filter(compte_client=client, payee=True).aggregate(
+        nb_commandes=Count('id', distinct=True),
+        montant_total=Sum(F('items__quantite') * F('items__prix_facture')),
+    )
+
     return Response({
         "is_authenticated": True,
         "email": client.email,
         "nom": client.nom,
         "telephone": client.telephone,
+        "identifiant": client.identifiant,
+        "nb_commandes": stats['nb_commandes'] or 0,
+        "montant_total_depense": stats['montant_total'] or 0,
     })
+
+
+@api_view(['POST'])
+@authentication_classes([ClientJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_client_changer_mot_de_passe(request):
+    """
+    🔐 Changement de mot de passe libre-service (self-service) -- distinct de
+    api_admin_reset_password_client (qui, lui, est une action ADMIN sur un compte d'un
+    tiers). Exige l'ancien mot de passe : un jeton JWT volé/laissé ouvert sur un appareil
+    partagé ne doit PAS suffire à lui seul pour changer le mot de passe et verrouiller le
+    vrai propriétaire du compte hors de son propre compte.
+    """
+    client = request.user
+    ancien = request.data.get('ancien_mot_de_passe', '')
+    nouveau = request.data.get('nouveau_mot_de_passe', '')
+
+    if not client.check_password(ancien):
+        return Response({"error": "Mot de passe actuel incorrect."}, status=400)
+    if len(nouveau) < 8:
+        return Response({"error": "Le nouveau mot de passe doit contenir au moins 8 caractères."}, status=400)
+
+    client.set_password(nouveau)
+    client.save(update_fields=['password'])
+    return Response({"message": "Mot de passe mis à jour avec succès. ✅"})
 
 
 @api_view(['POST'])

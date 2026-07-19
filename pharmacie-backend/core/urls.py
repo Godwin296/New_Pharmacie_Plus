@@ -12,6 +12,7 @@ urlpatterns = [
     path("client/register/", api.api_client_register, name="api_client_register"),
     path("client/login/", api.api_client_login, name="api_client_login"),
     path("client/me/", api.api_client_whoami, name="api_client_whoami"),
+    path("client/changer-mot-de-passe/", api.api_client_changer_mot_de_passe, name="api_client_changer_mot_de_passe"),
     
     # --- 🛒 EXPOSITION DES SERVICES CLIENT (NEXT.JS) ---
     path("catalogue/", api.api_catalogue, name="api_catalogue"), # Résolu : Plus de doublon
