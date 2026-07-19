@@ -67,6 +67,16 @@ class Produit(models.Model):
     description = models.TextField(blank=True, null=True)
     quantite = models.PositiveIntegerField(default=0)
     prix = models.DecimalField(max_digits=12, decimal_places=2)
+    # 💰 DASHBOARD ANALYTIQUE (18/07) : prix d'achat/coût, pour calculer une VRAIE marge
+    # (prix - prix_achat) plutôt que de confondre chiffre d'affaires et profit -- le
+    # dashboard actuel (api_boss_dashboard) n'affiche que du CA, jamais de rentabilité.
+    # Nullable volontairement : tous les produits existants (créés avant ce champ) n'ont pas
+    # cette donnée -- un admin devra la ressaisir progressivement, produit par produit ou à
+    # la prochaine réception de stock. `null=True` permet de distinguer explicitement
+    # "prix d'achat inconnu" (calcul de marge à exclure) de "prix d'achat de 0 FCFA" (un cas
+    # réel possible : don, échantillon fournisseur...), ce qu'un simple `default=0` ne
+    # permettrait pas de distinguer sans ambiguïté dans les futurs calculs de marge.
+    prix_achat = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Prix d'achat (coût) 💰")
     date_ajout = models.DateTimeField(auto_now_add=True)
     # 🚀 MODE OFFLINE (session 12/07, brique 2/4) : horodatage mis à jour automatiquement à
     # CHAQUE sauvegarde (auto_now=True). C'est le curseur utilisé par l'endpoint de synchro

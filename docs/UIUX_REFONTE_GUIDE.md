@@ -161,7 +161,7 @@ raison technique pour chaque point :
 | Fonctionnalité manquante | Faisable aujourd'hui ? | Pourquoi |
 |---|---|---|
 | Comparaison période/période (ce mois vs mois dernier, % de croissance) | ✅ Oui, données déjà en base | Juste une nouvelle requête agrégée + UI |
-| **Marge réelle / rentabilité** | ❌ **Non — bloqué par le modèle de données** | `Produit` n'a **aucun champ `prix_achat`** (prix d'achat/coût). Le CA actuel montre du chiffre d'affaires, jamais du profit. Nécessite une migration de base de données + ressaisie du prix d'achat par produit (ou import) avant que ce calcul ait le moindre sens |
+| **Marge réelle / rentabilité** | 🟡 **Champ ajouté (18/07), calcul pas encore construit** | `Produit.prix_achat` existe désormais (nullable -- tous les produits existants doivent être ressaisis progressivement, aucune valeur rétroactive possible). Le calcul de marge dans le dashboard lui-même (agrégation, UI) reste un chantier séparé à construire |
 | Répartition par catégorie de produit | ✅ Oui | `Produit.categorie` existe déjà, juste pas agrégé dans le dashboard |
 | Répartition par moyen de paiement (Orange Money vs MTN MoMo) | ✅ Oui, déjà tracké | `Commande.moyen_paiement` existe, juste pas exposé dans les stats |
 | Panier moyen (valeur moyenne par vente) | ✅ Oui | Calcul simple sur les données existantes |
@@ -224,11 +224,12 @@ qu'on le garde pour après la refonte client/caisse/admin-pharmacie.
 
 1. **Priorité entre les 4 chantiers** : refonte visuelle des 23 pages existantes, page
    profil client, dashboard analytique avancé, admin plateforme — dans quel ordre ?
-2. **Marge réelle (`prix_achat`)** : je lance la migration + le champ maintenant, ou on
-   attend que tu aies confirmé que c'est une donnée que tes pharmacies clientes veulent
-   saisir (ressaisir un prix d'achat pour chaque produit existant, c'est du travail pour
-   elles) ?
+2. **Marge réelle (`prix_achat`)** : ✅ tranché le 18/07 — champ ajouté sur `Produit`
+   (migration `0012_produit_prix_achat`, testée). Reste à construire : le calcul de marge
+   et son affichage dans le dashboard lui-même (agrégation CA - coûts, UI) -- pas fait
+   dans ce commit, volontairement limité à la migration du champ.
 3. **Retours/remboursements + clôture de caisse** : nouveau chantier logique à part
    entière, à cadrer précisément (motifs de retour acceptés, qui peut valider un retour...)
    avant même de penser à l'écran.
-4. **Admin plateforme** : phase 2 séparée, comme proposé ci-dessus — confirmes-tu ?
+4. **Admin plateforme** : ✅ confirmé le 18/07 — phase 2 séparée, après la refonte
+   client/caisse/admin-pharmacie.
