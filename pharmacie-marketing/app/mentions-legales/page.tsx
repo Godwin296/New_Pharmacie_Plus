@@ -75,7 +75,26 @@ export default function MentionsLegales() {
                 Pharmacie+ met tout en œuvre pour assurer leur exactitude mais ne saurait
                 être tenu responsable d&apos;éventuelles erreurs ou omissions.
               </p>
+              <p className="mt-3">
+                Pharmacie+ est un éditeur de logiciel qui met à disposition des officines
+                clientes (« les Tenants ») un outil de gestion. Chaque Tenant configure et
+                exploite son compte de façon autonome, notamment le choix de subordonner ou
+                non la vente de certains produits à la présentation d&apos;une ordonnance
+                médicale. Ce choix relève de la seule responsabilité du Tenant, titulaire de
+                son officine et seul habilité à apprécier ses obligations réglementaires
+                envers les autorités compétentes. Pharmacie+ n&apos;intervient à aucun moment
+                dans la décision de vente d&apos;un médicament et ne saurait être tenu
+                responsable des conséquences d&apos;un choix de configuration opéré par un
+                Tenant.
+              </p>
             </section>
+
+            {/* ⚠️ Le paragraphe ci-dessus est un BROUILLON rédigé à la demande du client,
+                pas un avis juridique. Fait suite à une décision produit du 18/07/2026
+                (garder `ordonnance_obligatoire` configurable par tenant plutôt que de
+                l'imposer globalement -- voir PROMPT_REPRISE.md). À faire relire par un
+                juriste/professionnel du droit camerounais avant de considérer cette clause
+                comme opposable en cas de litige réel. */}
 
             <section>
               <h2 className="font-display font-semibold text-[var(--color-ink)] dark:text-white text-lg mb-2">
