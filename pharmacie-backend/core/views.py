@@ -98,11 +98,17 @@ def export_facture_pdf(request, commande_id):
     else:
         nom_client = "Client au Guichet"
     qr_data = f"FACTURE:{commande.id}|CLIENT:{nom_client}|TOTAL:{commande.total()} CFA"
-    
-    qr = qrcode.make(qr_data)
-    buf = BytesIO()
-    qr.save(buf, format="PNG")
-    qr_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    # 🔴 CORRECTIF (bug remonté en test, session du 20/07) : le code ré-implémentait ici
+    # à la main la génération du QR code (qrcode.make + base64.b64encode), en oubliant de
+    # préfixer le résultat par "data:image/png;base64," -- un <img src="..."> sans ce
+    # préfixe est une URL invalide, l'image ne s'affiche jamais (le navigateur/WeasyPrint
+    # retombe sur le texte alt="QR Code" à la place, ce qui explique le texte "QR Code"
+    # visible tel quel sur la facture au lieu de l'image). `generate_qr_base64()` (déjà
+    # importé plus haut, déjà utilisé ailleurs comme sur le ticket de caisse) fait ça
+    # correctement -- il ne restait qu'à l'appeler ici aussi, au lieu de dupliquer une
+    # version incomplète du même code.
+    qr_base64 = generate_qr_base64(qr_data)
 
     # 4. Préparation du contexte pour WeasyPrint
     context = {

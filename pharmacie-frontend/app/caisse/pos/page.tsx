@@ -9,6 +9,7 @@ import {
 
 // 🌟 CONFIGURATION : Importation de l'apiClient unifié (Gère le tunnel et injecte le JWT Caisse)
 import apiClient from '../../../lib/apiClient'; // Ajuste le chemin selon l'arborescence (app/caisse/pos)
+import { voirFacturePdf } from '../../../lib/voirFacture';
 
 interface Produit { id: number; nom: string; prix: number; quantite: number; identifiant?: string; ordonnance_obligatoire?: boolean; }
 interface ItemPanier extends Produit { qte: number; }
@@ -183,8 +184,11 @@ export default function POSPage() {
       setShowConfirmModal(false);
       setOrdonnanceVerifiee(false);
       fetchProduits(search, page); // Rafraîchir les stocks réels, en gardant recherche ET page en cours
-      // Ouverture de la page de facture Next.js locale
-      router.push(`/facture?id=${res.data.id}`);
+      // 🔴 CORRECTIF (bug remonté en test, session du 20/07) : ouvrait la page React
+      // `/facture?id=...` (style jugé peu professionnel) au lieu de la vraie facture PDF.
+      // On reste maintenant sur l'écran de succès du POS (la caissière ne perd pas sa
+      // place), la facture PDF s'ouvre dans un nouvel onglet à côté -- voir lib/voirFacture.ts.
+      voirFacturePdf(res.data.id);
   
     } catch (err: any) {
         alert(err.response?.data?.error || "Erreur lors de la validation de la vente au guichet. Vérifiez les droits caisse.");
