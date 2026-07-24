@@ -15,6 +15,7 @@ from io import BytesIO
 # Imports de tes modèles locaux requis pour les requêtes d'impression
 from .models import Commande, Produit, PharmacieConfig
 from .utils import generate_qr_base64, obtenir_logo_base64_pour_pdf
+from .cache_utils import cache_get, cache_set
 
 # --- 🛡️ SYSTÈME DE VÉRIFICATION DES RÔLES ---
 def is_staff_member(user):
@@ -85,6 +86,17 @@ def export_facture_pdf(request, commande_id):
 
     config = PharmacieConfig.objects.first()
 
+    # 📄 CACHE PDF : on ne vérifie le cache QU'APRÈS le contrôle d'accès ci-dessus (jamais
+    # avant) -- la sécurité anti-IDOR doit s'appliquer à CHAQUE requête, qu'elle soit servie
+    # depuis le cache ou fraîchement générée. Invalidé précisément à chaque sauvegarde de
+    # cette Commande (voir Commande.save(), core/models.py) -- pas de TTL approximatif ici.
+    pdf_cache_key = f"facture_pdf:{commande.id}"
+    pdf_en_cache = cache_get(pdf_cache_key)
+    if pdf_en_cache is not None:
+        response = HttpResponse(pdf_en_cache, content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="Facture_{commande.id}.pdf"'
+        return response
+
     # 3. Génération du QR Code basé sur le total exact et figé
     # 🔧 CORRECTIF : l'ancien champ Commande.client (modèle Client local au tenant) a été
     # supprimé au profit de Commande.compte_client (CompteClient, marketplace globale) --
@@ -127,6 +139,12 @@ def export_facture_pdf(request, commande_id):
         html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
         pdf = html.write_pdf()
 
+        # 📄 CACHE : TTL long (7 jours) purement comme filet de sécurité anti-accumulation
+        # dans Redis -- l'invalidation réelle est déjà garantie par Commande.save() ci-dessus,
+        # ce TTL ne sert qu'à éviter de garder indéfiniment en mémoire les factures de
+        # commandes anciennes plus jamais consultées.
+        cache_set(pdf_cache_key, pdf, timeout=60 * 60 * 24 * 7)
+
         response = HttpResponse(pdf, content_type='application/pdf')
         # 'inline' permet à Next.js d'ouvrir le PDF directement dans un onglet propre
         response['Content-Disposition'] = f'inline; filename="Facture_{commande.id}.pdf"'
@@ -148,6 +166,20 @@ def export_pdf_financier(request):
     # 2. 🔐 PRINCIPE DU MOINDRE PRIVILÈGE : Seul le Boss (Superuser) a le droit de voir les finances
     if not user.is_superuser:
         return HttpResponseForbidden("Accès interdit. Cette action est réservée à l'administrateur.")
+
+    # 📄 CACHE PDF (TTL 5 min, PAS d'invalidation exacte comme la facture) : ce rapport
+    # agrège TOUTES les commandes payées + le top 10 produits -- une invalidation précise
+    # devrait s'accrocher à chaque vente (guichet ET en ligne), exactement le genre de
+    # multiplication de points d'écriture qui a déjà causé plusieurs bugs oubliés cette
+    # session (cf. PROMPT_REPRISE.md). Même choix que le cache catalogue/prédictions
+    # (core/cache_utils.py) : un léger flou de fraîcheur, borné et prévisible, plutôt
+    # qu'une invalidation exhaustive fragile.
+    pdf_cache_key = "pdf_financier"
+    pdf_en_cache = cache_get(pdf_cache_key)
+    if pdf_en_cache is not None:
+        response = HttpResponse(pdf_en_cache, content_type='application/pdf')
+        response['Content-Disposition'] = 'inline; filename="Rapport_Financier.pdf"'
+        return response
 
     config = PharmacieConfig.objects.first()
     ventes = Commande.objects.filter(payee=True)
@@ -182,6 +214,8 @@ def export_pdf_financier(request):
         html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
         pdf = html.write_pdf()
 
+        cache_set(pdf_cache_key, pdf, timeout=300)  # 5 min, cf. commentaire ci-dessus
+
         response = HttpResponse(pdf, content_type='application/pdf')
         # 'inline' pour permettre à l'admin de le consulter directement dans Next.js
         response['Content-Disposition'] = 'inline; filename="Rapport_Financier.pdf"'
@@ -206,6 +240,16 @@ def export_rapport_stock(request):
     if not user.is_staff:
         return HttpResponse("Accès refusé. Réservé au personnel.", status=403)
 
+    # 📄 CACHE PDF (TTL 5 min) : même choix que pdf_financier ci-dessus -- voir son
+    # commentaire pour le raisonnement (trop de points d'écriture stock pour une
+    # invalidation exacte : chaque vente guichet/en ligne, chaque réception de lot...).
+    pdf_cache_key = "pdf_rapport_stock"
+    pdf_en_cache = cache_get(pdf_cache_key)
+    if pdf_en_cache is not None:
+        response = HttpResponse(pdf_en_cache, content_type='application/pdf')
+        response['Content-Disposition'] = 'inline; filename="Inventaire_Stock.pdf"'
+        return response
+
     try:
         config = PharmacieConfig.objects.first()
         produits = Produit.objects.all().order_by('nom')
@@ -227,6 +271,8 @@ def export_rapport_stock(request):
         html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
         pdf_file = html.write_pdf()
 
+        cache_set(pdf_cache_key, pdf_file, timeout=300)  # 5 min, cf. commentaire ci-dessus
+
         response = HttpResponse(pdf_file, content_type='application/pdf')
         response['Content-Disposition'] = 'inline; filename="Inventaire_Stock.pdf"'
         return response
@@ -246,6 +292,14 @@ def export_alertes_pdf(request):
     # 2. 🔐 SÉCURITÉ : Moindre privilège (Caisse / Admin uniquement)
     if not user.is_staff:
         return HttpResponse("Accès refusé. Réservé au personnel.", status=403)
+
+    # 📄 CACHE PDF (TTL 5 min) : même choix que pdf_financier/pdf_rapport_stock ci-dessus.
+    pdf_cache_key = "pdf_alertes"
+    pdf_en_cache = cache_get(pdf_cache_key)
+    if pdf_en_cache is not None:
+        response = HttpResponse(pdf_en_cache, content_type='application/pdf')
+        response['Content-Disposition'] = 'inline; filename="Etat_Critique_Stocks.pdf"'
+        return response
 
     config = PharmacieConfig.objects.first()
     aujourdhui = timezone.now().date()
@@ -271,6 +325,8 @@ def export_alertes_pdf(request):
 
     html_string = render_to_string('core/Admin/alertes.html', context)
     pdf = HTML(string=html_string, base_url=request.build_absolute_uri('/')).write_pdf()
+
+    cache_set(pdf_cache_key, pdf, timeout=300)  # 5 min, cf. commentaire ci-dessus
 
     response = HttpResponse(pdf, content_type='application/pdf')
     response['Content-Disposition'] = 'inline; filename="Etat_Critique_Stocks.pdf"'
