@@ -26,6 +26,16 @@ export default function CataloguePage() {
   const [categories, setCategories] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [activeCat, setActiveCat] = useState("all");
+  // 🔐 (19/07) : l'overlay "changer la photo au survol" plus bas s'affichait pour TOUT
+  // visiteur du catalogue (client, caissière) alors que seul l'admin du tenant peut
+  // réellement réussir cette action -- api_modifier_photo_produit vérifie déjà
+  // `request.user.is_superuser` côté backend (la vraie barrière de sécurité), mais rien
+  // n'empêchait un client ou une caissière de VOIR le bouton et de se heurter à un 403.
+  // Purement déclaratif : ne remplace pas la vérification backend, l'améliore.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    setIsAdmin(typeof window !== 'undefined' && localStorage.getItem('user_role') === 'admin');
+  }, []);
   const [loading, setLoading] = useState(true);
   // 🔐 CORRECTIF (bug remonté en test, session 12/07) : `loading` était utilisé pour un
   // early-return "plein écran" (voir plus bas) qui démontait TOUT le composant -- y compris
@@ -301,19 +311,21 @@ export default function CataloguePage() {
                     <div className="text-7xl group-hover:scale-110 transition-transform">💊</div>
                   )}
 
-                  {/* Zone d'upload pour Admin */}
-                  <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all z-20">
-                    <Camera className="text-white mb-2" size={32} />
-                    <span className="text-white text-[10px] font-black uppercase tracking-tighter">Modifier Photo</span>
-                    <input 
-                      type="file" 
-                      className="hidden" 
-                      accept="image/*"
-                      onChange={(e) => {
-                        if (e.target.files?.[0]) handleUpdatePhoto(p.id, e.target.files[0]);
-                      }}
-                    />
+                  {/* Zone d'upload -- réservée à l'admin (voir isAdmin ci-dessus) */}
+                  {isAdmin && (
+                    <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all z-20">
+                      <Camera className="text-white mb-2" size={32} />
+                      <span className="text-white text-[10px] font-black uppercase tracking-tighter">Modifier Photo</span>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) handleUpdatePhoto(p.id, e.target.files[0]);
+                        }}
+                      />
                   </label>
+                  )}
 
                   <div className={`absolute top-4 right-4 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm z-10 ${p.quantite > 0 ? 'bg-white text-emerald-600' : 'bg-red-100 text-red-600'}`}>
                     {p.statut_stock_label}: {p.quantite}

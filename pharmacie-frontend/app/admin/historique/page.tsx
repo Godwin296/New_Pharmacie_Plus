@@ -9,6 +9,7 @@ import {
 // 🌟 CONFIGURATION : Importation de l'apiClient unifié (Gère l'URL brute et injecte le JWT pour le Staff)
 import apiClient from '../../../lib/apiClient';
 import Prix from '../../../lib/components/Prix';
+import { voirFacturePdf } from '../../../lib/voirFacture';
 import router, { useRouter } from 'next/navigation';
 
 export default function HistoriqueVentes() {
@@ -53,8 +54,10 @@ export default function HistoriqueVentes() {
 
   // 🖨️ ÉTAPE 2 : Alignement précis de l'URL du ticket de caisse selon core/urls.py
   const handleViewDetails = (id: string) => {
-     // Utilise l'URL de base dynamique du client pour ouvrir le ticket au guichet avec son slash final
-     router.push(`/facture?id=${id}`);
+     // 🔴 CORRECTIF (bug remonté en test, session du 20/07) : ouvrait la page React
+     // `/facture?id=...` (style jugé peu professionnel) au lieu de la vraie facture PDF.
+     // Voir lib/voirFacture.ts pour le détail du correctif.
+     voirFacturePdf(id);
   };
 
     return (

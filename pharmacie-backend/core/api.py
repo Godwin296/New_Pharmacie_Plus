@@ -420,13 +420,31 @@ def api_get_current_user(request):
 
 # --- 💊 CATALOGUE & RECHERCHE (Remplace HTMX) ---
 @api_view(['GET'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
 @permission_classes([AllowAny])
-@authentication_classes([])
 # 🔴 CORRECTIF CRITIQUE (bug remonté en test, session du 19/07 -- même famille que
-# infos_pharmacie) : sans cette ligne, un CLIENT connecté recevait 401 sur le catalogue
-# lui-même. Cette vue n'utilise jamais request.user.
+# infos_pharmacie) : sans authentication_classes explicite, un CLIENT connecté recevait 401
+# sur le catalogue lui-même (StaffJWTAuthentication, la classe par défaut, rejette tout
+# jeton "type": "client" avant même l'évaluation de permission_classes).
+# ⚠️ CORRIGÉ (18/07) : la version précédente de ce correctif utilisait
+# `@authentication_classes([])` (aucune authentification, `request.user` toujours anonyme)
+# avec le commentaire "cette vue n'utilise jamais request.user" -- FAUX désormais : la
+# détection admin pour masquer/afficher `prix_achat` (voir plus bas et serializers.py) EN A
+# BESOIN. `ClientOrStaffJWTAuthentication` reste compatible avec la navigation anonyme
+# (AllowAny) : un jeton absent ou invalide retombe simplement sur AnonymousUser, sans 401.
 def api_catalogue(request):
     """Catalogue réactif pour Next.js 🚀
+
+    🔐 CORRECTIF AUTHENTIFICATION (18/07, trouvé en testant le correctif prix_achat
+    ci-dessous) : cette route n'avait AUCUN `@authentication_classes` explicite, donc
+    utilisait `StaffJWTAuthentication` par défaut (voir son docstring) -- qui REJETTE tout
+    jeton "type": "client" avec un 401 explicite. Conséquence vérifiée en conditions
+    réelles : un client connecté ne pouvait PAS charger le catalogue du tout (POST
+    /api/catalogue/ → 401 "token_not_staff"), alors que `@permission_classes([AllowAny])`
+    laissait penser que c'était accessible à tous -- l'échec se produit AVANT même
+    l'évaluation des permissions, au niveau de l'authentification elle-même. Même classe de
+    bug que celui déjà corrigé sur api_panier (voir son commentaire "CORRECTIF JONCTION
+    COMPTECLIENT"), simplement oublié ici lors du même correctif de sécurité.
 
     🔧 PAGINATION (avant : tout le catalogue était renvoyé en une seule réponse,
     ce qui devenait lourd sur 3G/4G à mesure que le catalogue grossit). On utilise
@@ -441,8 +459,21 @@ def api_catalogue(request):
     volontaire -- une minute de fraîcheur en moins sur un catalogue public est largement
     acceptable face à la complexité et aux risques d'oubli d'une invalidation exhaustive
     sur chaque point d'écriture du stock.
+
+    🔐 CACHE PAR RÔLE (18/07) : cette route est appelée à la fois par le catalogue client,
+    le POS caisse ET la page /admin/stocks -- avec un `ProduitSerializer` qui masque
+    désormais `prix_achat` sauf pour l'admin (voir serializers.py). Sans précaution, le
+    cache Redis (partagé, clé = tenant + query string SEULE) aurait pu resservir la réponse
+    ADMIN (avec prix_achat) à un client faisant exactement la même requête dans la même
+    fenêtre de 60s -- une fuite via le cache, pas via le serializer lui-même. D'où la clé de
+    cache distincte "catalogue_admin" / "catalogue" selon le rôle de l'appelant ci-dessous.
     """
-    cached = cache_get("catalogue", request)
+    est_admin_tenant = bool(
+        request.user and request.user.is_authenticated and getattr(request.user, 'is_superuser', False)
+    )
+    cache_key_base = "catalogue_admin" if est_admin_tenant else "catalogue"
+
+    cached = cache_get(cache_key_base, request)
     if cached is not None:
         return Response(cached)
 
@@ -462,14 +493,14 @@ def api_catalogue(request):
 
     paginator = CataloguePagination()
     page = paginator.paginate_queryset(produits, request)
-    serializer = ProduitSerializer(page, many=True)
+    serializer = ProduitSerializer(page, many=True, context={'request': request})
     categories_dict = dict(getattr(Produit, 'CATEGORIES', {}))
 
     reponse = paginator.get_paginated_response({
         "produits": serializer.data,
         "categories": categories_dict # Envoie les labels pour les menus Next.js
     })
-    cache_set("catalogue", reponse.data, timeout=60, request=request)
+    cache_set(cache_key_base, reponse.data, timeout=60, request=request)
     return reponse
 
 
@@ -479,12 +510,17 @@ CATALOGUE_SYNC_BATCH_SIZE = 300  # cf. docstring api_catalogue_sync : compromis 
 
 
 @api_view(['GET'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
 @permission_classes([AllowAny])
-@authentication_classes([])
 # 🔴 CORRECTIF CRITIQUE (bug remonté en test, session du 19/07) : c'est CET endpoint
 # précis qui a été observé en 401 dans les logs du porteur du projet, provoquant la
 # déconnexion en boucle des comptes clients (mode offline appelé à chaque chargement de
 # page). Même correctif que infos_pharmacie/api_catalogue ci-dessus.
+# ⚠️ CORRIGÉ (18/07) : gardé `ClientOrStaffJWTAuthentication` plutôt que
+# `authentication_classes([])` -- ce endpoint sert aussi la synchro offline de l'admin
+# (voir ProduitSerializer plus bas), qui a besoin de request.user pour la même détection
+# admin/prix_achat qu'api_catalogue. `ClientOrStaffJWTAuthentication` reste compatible avec
+# un appel sans jeton (AnonymousUser, pas de 401).
 def api_catalogue_sync(request):
     """
     🌐 Endpoint dédié au cache offline (IndexedDB côté frontend) -- DIFFÉRENT de api_catalogue

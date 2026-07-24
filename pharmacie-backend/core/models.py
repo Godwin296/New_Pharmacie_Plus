@@ -10,6 +10,7 @@ from django.db.models.functions import Upper
 from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth.hashers import make_password, check_password # 👈 Pour la sécurité
+from .cache_utils import cache_delete_exact
 
 # 🚀 INDEXATION BDD (session offline) : GinIndex + opclass gin_trgm_ops permet d'accélérer les
 # recherches __icontains (LIKE '%...%') qu'un index B-Tree classique ne peut PAS utiliser --
@@ -449,6 +450,15 @@ class Commande(models.Model):
         if not self.reference:
             self.reference = self._generer_reference()
         super().save(*args, **kwargs)
+        # 📄 CACHE PDF FACTURE : la facture affiche `commande.payee` (badge "Payée"/"En
+        # attente") et peut être régénérée à tout moment -- si on la met en cache sans
+        # invalider ici, un client pourrait télécharger une facture montrant "En attente"
+        # alors que le paiement vient d'être confirmé par la caisse. Contrairement au
+        # catalogue/aux prédictions (TTL court, léger flou de fraîcheur acceptable pour de
+        # la lecture publique à haute fréquence), une facture est un document quasi-légal
+        # lu rarement par commande : une invalidation EXACTE, ici au point de sauvegarde
+        # unique de Commande, est possible et largement préférable à un TTL approximatif.
+        cache_delete_exact(f"facture_pdf:{self.pk}")
 
     def _generer_reference(self):
         """
