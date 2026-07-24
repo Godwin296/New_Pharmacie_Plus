@@ -420,10 +420,16 @@ def api_get_current_user(request):
 @api_view(['GET'])
 @authentication_classes([ClientOrStaffJWTAuthentication])
 @permission_classes([AllowAny])
-@authentication_classes([])
 # 🔴 CORRECTIF CRITIQUE (bug remonté en test, session du 19/07 -- même famille que
-# infos_pharmacie) : sans cette ligne, un CLIENT connecté recevait 401 sur le catalogue
-# lui-même. Cette vue n'utilise jamais request.user.
+# infos_pharmacie) : sans authentication_classes explicite, un CLIENT connecté recevait 401
+# sur le catalogue lui-même (StaffJWTAuthentication, la classe par défaut, rejette tout
+# jeton "type": "client" avant même l'évaluation de permission_classes).
+# ⚠️ CORRIGÉ (18/07) : la version précédente de ce correctif utilisait
+# `@authentication_classes([])` (aucune authentification, `request.user` toujours anonyme)
+# avec le commentaire "cette vue n'utilise jamais request.user" -- FAUX désormais : la
+# détection admin pour masquer/afficher `prix_achat` (voir plus bas et serializers.py) EN A
+# BESOIN. `ClientOrStaffJWTAuthentication` reste compatible avec la navigation anonyme
+# (AllowAny) : un jeton absent ou invalide retombe simplement sur AnonymousUser, sans 401.
 def api_catalogue(request):
     """Catalogue réactif pour Next.js 🚀
 
@@ -504,11 +510,15 @@ CATALOGUE_SYNC_BATCH_SIZE = 300  # cf. docstring api_catalogue_sync : compromis 
 @api_view(['GET'])
 @authentication_classes([ClientOrStaffJWTAuthentication])
 @permission_classes([AllowAny])
-@authentication_classes([])
 # 🔴 CORRECTIF CRITIQUE (bug remonté en test, session du 19/07) : c'est CET endpoint
 # précis qui a été observé en 401 dans les logs du porteur du projet, provoquant la
 # déconnexion en boucle des comptes clients (mode offline appelé à chaque chargement de
 # page). Même correctif que infos_pharmacie/api_catalogue ci-dessus.
+# ⚠️ CORRIGÉ (18/07) : gardé `ClientOrStaffJWTAuthentication` plutôt que
+# `authentication_classes([])` -- ce endpoint sert aussi la synchro offline de l'admin
+# (voir ProduitSerializer plus bas), qui a besoin de request.user pour la même détection
+# admin/prix_achat qu'api_catalogue. `ClientOrStaffJWTAuthentication` reste compatible avec
+# un appel sans jeton (AnonymousUser, pas de 401).
 def api_catalogue_sync(request):
     """
     🌐 Endpoint dédié au cache offline (IndexedDB côté frontend) -- DIFFÉRENT de api_catalogue
