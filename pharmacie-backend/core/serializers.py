@@ -153,6 +153,30 @@ class ProduitSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.image.url)
         return obj.image.url if obj.image else None
 
+    def to_representation(self, instance):
+        """
+        🔐 CONFIDENTIALITÉ PRIX D'ACHAT (18/07) : `prix_achat` (coût, pour calculer la marge
+        réelle -- voir Produit.prix_achat) n'a AUCUNE raison d'être visible par un client
+        (fuite de la structure de marge de la pharmacie vers l'extérieur) ni même par une
+        caissière (elle vend, elle n'a pas besoin de connaître les coûts d'achat) -- SEUL
+        l'administrateur du tenant (is_superuser=True) le voit. Retiré ici, dans le
+        serializer, plutôt que dans chaque vue individuellement : un seul endroit à
+        auditer, impossible à contourner en oubliant un `.pop()` dans une vue future.
+
+        ⚠️ Ceci suppose que `context={'request': request}` est bien transmis par l'appelant.
+        Si `request` est absent du contexte (oubli), le comportement est FAIL-SAFE : le champ
+        est retiré par défaut (traité comme non-admin), jamais l'inverse.
+        """
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        est_admin_tenant = bool(
+            request and getattr(request, 'user', None) and request.user.is_authenticated
+            and getattr(request.user, 'is_superuser', False)
+        )
+        if not est_admin_tenant:
+            data.pop('prix_achat', None)
+        return data
+
 class FournisseurSerializer(serializers.ModelSerializer):
     class Meta:
         model = Fournisseur
