@@ -20,6 +20,12 @@ export default function OrdonnancesPage() {
   const [enLigne, setEnLigne] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const socketRef = useRef<ReconnectingSocket | null>(null);
+  // 🔐 CHIFFREMENT AU REPOS (core/chiffrement.py) : `c.ordonnance` pointe maintenant vers un
+  // endpoint protégé par JWT (plus une URL de fichier statique) -- un <img src="..."> ou
+  // window.open() brut n'enverrait pas le header Authorization et se ferait rejeter (401).
+  // On récupère donc le contenu déchiffré via apiClient (qui injecte le JWT) sous forme de
+  // blob, puis on affiche/ouvre une URL objet locale créée à partir de ce blob.
+  const [blobsOrdonnance, setBlobsOrdonnance] = useState<Record<number, string>>({});
 
   // 🌟 ÉTAPE 1 : Chargement des ordonnances en attente via apiClient
   const fetchAttentes = async () => {
@@ -79,6 +85,55 @@ export default function OrdonnancesPage() {
     const timer = setTimeout(() => setNotification(null), 3000);
     return () => clearTimeout(timer);
   }, [notification]);
+
+  // 🔐 CHIFFREMENT AU REPOS : récupère le contenu déchiffré de chaque nouvelle ordonnance de
+  // la liste sous forme de blob authentifié (voir commentaire sur blobsOrdonnance plus haut),
+  // et le garde en cache local le temps que la carte reste affichée.
+  useEffect(() => {
+    let annule = false;
+
+    attentes.forEach((c) => {
+      if (!c.ordonnance || blobsOrdonnance[c.id]) return;
+      apiClient
+        .get(c.ordonnance, { responseType: 'blob' })
+        .then((res) => {
+          if (annule) return;
+          const url = URL.createObjectURL(res.data);
+          setBlobsOrdonnance((prev) => ({ ...prev, [c.id]: url }));
+        })
+        .catch((err) => console.error("Erreur chargement ordonnance déchiffrée:", err));
+    });
+
+    // Nettoyage : révoque les URL objet des ordonnances qui ont quitté la liste (traitées
+    // par cette caisse ou par une autre) pour ne pas accumuler des blobs en mémoire.
+    const idsActuels = new Set(attentes.map((c) => c.id));
+    setBlobsOrdonnance((prev) => {
+      const suivant: Record<number, string> = {};
+      let modifie = false;
+      for (const [id, url] of Object.entries(prev)) {
+        if (idsActuels.has(Number(id))) {
+          suivant[Number(id)] = url;
+        } else {
+          URL.revokeObjectURL(url);
+          modifie = true;
+        }
+      }
+      return modifie ? suivant : prev;
+    });
+
+    return () => {
+      annule = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attentes]);
+
+  // Révoque toutes les URL objet restantes au démontage du composant (évite la fuite mémoire)
+  useEffect(() => {
+    return () => {
+      Object.values(blobsOrdonnance).forEach((url) => URL.revokeObjectURL(url));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 🌟 ÉTAPE 2 : Actions de Validation ou de Rejet sécurisées par JWT
   const handleDecision = async (commandeId: number, action: 'approuver' | 'rejeter') => {
@@ -166,24 +221,30 @@ export default function OrdonnancesPage() {
               {/* 📸 IMAGE RÉELLE DEPUIS DJANGO MEDIA */}
               <div className="lg:w-1/2 bg-slate-50 dark:bg-slate-950 relative flex items-center justify-center p-10 border-r border-slate-100 dark:border-slate-800">
                 <div className="relative overflow-hidden rounded-[2.5rem] shadow-2xl bg-white ring-8 ring-white dark:ring-slate-800 group/img">
-                  {/* 🌟 STABLE : Utilisation de l'URL absolue fournie par le Serializer de Django */}
-                  {/* ⚡ PERF : loading="lazy" -- la liste d'attente peut contenir de nombreuses
-                      ordonnances, inutile de charger toutes les images d'un coup. */}
+                  {/* 🔐 CHIFFREMENT AU REPOS : on affiche le blob déchiffré récupéré via JWT
+                      (voir useEffect ci-dessus), plus l'URL brute -- celle-ci pointe désormais
+                      vers un endpoint protégé qu'un <img src> ne peut pas authentifier seul. */}
                   {c.ordonnance ? (
-                    <img 
-                      src={c.ordonnance} 
-                      loading="lazy"
-                      decoding="async"
-                      className="max-h-[550px] w-full object-contain transition-transform duration-1000 group-hover/img:scale-110" 
-                      alt="Ordonnance du Client"
-                    />
+                    blobsOrdonnance[c.id] ? (
+                      <img 
+                        src={blobsOrdonnance[c.id]} 
+                        loading="lazy"
+                        decoding="async"
+                        className="max-h-[550px] w-full object-contain transition-transform duration-1000 group-hover/img:scale-110" 
+                        alt="Ordonnance du Client"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center p-20">
+                        <Loader2 size={32} className="animate-spin text-slate-300" />
+                      </div>
+                    )
                   ) : (
                     <div className="text-7xl p-20">📋</div>
                   )}
                   
                   <div 
-                    className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover/img:opacity-100 flex flex-col items-center justify-center transition-all backdrop-blur-sm cursor-pointer" 
-                    onClick={() => window.open(c.ordonnance, '_blank')}
+                    className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover/img:opacity-100 flex flex-col items-center justify-center transition-all backdrop-blur-sm cursor-pointer"
+                    onClick={() => blobsOrdonnance[c.id] && window.open(blobsOrdonnance[c.id], '_blank')}
                   >
                     <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-slate-900 shadow-2xl mb-4">
                       <Search size={28} strokeWidth={3} />

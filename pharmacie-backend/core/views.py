@@ -15,6 +15,7 @@ from io import BytesIO
 # Imports de tes modèles locaux requis pour les requêtes d'impression
 from .models import Commande, Produit, PharmacieConfig
 from .utils import generate_qr_base64, obtenir_logo_base64_pour_pdf
+from .chiffrement import dechiffrer_si_necessaire
 
 # --- 🛡️ SYSTÈME DE VÉRIFICATION DES RÔLES ---
 def is_staff_member(user):
@@ -268,6 +269,51 @@ def export_alertes_pdf(request):
 
     response = HttpResponse(pdf, content_type='application/pdf')
     response['Content-Disposition'] = 'inline; filename="Etat_Critique_Stocks.pdf"'
+    return response
+
+
+# --- 🔐 CHIFFREMENT AU REPOS DES ORDONNANCES : point de déchiffrement pour le personnel ---
+@csrf_exempt
+def api_voir_ordonnance(request, commande_id):
+    """
+    Sert le contenu DÉCHIFFRÉ d'une ordonnance au personnel de la pharmacie (caisse/admin),
+    pour affichage/validation -- cf. app/caisse/ordonnances/page.tsx.
+
+    🔐 Pourquoi un endpoint dédié plutôt qu'une URL directe vers le fichier (comme avant
+    core/chiffrement.py) : le fichier sur disque est maintenant chiffré (Fernet), donc
+    illisible tel quel par un navigateur -- il FAUT un point de passage serveur qui déchiffre
+    à la volée avant de streamer la réponse. Volontairement staff-only (pas de variante
+    client_ou_staff comme export_facture_pdf) : seul le personnel a besoin de consulter le
+    document d'un patient pour le valider, jamais le client lui-même via cet endpoint (il a
+    déjà uploadé le fichier, inutile de le lui reservir).
+    """
+    user = _recuperer_utilisateur_jwt(request)
+    if not user or not user.is_authenticated:
+        return HttpResponse("Authentification requise.", status=401)
+    if not user.is_staff:
+        return HttpResponseForbidden("Accès réservé au personnel de la pharmacie.")
+
+    # get_object_or_404 suffit pour l'isolation multi-tenant : le routeur django-tenants a
+    # déjà positionné le schéma PostgreSQL du bon tenant avant que cette vue ne s'exécute --
+    # `Commande.objects` ne peut physiquement pas voir les commandes d'un AUTRE tenant.
+    commande = get_object_or_404(Commande, id=commande_id)
+    if not commande.ordonnance:
+        return HttpResponse("Aucune ordonnance associée à cette commande.", status=404)
+
+    with commande.ordonnance.open('rb') as f:
+        contenu_brut = f.read()
+    contenu_clair = dechiffrer_si_necessaire(contenu_brut)
+
+    # Détection du type réel par contenu (même bibliothèque `magic` que la désinfection à
+    # l'upload, cf. core/validators.py) -- le content_type d'origine n'est PAS conservé en
+    # base séparément, pas besoin : les seuls formats possibles sont ceux déjà validés par
+    # valider_et_desinfecter_ordonnance() (JPEG ou PDF), donc redétecter est fiable et évite
+    # une colonne supplémentaire pour une info entièrement déductible du contenu lui-même.
+    import magic
+    type_detecte = magic.from_buffer(contenu_clair, mime=True)
+
+    response = HttpResponse(contenu_clair, content_type=type_detecte)
+    response['Content-Disposition'] = f'inline; filename="{commande.ordonnance.name.split("/")[-1]}"'
     return response
 
 

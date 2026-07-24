@@ -47,7 +47,21 @@ class CommandeSerializer(serializers.ModelSerializer):
     est_perimee = serializers.ReadOnlyField()
     statut = serializers.CharField(read_only=True)
     agent_validateur_nom = serializers.ReadOnlyField(source='agent_validateur.username', default="N/A")
-    
+
+    # 🔐 CHIFFREMENT AU REPOS (core/chiffrement.py) : le fichier sur disque est désormais
+    # chiffré, donc illisible tel quel par un navigateur -- on n'expose plus l'URL DIRECTE du
+    # FileField (comportement par défaut de DRF pour ordonnance = models.FileField), mais
+    # l'URL du point de déchiffrement dédié (views.py::api_voir_ordonnance), qui déchiffre à
+    # la volée avant de streamer la réponse.
+    ordonnance = serializers.SerializerMethodField()
+
+    def get_ordonnance(self, obj):
+        if not obj.ordonnance:
+            return None
+        request = self.context.get('request')
+        chemin = f"/api/v1/ordonnance/{obj.id}/voir/"
+        return request.build_absolute_uri(chemin) if request else chemin
+
     # 🌟 EXTRACTION DYNAMIQUE DES COORDONNÉES POUR NEXT.JS
     client_nom = serializers.SerializerMethodField()
     client_telephone = serializers.SerializerMethodField()

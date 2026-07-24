@@ -49,6 +49,7 @@ urlpatterns = [
     # --- 📄 IMPRESSIONS & EXPORTS SÉCURISÉS ---
     # Ces routes restent nécessaires car ton Next.js va ouvrir des fenêtres de téléchargement PDF
     path("facture-pdf/<int:commande_id>/", views.export_facture_pdf, name="export_facture_pdf"),
+    path("ordonnance/<int:commande_id>/voir/", views.api_voir_ordonnance, name="api_voir_ordonnance"),
     path('export-pdf/rapport-stock/', views.export_rapport_stock, name='export_rapport_stock'),
     path('export-pdf/stocks/', views.export_alertes_pdf, name='export_alertes_pdf'),
     path('export-pdf/financier/', views.export_pdf_financier, name='export_pdf_financier'),

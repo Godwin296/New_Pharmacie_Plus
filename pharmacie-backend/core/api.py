@@ -26,6 +26,8 @@ from .serializers import (
     PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer
 )
 from .validators import valider_et_desinfecter_ordonnance, valider_et_desinfecter_photo_produit
+from .chiffrement import chiffrer_contenu, dechiffrer_si_necessaire
+from django.core.files.base import ContentFile
 from .pagination import CataloguePagination
 from .throttles import LoginRateThrottle, SoumettrePaiementRateThrottle
 from .services_prediction import predire_pour_produit, predire_pour_tous_produits
@@ -870,12 +872,20 @@ def api_gestion_ordonnance(request, commande_id=None):
                     message = e.message if hasattr(e, 'message') else str(e)
                     return Response({"error": message}, status=400)
 
+                # 🔐 CHIFFREMENT AU REPOS (voir core/chiffrement.py) : le fichier désinfecté
+                # ci-dessus est encore un document médical en clair à ce stade -- on ne l'écrit
+                # JAMAIS tel quel sur disque. Le nom de fichier et le content_type générés par
+                # la désinfection sont conservés (ils ne concernent que les métadonnées, pas le
+                # contenu) ; seul le contenu binaire devient illisible sans la clé.
+                contenu_chiffre = chiffrer_contenu(fichier_propre.read())
+                fichier_a_enregistrer = ContentFile(contenu_chiffre, name=fichier_propre.name)
+
                 # Si une ordonnance précédente existait déjà (ex: réupload après rejet), on la
                 # supprime physiquement du disque avant d'enregistrer la nouvelle.
                 if commande.ordonnance:
                     commande.ordonnance.delete(save=False)
 
-                commande.ordonnance = fichier_propre
+                commande.ordonnance = fichier_a_enregistrer
                 commande.statut = "attente_validation"
                 commande.save()
 

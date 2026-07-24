@@ -31,6 +31,20 @@ AUTHENTICATION_BACKENDS = [
 # volontairement plutôt que de tourner avec une clé connue et présente dans l'historique Git.
 SECRET_KEY = config('SECRET_KEY')
 
+# 🔐 CHIFFREMENT AU REPOS DES ORDONNANCES (voir core/chiffrement.py) : clé Fernet DÉDIÉE,
+# volontairement distincte de SECRET_KEY. Ne jamais réutiliser SECRET_KEY pour du chiffrement
+# de données -- elle sert à des usages très différents (signature de sessions, tokens...) dont
+# la rotation ou une éventuelle fuite ne devrait pas être couplée à celle des documents médicaux
+# déjà chiffrés sur disque (une rotation de SECRET_KEY rendrait alors toutes les ordonnances
+# existantes indéchiffrables si la même clé servait aux deux).
+# Génère une clé avec : python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# ⚠️ Contrairement à SECRET_KEY, PAS de valeur obligatoire ici (default=None) : cette fonctionnalité
+# est ajoutée à un projet déjà déployé ailleurs -- rendre cette variable obligatoire ferait planter
+# TOUS les environnements existants (dev des autres sessions, prod...) qui ne l'ont pas encore dans
+# leur .env, dès le prochain démarrage. core/chiffrement.py lève une erreur claire, mais seulement
+# au moment réel où une ordonnance est chiffrée/déchiffrée sans clé configurée -- pas au démarrage.
+ORDONNANCE_ENCRYPTION_KEY = config('ORDONNANCE_ENCRYPTION_KEY', default=None)
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
