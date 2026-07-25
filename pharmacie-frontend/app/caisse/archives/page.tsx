@@ -10,6 +10,7 @@ import {
 // 🌟 CONFIGURATION : Utilisation de l'instance apiClient unifiée (Gère l'URL brute et le JWT)
 import apiClient from '../../../lib/apiClient';
 import Prix from '../../../lib/components/Prix';
+import { voirFacturePdf } from '../../../lib/voirFacture';
 import router from 'next/dist/shared/lib/router/router';
 
 export default function ArchivesPage() {
@@ -114,9 +115,9 @@ export default function ArchivesPage() {
                 <div className="flex gap-2">
                   {/* 🌟 ACCESSIBILITÉ : Ajout de l'attribut title obligatoire */}
                   <button 
-                    onClick={() => router.push(`/facture?id=${arc.id}`)}
-                    title="Ouvrir la facture pour impression"
-                    aria-label="Ouvrir la facture pour impression"
+                    onClick={() => voirFacturePdf(arc.id)}
+                    title="Ouvrir la facture PDF pour impression"
+                    aria-label="Ouvrir la facture PDF pour impression"
                     className="p-4 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border-none cursor-pointer flex items-center justify-center"
                   >
                     <Printer size={20} />

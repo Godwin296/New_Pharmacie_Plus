@@ -1,0 +1,100 @@
+# 🐳 Docker Compose -- backend Django/Daphne + frontend Next.js + PostgreSQL + Redis.
+#
+# ⚠️ IMPORTANT : ce fichier a été écrit et relu avec soin (dépendances système exactes,
+# variables d'environnement vérifiées dans config/settings.py...), mais n'a PAS pu être
+# validé par un `docker compose up` réel dans l'environnement où il a été rédigé (Docker
+# absent du sandbox, réseau restreint sans accès à Docker Hub). Conformément à la règle
+# "tester réellement" du projet (voir CONTRIBUTING.md), considère-le comme "prêt à
+# tester", pas encore "testé" -- premier lancement à faire toi-même, en local, où Docker
+# fonctionne. Voir docs/INFRASTRUCTURE_ROADMAP.md pour le contexte complet.
+#
+# Démarrage :
+#   cp pharmacie-backend/.env.example pharmacie-backend/.env   # puis remplir les vraies valeurs
+#   docker compose up --build
+#   docker compose exec backend python manage.py migrate_schemas --shared
+#   docker compose exec backend python seed.py   # si tu veux des données de démo
+#
+# Le backend attend DB_HOST=db et REDIS_HOST=redis (au lieu de 127.0.0.1/localhost en dev
+# local sans Docker) -- ces deux variables sont injectées ci-dessous et prioritaires sur
+# celles du fichier .env (qui, lui, garde ses valeurs pour un lancement SANS Docker).
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-pharmacie_saas}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?La variable DB_PASSWORD doit être définie (voir .env)}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # 🔧 Active pg_trgm automatiquement à la création de la base (nécessaire pour les
+      # index GIN trigram des migrations core.0006/clients_publics.0002 -- sans ça,
+      # `migrate_schemas` échoue avec "operator class gin_trgm_ops does not exist", vécu
+      # concrètement pendant les tests de ce projet).
+      - ./docker/postgres-init/01-pg_trgm.sql:/docker-entrypoint-initdb.d/01-pg_trgm.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./pharmacie-backend
+    restart: unless-stopped
+    env_file:
+      - ./pharmacie-backend/.env
+    environment:
+      # Prioritaires sur .env : à l'intérieur du réseau Docker Compose, la base et Redis
+      # sont joignables par leur NOM DE SERVICE, pas par localhost/127.0.0.1.
+      DB_HOST: db
+      REDIS_HOST: redis
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persistant : ordonnances/photos produits ne doivent pas disparaître à chaque
+      # rebuild de l'image (contrairement au code, copié dans l'image au build).
+      - backend_media:/app/media
+      - backend_static:/app/staticfiles
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./pharmacie-frontend
+      args:
+        # Voir le commentaire détaillé dans pharmacie-frontend/Dockerfile : vides par
+        # défaut, l'URL du backend est déduite dynamiquement au runtime pour le cas
+        # multi-tenant standard de ce projet. Ne renseigner que pour un déploiement avec
+        # domaines fixes distincts.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        NEXT_PUBLIC_API_PORT: ${NEXT_PUBLIC_API_PORT:-}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+  backend_media:
+  backend_static:

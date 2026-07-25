@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'; // 🌟 Ajout de ShieldAlert, ArrowLeft, TrendingUp (prédictions) et Users (clients)
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { PharmacyIcon } from '../../components/PharmacyIcon';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -111,7 +112,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <header className="fixed top-0 left-0 right-0 h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-8 z-50 no-print">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-white rounded shadow-lg flex items-center justify-center p-1.5 border border-slate-100 dark:border-slate-800">
-            <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+            {/* 🔧 FIX LOGO (bug remonté en test, session du 19/07) : cet en-tête admin
+                affichait TOUJOURS l'icône générique "Pharmacie+", jamais le logo réel
+                uploadé par le tenant dans /admin/settings -- seule app/page.tsx (l'accueil)
+                le faisait correctement. <PharmacyIcon/> lit le même contexte partagé
+                (useConfigPharmacie), avec repli sur l'icône générique si aucun logo n'a
+                encore été uploadé. */}
+            <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
           </div>
           <div>
             <span className="font-bold text-xl uppercase tracking-tighter block">PHARMACIE +</span>

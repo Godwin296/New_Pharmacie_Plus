@@ -127,7 +127,19 @@
                 </td>
                 <td style="text-align: right;">
                     <div class="info-label">&Eacute;mise le</div>
-                    <div class="info-value">{{ commande.date|date:"d/m/Y &agrave; H:i" }}</div>
+                    <!-- 🔴 CORRECTIF (bug remonté en test, session du 20/07) : l'ancien
+                         format "d/m/Y &agrave; H:i" passait LITTÉRALEMENT la chaîne
+                         "&agrave;" au filtre `date` de Django, qui interprète CHAQUE
+                         caractère comme un code de format sauf s'il est échappé -- or
+                         "agrave" contient "a" (matin/après-midi), "g" (heure sans zéro),
+                         "r" (date RFC 5322 complète), "v" et "e" (fuseau horaire), tous
+                         des codes de format valides ! D'où le texte totalement illisible
+                         observé ("19/07/2026 &après-midi12Sun, 19 Jul 2026 12:39:18
+                         +0100après-midivWAT; 12:39"). Fix : deux appels séparés au
+                         filtre `date`, avec "&agrave;" en texte HTML littéral ENTRE les
+                         deux -- chacun ne contient alors QUE des codes de format
+                         volontaires (d/m/Y d'un côté, H:i de l'autre). -->
+                    <div class="info-value">{{ commande.date|date:"d/m/Y" }} &agrave; {{ commande.date|date:"H:i" }}</div>
                     <div class="info-sub">R&eacute;f&eacute;rence : {{ commande.reference|default:commande.id }}</div>
                 </td>
             </tr>

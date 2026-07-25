@@ -33,7 +33,11 @@ def envoyer_email_confirmation_commande(commande):
     """
     from .models import PharmacieConfig  # import local : évite l'import circulaire avec models.py
 
-    destinataire = commande.compte_client or commande.client or commande.client_guichet
+    # 🐛 CORRECTIF (bug préexistant, introduit par le retrait du modèle Client) :
+    # "commande.client" n'existe plus depuis la suppression complète de l'ancien modèle
+    # Client -- y accéder levait AttributeError et empêchait TOUT email de confirmation
+    # de partir, pour absolument toutes les commandes (en ligne comme au guichet).
+    destinataire = commande.compte_client or commande.client_guichet
     if not destinataire or not destinataire.email:
         return
 
@@ -174,7 +178,11 @@ def envoyer_email_ordonnance_refusee(commande):
     refusée bloque sa commande, il est important qu'il le sache rapidement même hors ligne.
     Même logique défensive que les autres emails transactionnels : jamais bloquant.
     """
-    destinataire = commande.compte_client or commande.client
+    # 🐛 CORRECTIF (bug préexistant, introduit par le retrait du modèle Client) : idem
+    # envoyer_email_confirmation_commande ci-dessus -- "commande.client" n'existe plus.
+    # Une ordonnance refusée concerne toujours une commande en ligne (le guichet n'a pas
+    # de flux d'upload/refus numérique), donc compte_client seul suffit ici.
+    destinataire = commande.compte_client
     if not destinataire or not destinataire.email:
         return
 

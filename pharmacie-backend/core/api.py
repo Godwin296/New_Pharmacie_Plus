@@ -10,22 +10,24 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
-from django.utils.dateparse import parse_datetime
+from django.utils.dateparse import parse_datetime, parse_date
 from django.utils.crypto import get_random_string
 from django.contrib.auth import authenticate
-from django.db.models import Q, Sum, F
+from django.db.models import Q, Sum, F, Count
 from django.db.models.functions import TruncDate
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 from datetime import timedelta
 from django.utils import timezone
 
-from .models import Produit, Commande, ItemCommande, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog
+from .models import Produit, Commande, ItemCommande, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog, LotProduit
 from .serializers import (
     ProduitSerializer, CommandeSerializer, CommandeClientSerializer,
-    PharmacieConfigSerializer, FournisseurSerializer
+    PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer
 )
 from .validators import valider_et_desinfecter_ordonnance, valider_et_desinfecter_photo_produit
+from .chiffrement import chiffrer_contenu, dechiffrer_si_necessaire
+from django.core.files.base import ContentFile
 from .pagination import CataloguePagination
 from .throttles import LoginRateThrottle, SoumettrePaiementRateThrottle
 from .services_prediction import predire_pour_produit, predire_pour_tous_produits
@@ -72,12 +74,24 @@ def _notifier_client(commande_id, **payload):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-@authentication_classes([StaffJWTAuthentication])
+@authentication_classes([])
 def infos_pharmacie(request):
     # 🌍 Volontairement PUBLIC (AllowAny) : nom, logo, devise, adresse de la pharmacie
     # doivent s'afficher pour n'importe quel visiteur (catalogue, page de connexion...),
     # pas seulement pour un admin déjà authentifié. Aucune donnée sensible n'est exposée
     # ici -- la modification de la config, elle, reste réservée aux admins (api_update_config).
+    #
+    # 🔴 CORRECTIF CRITIQUE (bug remonté en test, session du 19/07) : `@authentication_classes`
+    # était fixé à `[StaffJWTAuthentication]`, qui REJETTE explicitement (AuthenticationFailed,
+    # donc 401 immédiat, AVANT même que `permission_classes([AllowAny])` soit évalué) tout
+    # jeton portant `"type": "client"`. Résultat : tout visiteur connecté en tant que CLIENT
+    # recevait un 401 sur cette route pourtant censée être publique -- appelée à CHAQUE
+    # chargement de page via ConfigPharmacieContext. Combiné au bug de rotation de refresh
+    # token côté frontend (cf. apiClient.ts), ça provoquait une déconnexion en boucle des
+    # comptes clients (redirection systématique vers /login). Cette vue n'utilise JAMAIS
+    # `request.user` (juste de la config publique) -- `authentication_classes([])` est donc
+    # la correction la plus sûre : aucun jeton, quel qu'il soit, ne peut faire échouer cette
+    # route.
     #
     # 🔴 CACHE REDIS : cette route est appelée à CHAQUE chargement de page (login, catalogue,
     # panier...) mais son contenu ne change que lorsqu'un admin modifie sa config -- candidat
@@ -196,6 +210,11 @@ def check_role(user, role_requested):
 # ============================================================================
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])
+# 🔴 CORRECTIF (même bug que infos_pharmacie, cf. son commentaire) : sans cette ligne,
+# un visiteur qui a DÉJÀ un jeton (client ou périmé) attaché par apiClient recevait un
+# 401 avant même que la logique d'inscription ne s'exécute. L'inscription ne dépend
+# jamais de request.user -- aucun risque à désactiver l'authentification ici.
 def api_client_register(request):
     email = (request.data.get('email') or '').strip().lower()
     password = request.data.get('password') or ''
@@ -223,6 +242,7 @@ def api_client_register(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])  # 🔴 même correctif que api_client_register ci-dessus
 @throttle_classes([LoginRateThrottle])
 def api_client_login(request):
     email = (request.data.get('email') or '').strip().lower()
@@ -253,21 +273,79 @@ def api_client_login(request):
     }, status=200)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'PATCH'])
 @authentication_classes([ClientJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def api_client_whoami(request):
+    """
+    🚀 REFONTE UI/UX (18/07) : sert la page /profil (image 4 des maquettes -- bannière avec
+    nombre de commandes + montant dépensé, tuiles "Mon profil"). Étendu au-delà du simple
+    GET whoami d'origine :
+    - GET : identité + statistiques -- UNIQUEMENT sur le tenant courant (le sous-domaine
+      actif). CompteClient est global (schéma public), mais Commande vit par-tenant : une
+      vraie vue "toutes pharmacies confondues" demanderait d'agréger sur tous les schémas où
+      ce client a commandé -- hors de portée ici (chantier "page marketplace", phase 2
+      distincte, cf. PROMPT_REPRISE.md). Ce que cette page affiche est donc concrètement
+      "mes commandes THIS pharmacie", pas encore une vue globale multi-tenant.
+    - PATCH : mise à jour libre-service de nom/telephone (jamais l'email, qui est
+      l'identifiant de connexion -- le changer nécessiterait une revérification, hors
+      scope ici).
+    """
     client = request.user
+
+    if request.method == 'PATCH':
+        nom = request.data.get('nom', '').strip()
+        telephone = request.data.get('telephone', '').strip()
+        if nom:
+            client.nom = nom
+        if telephone:
+            client.telephone = telephone
+        client.save(update_fields=['nom', 'telephone'] if nom and telephone else (['nom'] if nom else ['telephone']))
+
+    stats = Commande.objects.filter(compte_client=client, payee=True).aggregate(
+        nb_commandes=Count('id', distinct=True),
+        montant_total=Sum(F('items__quantite') * F('items__prix_facture')),
+    )
+
     return Response({
         "is_authenticated": True,
         "email": client.email,
         "nom": client.nom,
         "telephone": client.telephone,
+        "identifiant": client.identifiant,
+        "nb_commandes": stats['nb_commandes'] or 0,
+        "montant_total_depense": stats['montant_total'] or 0,
     })
 
 
 @api_view(['POST'])
+@authentication_classes([ClientJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_client_changer_mot_de_passe(request):
+    """
+    🔐 Changement de mot de passe libre-service (self-service) -- distinct de
+    api_admin_reset_password_client (qui, lui, est une action ADMIN sur un compte d'un
+    tiers). Exige l'ancien mot de passe : un jeton JWT volé/laissé ouvert sur un appareil
+    partagé ne doit PAS suffire à lui seul pour changer le mot de passe et verrouiller le
+    vrai propriétaire du compte hors de son propre compte.
+    """
+    client = request.user
+    ancien = request.data.get('ancien_mot_de_passe', '')
+    nouveau = request.data.get('nouveau_mot_de_passe', '')
+
+    if not client.check_password(ancien):
+        return Response({"error": "Mot de passe actuel incorrect."}, status=400)
+    if len(nouveau) < 8:
+        return Response({"error": "Le nouveau mot de passe doit contenir au moins 8 caractères."}, status=400)
+
+    client.set_password(nouveau)
+    client.save(update_fields=['password'])
+    return Response({"message": "Mot de passe mis à jour avec succès. ✅"})
+
+
+@api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])  # 🔴 même correctif que api_client_register ci-dessus
 @throttle_classes([LoginRateThrottle])
 def api_login(request):
     """Connexion Next.js avec génération de jetons JWT 🎭"""
@@ -342,9 +420,31 @@ def api_get_current_user(request):
 
 # --- 💊 CATALOGUE & RECHERCHE (Remplace HTMX) ---
 @api_view(['GET'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
 @permission_classes([AllowAny])
+# 🔴 CORRECTIF CRITIQUE (bug remonté en test, session du 19/07 -- même famille que
+# infos_pharmacie) : sans authentication_classes explicite, un CLIENT connecté recevait 401
+# sur le catalogue lui-même (StaffJWTAuthentication, la classe par défaut, rejette tout
+# jeton "type": "client" avant même l'évaluation de permission_classes).
+# ⚠️ CORRIGÉ (18/07) : la version précédente de ce correctif utilisait
+# `@authentication_classes([])` (aucune authentification, `request.user` toujours anonyme)
+# avec le commentaire "cette vue n'utilise jamais request.user" -- FAUX désormais : la
+# détection admin pour masquer/afficher `prix_achat` (voir plus bas et serializers.py) EN A
+# BESOIN. `ClientOrStaffJWTAuthentication` reste compatible avec la navigation anonyme
+# (AllowAny) : un jeton absent ou invalide retombe simplement sur AnonymousUser, sans 401.
 def api_catalogue(request):
     """Catalogue réactif pour Next.js 🚀
+
+    🔐 CORRECTIF AUTHENTIFICATION (18/07, trouvé en testant le correctif prix_achat
+    ci-dessous) : cette route n'avait AUCUN `@authentication_classes` explicite, donc
+    utilisait `StaffJWTAuthentication` par défaut (voir son docstring) -- qui REJETTE tout
+    jeton "type": "client" avec un 401 explicite. Conséquence vérifiée en conditions
+    réelles : un client connecté ne pouvait PAS charger le catalogue du tout (POST
+    /api/catalogue/ → 401 "token_not_staff"), alors que `@permission_classes([AllowAny])`
+    laissait penser que c'était accessible à tous -- l'échec se produit AVANT même
+    l'évaluation des permissions, au niveau de l'authentification elle-même. Même classe de
+    bug que celui déjà corrigé sur api_panier (voir son commentaire "CORRECTIF JONCTION
+    COMPTECLIENT"), simplement oublié ici lors du même correctif de sécurité.
 
     🔧 PAGINATION (avant : tout le catalogue était renvoyé en une seule réponse,
     ce qui devenait lourd sur 3G/4G à mesure que le catalogue grossit). On utilise
@@ -359,8 +459,21 @@ def api_catalogue(request):
     volontaire -- une minute de fraîcheur en moins sur un catalogue public est largement
     acceptable face à la complexité et aux risques d'oubli d'une invalidation exhaustive
     sur chaque point d'écriture du stock.
+
+    🔐 CACHE PAR RÔLE (18/07) : cette route est appelée à la fois par le catalogue client,
+    le POS caisse ET la page /admin/stocks -- avec un `ProduitSerializer` qui masque
+    désormais `prix_achat` sauf pour l'admin (voir serializers.py). Sans précaution, le
+    cache Redis (partagé, clé = tenant + query string SEULE) aurait pu resservir la réponse
+    ADMIN (avec prix_achat) à un client faisant exactement la même requête dans la même
+    fenêtre de 60s -- une fuite via le cache, pas via le serializer lui-même. D'où la clé de
+    cache distincte "catalogue_admin" / "catalogue" selon le rôle de l'appelant ci-dessous.
     """
-    cached = cache_get("catalogue", request)
+    est_admin_tenant = bool(
+        request.user and request.user.is_authenticated and getattr(request.user, 'is_superuser', False)
+    )
+    cache_key_base = "catalogue_admin" if est_admin_tenant else "catalogue"
+
+    cached = cache_get(cache_key_base, request)
     if cached is not None:
         return Response(cached)
 
@@ -380,14 +493,14 @@ def api_catalogue(request):
 
     paginator = CataloguePagination()
     page = paginator.paginate_queryset(produits, request)
-    serializer = ProduitSerializer(page, many=True)
+    serializer = ProduitSerializer(page, many=True, context={'request': request})
     categories_dict = dict(getattr(Produit, 'CATEGORIES', {}))
 
     reponse = paginator.get_paginated_response({
         "produits": serializer.data,
         "categories": categories_dict # Envoie les labels pour les menus Next.js
     })
-    cache_set("catalogue", reponse.data, timeout=60, request=request)
+    cache_set(cache_key_base, reponse.data, timeout=60, request=request)
     return reponse
 
 
@@ -397,7 +510,17 @@ CATALOGUE_SYNC_BATCH_SIZE = 300  # cf. docstring api_catalogue_sync : compromis 
 
 
 @api_view(['GET'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
 @permission_classes([AllowAny])
+# 🔴 CORRECTIF CRITIQUE (bug remonté en test, session du 19/07) : c'est CET endpoint
+# précis qui a été observé en 401 dans les logs du porteur du projet, provoquant la
+# déconnexion en boucle des comptes clients (mode offline appelé à chaque chargement de
+# page). Même correctif que infos_pharmacie/api_catalogue ci-dessus.
+# ⚠️ CORRIGÉ (18/07) : gardé `ClientOrStaffJWTAuthentication` plutôt que
+# `authentication_classes([])` -- ce endpoint sert aussi la synchro offline de l'admin
+# (voir ProduitSerializer plus bas), qui a besoin de request.user pour la même détection
+# admin/prix_achat qu'api_catalogue. `ClientOrStaffJWTAuthentication` reste compatible avec
+# un appel sans jeton (AnonymousUser, pas de 401).
 def api_catalogue_sync(request):
     """
     🌐 Endpoint dédié au cache offline (IndexedDB côté frontend) -- DIFFÉRENT de api_catalogue
@@ -785,12 +908,20 @@ def api_gestion_ordonnance(request, commande_id=None):
                     message = e.message if hasattr(e, 'message') else str(e)
                     return Response({"error": message}, status=400)
 
+                # 🔐 CHIFFREMENT AU REPOS (voir core/chiffrement.py) : le fichier désinfecté
+                # ci-dessus est encore un document médical en clair à ce stade -- on ne l'écrit
+                # JAMAIS tel quel sur disque. Le nom de fichier et le content_type générés par
+                # la désinfection sont conservés (ils ne concernent que les métadonnées, pas le
+                # contenu) ; seul le contenu binaire devient illisible sans la clé.
+                contenu_chiffre = chiffrer_contenu(fichier_propre.read())
+                fichier_a_enregistrer = ContentFile(contenu_chiffre, name=fichier_propre.name)
+
                 # Si une ordonnance précédente existait déjà (ex: réupload après rejet), on la
                 # supprime physiquement du disque avant d'enregistrer la nouvelle.
                 if commande.ordonnance:
                     commande.ordonnance.delete(save=False)
 
-                commande.ordonnance = fichier_propre
+                commande.ordonnance = fichier_a_enregistrer
                 commande.statut = "attente_validation"
                 commande.save()
 
@@ -974,7 +1105,18 @@ def api_boss_dashboard(request):
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def api_update_stock(request, produit_id):
-    """Mise à jour rapide du stock par le BOSS avec traçabilité complète 🔄"""
+    """
+    Mise à jour rapide du stock par le BOSS avec traçabilité complète 🔄
+
+    🔧 CHANTIER LOTS/FEFO : ce endpoint reste un ajustement du TOTAL (contrat inchangé pour
+    ne pas casser app/admin/stocks/page.tsx, qui envoie un nombre absolu, pas une date de
+    péremption) -- mais l'écriture réelle passe désormais par les lots :
+    - hausse -> crée un nouveau lot "sans date de péremption connue" pour la différence
+      (consommé en dernier par le FEFO, cf. Produit.decrementer_stock_fefo) ;
+    - baisse -> consomme la différence en FEFO comme une sortie normale.
+    Une vraie UI de réception de lot DATÉ reste à construire (voir /admin/ Django en
+    attendant, où LotProduit est désormais gérable directement).
+    """
     produit = get_object_or_404(Produit, id=produit_id)
     
     # SÉCURITÉ : Validation de la quantité entrante
@@ -985,11 +1127,62 @@ def api_update_stock(request, produit_id):
         return Response({"error": "La quantité doit être un entier positif"}, status=400)
     try:
         with transaction.atomic():
-            produit.quantite = nouvelle_qte
-            produit.save()
-            # 🔐 TRACABILITÉ : On passe l'auteur du mouvement via request.user (extrait du JWT)
-            Mouvement_stock.objects.create(produit=produit, quantite=nouvelle_qte, type="entree", auteur=request.user)
+            produit = Produit.objects.select_for_update().get(id=produit_id)
+            delta = nouvelle_qte - produit.quantite
+            if delta > 0:
+                produit.ajouter_lot(delta, date_peremption=None, auteur=request.user, note="Ajustement manuel (sans date de péremption)")
+            elif delta < 0:
+                produit.decrementer_stock_fefo(abs(delta), auteur=request.user, note="Ajustement manuel")
+            produit.refresh_from_db()
         return Response({"nouveau_statut": "OK", "quantite": produit.quantite}, status=200)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+
+# --- 📦 GESTION DES LOTS (FEFO) ---
+@api_view(['GET', 'POST'])
+@permission_classes([IsAdminUser])
+def api_lots_produit(request, produit_id):
+    """
+    GET  : historique des lots d'un produit (le plus proche de la péremption en premier -- ordre FEFO).
+    POST : réception d'un nouveau lot daté {quantite, date_peremption (optionnelle, "AAAA-MM-JJ"), numero_lot (optionnel)}.
+    Réservé au personnel (IsAdminUser, comme api_update_stock) -- jamais accessible à un CompteClient.
+    """
+    produit = get_object_or_404(Produit, id=produit_id)
+
+    if request.method == 'GET':
+        lots = produit.lots.all()  # déjà trié par date_peremption (Meta.ordering du modèle)
+        return Response(LotProduitSerializer(lots, many=True).data)
+
+    # POST : réception d'un nouveau lot
+    try:
+        quantite = int(request.data.get('quantite'))
+        if quantite <= 0: raise ValueError()
+    except (TypeError, ValueError):
+        return Response({"error": "La quantité doit être un entier strictement positif"}, status=400)
+
+    date_peremption_str = request.data.get('date_peremption') or None
+    date_peremption = None
+    if date_peremption_str:
+        # 🐛 CORRECTIF : request.data renvoie une chaîne brute ("AAAA-MM-JJ"), jamais un objet
+        # date -- l'assigner tel quel plantait dans LotProduit.save() (calendar.monthrange()
+        # sur un str). parse_date() la convertit proprement, ou renvoie None si mal formée.
+        date_peremption = parse_date(date_peremption_str)
+        if date_peremption is None:
+            return Response({"error": "Date de péremption invalide (format attendu : AAAA-MM-JJ)"}, status=400)
+    numero_lot = request.data.get('numero_lot') or None
+
+    try:
+        with transaction.atomic():
+            produit = Produit.objects.select_for_update().get(id=produit_id)
+            lot = produit.ajouter_lot(
+                quantite, date_peremption=date_peremption, numero_lot=numero_lot,
+                auteur=request.user, note="Réception lot",
+            )
+        return Response(LotProduitSerializer(lot).data, status=201)
+    except ValidationError as e:
+        error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
+        return Response({"error": error_message}, status=400)
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
@@ -1230,8 +1423,11 @@ def api_vente_directe(request):
                 )
 
             # 2. Création de la commande liée au ClientGuichet (ou totalement anonyme)
+            # 🐛 CORRECTIF (bug préexistant, introduit par le retrait du modèle Client) :
+            # Commande.client n'existe plus depuis la suppression complète de l'ancien
+            # modèle Client -- passer "client=None" ici levait TypeError ("unexpected
+            # keyword argument 'client'") et faisait planter TOUTE vente au guichet.
             commande = Commande.objects.create(
-                client=None, # Laissé vide car c'est une vente physique comptoir
                 client_guichet=client_pos, # 🌟 None si vente anonyme sans coordonnées
                 type_vente='guichet',
                 payee=True,
@@ -1258,10 +1454,8 @@ def api_vente_directe(request):
                 
                 ItemCommande.objects.create(commande=commande, produit=produit, quantite=qte)
                 
-                produit.quantite -= qte
-                produit.save()
-                
-                Mouvement_stock.objects.create(produit=produit, quantite=qte, type="sortie", auteur=request.user)
+                # 📦 FEFO : consomme d'abord le(s) lot(s) dont la péremption est la plus proche
+                produit.decrementer_stock_fefo(qte, auteur=request.user, note=f"Vente guichet {commande.reference}")
 
             serializer = CommandeSerializer(commande, context={'request': request})
 

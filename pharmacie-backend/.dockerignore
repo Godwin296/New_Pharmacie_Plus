@@ -1,0 +1,33 @@
+# 🐳 Exclut du contexte de build tout ce qui n'a pas besoin d'être copié dans l'image --
+# accélère le build (moins de données envoyées au démon Docker) et évite d'embarquer des
+# secrets ou des artefacts locaux dans l'image finale.
+
+# Environnement virtuel local (créé PAR ce Dockerfile via pip install, jamais copié)
+venv/
+venv_test/
+__pycache__/
+*.pyc
+*.pyo
+
+# Secrets -- JAMAIS dans l'image (injectés à l'exécution via env_file dans docker-compose.yml)
+.env
+.env.*
+!.env.example
+
+# Fichiers générés localement, pas nécessaires dans l'image (regénérés dans le conteneur
+# ou montés en volume selon le besoin réel de déploiement)
+staticfiles/
+media/
+db.sqlite3
+*.log
+
+# Git et éditeurs
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Tests/scratch de développement
+seed_mouvements_test.py
+test_service_direct.py
+debug_holt.py

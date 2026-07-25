@@ -12,6 +12,7 @@ urlpatterns = [
     path("client/register/", api.api_client_register, name="api_client_register"),
     path("client/login/", api.api_client_login, name="api_client_login"),
     path("client/me/", api.api_client_whoami, name="api_client_whoami"),
+    path("client/changer-mot-de-passe/", api.api_client_changer_mot_de_passe, name="api_client_changer_mot_de_passe"),
     
     # --- 🛒 EXPOSITION DES SERVICES CLIENT (NEXT.JS) ---
     path("catalogue/", api.api_catalogue, name="api_catalogue"), # Résolu : Plus de doublon
@@ -36,6 +37,7 @@ urlpatterns = [
     # --- 📉 GESTION ET ADMINISTRATION STRICTE (NEXT.JS) ---
     path("boss-dashboard/", api.api_boss_dashboard, name="api_boss_dashboard"),
     path("boss/update-stock/<int:produit_id>/", api.api_update_stock, name="api_update_stock"),
+    path("produits/<int:produit_id>/lots/", api.api_lots_produit, name="api_lots_produit"),
     path("fournisseurs/", api.api_fournisseurs, name="api_fournisseurs"),
     path("fournisseurs/<int:pk>/", api.api_fournisseur_detail, name="api_fournisseur_detail"),
     path("inventaire_stock/", api.api_inventaire_stock, name="api_inventaire_stock"),
@@ -47,6 +49,7 @@ urlpatterns = [
     # --- 📄 IMPRESSIONS & EXPORTS SÉCURISÉS ---
     # Ces routes restent nécessaires car ton Next.js va ouvrir des fenêtres de téléchargement PDF
     path("facture-pdf/<int:commande_id>/", views.export_facture_pdf, name="export_facture_pdf"),
+    path("ordonnance/<int:commande_id>/voir/", views.api_voir_ordonnance, name="api_voir_ordonnance"),
     path('export-pdf/rapport-stock/', views.export_rapport_stock, name='export_rapport_stock'),
     path('export-pdf/stocks/', views.export_alertes_pdf, name='export_alertes_pdf'),
     path('export-pdf/financier/', views.export_pdf_financier, name='export_pdf_financier'),

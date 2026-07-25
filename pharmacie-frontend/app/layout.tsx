@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Menu, X, House,  
-  Power, ShoppingCart, LogIn, Pill, History, LayoutDashboard
+  Power, ShoppingCart, LogIn, Pill, History, LayoutDashboard, User
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
@@ -13,7 +13,9 @@ import { ConfigPharmacieProvider } from '../lib/context/ConfigPharmacieContext';
 import { ThemeProvider } from '../lib/context/ThemeProvider';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { PharmacyBrandName } from '../components/PharmacyBrandName';
+import { PharmacyIcon } from '../components/PharmacyIcon';
 import { useOfflinePanier } from '../lib/hooks/useOfflinePanier';
+import { useOfflineCatalogue } from '../lib/hooks/useOfflineCatalogue';
 
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -42,6 +44,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // synchronisation -- rappel discret pour ne pas oublier de repasser en ligne, sans devoir
   // se rendre sur /panier pour s'en rendre compte.
   const { file: fileAttenteOffline } = useOfflinePanier();
+
+  // 🚀 MODE OFFLINE (brique 4/4) : synchronise silencieusement la copie locale du catalogue
+  // en arrière-plan (montage + retour réseau) -- purement un effet de fond ici, pas de rendu ;
+  // c'est app/catalogue/page.tsx qui consulte cette copie locale en repli si le réseau manque.
+  useOfflineCatalogue();
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 3500);
@@ -96,7 +103,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300">
         <ThemeProvider>
         <SerwistProvider swUrl="/serwist/sw.js">
-        
+
+        {/* 🔧 FIX LOGO : ConfigPharmacieProvider doit englober le splash screen aussi,
+            pas seulement le nav/footer -- sinon useConfigPharmacie() à l'intérieur du
+            splash retombe toujours sur la valeur par défaut (config: null), car un
+            composant ne peut jamais consommer un Provider qu'il rend lui-même dans son
+            propre JSX ; il doit être un DESCENDANT de ce Provider. D'où le déplacement
+            de l'ouverture de <ConfigPharmacieProvider> ici, avant le splash. */}
+        <ConfigPharmacieProvider>
         {/* SPLASH SCREEN */}
         <AnimatePresence>
           {showSplash && (
@@ -108,7 +122,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <div className="relative inline-block mb-6">
                   <div className="absolute inset-0 bg-emerald-500 rounded-full blur-3xl opacity-20 animate-pulse" />
                   <div className="h-32 w-32 bg-white rounded-3xl flex items-center justify-center shadow-2xl relative border border-white/10 mx-auto p-5">
-                    <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+                    <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
                   </div>
                 </div>
                 <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter mb-4">
@@ -122,14 +136,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           )}
         </AnimatePresence>
 
-        <ConfigPharmacieProvider>
         {!isSpecialRoute && (
           <>
             <nav className="sticky top-0 z-50 bg-emerald-600/90 dark:bg-emerald-900/80 backdrop-blur-md p-4 text-white shadow-lg border-b border-white/10">
               <div className="container mx-auto flex justify-between items-center">
                 <Link href="/" className="flex items-center gap-3 text-white no-underline group">
                   <div className="h-10 w-10 bg-white rounded-lg shadow-md flex items-center justify-center p-1.5 overflow-hidden group-hover:rotate-12 transition-transform">
-                    <img src="/branding/icon-mark.png" alt="Pharmacie+" className="w-full h-full object-contain" />
+                    <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
                   </div>
                   <PharmacyBrandName className="font-bold text-xl tracking-tighter uppercase italic" />
                 </Link>
@@ -195,6 +208,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                               <Link href="/catalogue" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all no-underline"><Pill size={20} /> Catalogue Produits</Link>
                               <Link href="/panier" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all no-underline"><ShoppingCart size={20} /> Mon Panier</Link>
                               <Link href="/commandes" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all no-underline"><History size={20} /> Mes Commandes</Link>
+                              <Link href="/profil" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all no-underline"><User size={20} /> Mon Profil</Link>
                             </>
                           )}
                         </>

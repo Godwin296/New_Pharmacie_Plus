@@ -8,6 +8,12 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('clients_publics', '0001_initial'),
+        # 🐛 CORRECTIF (bug préexistant, sans rapport avec CompteClient/lots) : voir le
+        # docstring détaillé dans core/migrations/0006_client_client_nom_trgm_idx_and_more.py
+        # -- même cause exacte ici (AddIndex avec opclasses=['gin_trgm_ops'] sans dépendance
+        # explicite vers la migration qui active l'extension pg_trgm), même symptôme
+        # constaté en conditions réelles (échec ~1 fois sur 2 sur une base neuve).
+        ('tenants', '0002_enable_pg_trgm'),
     ]
 
     operations = [

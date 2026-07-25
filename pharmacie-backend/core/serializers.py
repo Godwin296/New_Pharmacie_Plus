@@ -1,11 +1,24 @@
 from rest_framework import serializers
-from .models import Produit, Mouvement_stock, Commande, ItemCommande, Fournisseur, PharmacieConfig
+from .models import Produit, Mouvement_stock, Commande, ItemCommande, Fournisseur, PharmacieConfig, LotProduit
 from .utils import generate_qr_base64
 
 class PharmacieConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = PharmacieConfig
         fields = '__all__'
+
+
+class LotProduitSerializer(serializers.ModelSerializer):
+    # 🔐 TRAÇABILITÉ : nom lisible plutôt que l'ID brut de l'utilisateur Django
+    auteur_nom = serializers.ReadOnlyField(source='auteur.username')
+
+    class Meta:
+        model = LotProduit
+        fields = [
+            'id', 'produit', 'numero_lot', 'quantite_initiale', 'quantite_restante',
+            'date_peremption', 'date_reception', 'auteur_nom', 'note',
+        ]
+        read_only_fields = ['id', 'quantite_restante', 'date_reception', 'auteur_nom']
 
 
 class ItemCommandeSerializer(serializers.ModelSerializer):
@@ -34,7 +47,21 @@ class CommandeSerializer(serializers.ModelSerializer):
     est_perimee = serializers.ReadOnlyField()
     statut = serializers.CharField(read_only=True)
     agent_validateur_nom = serializers.ReadOnlyField(source='agent_validateur.username', default="N/A")
-    
+
+    # 🔐 CHIFFREMENT AU REPOS (core/chiffrement.py) : le fichier sur disque est désormais
+    # chiffré, donc illisible tel quel par un navigateur -- on n'expose plus l'URL DIRECTE du
+    # FileField (comportement par défaut de DRF pour ordonnance = models.FileField), mais
+    # l'URL du point de déchiffrement dédié (views.py::api_voir_ordonnance), qui déchiffre à
+    # la volée avant de streamer la réponse.
+    ordonnance = serializers.SerializerMethodField()
+
+    def get_ordonnance(self, obj):
+        if not obj.ordonnance:
+            return None
+        request = self.context.get('request')
+        chemin = f"/api/v1/ordonnance/{obj.id}/voir/"
+        return request.build_absolute_uri(chemin) if request else chemin
+
     # 🌟 EXTRACTION DYNAMIQUE DES COORDONNÉES POUR NEXT.JS
     client_nom = serializers.SerializerMethodField()
     client_telephone = serializers.SerializerMethodField()
@@ -139,6 +166,30 @@ class ProduitSerializer(serializers.ModelSerializer):
         if obj.image and request:
             return request.build_absolute_uri(obj.image.url)
         return obj.image.url if obj.image else None
+
+    def to_representation(self, instance):
+        """
+        🔐 CONFIDENTIALITÉ PRIX D'ACHAT (18/07) : `prix_achat` (coût, pour calculer la marge
+        réelle -- voir Produit.prix_achat) n'a AUCUNE raison d'être visible par un client
+        (fuite de la structure de marge de la pharmacie vers l'extérieur) ni même par une
+        caissière (elle vend, elle n'a pas besoin de connaître les coûts d'achat) -- SEUL
+        l'administrateur du tenant (is_superuser=True) le voit. Retiré ici, dans le
+        serializer, plutôt que dans chaque vue individuellement : un seul endroit à
+        auditer, impossible à contourner en oubliant un `.pop()` dans une vue future.
+
+        ⚠️ Ceci suppose que `context={'request': request}` est bien transmis par l'appelant.
+        Si `request` est absent du contexte (oubli), le comportement est FAIL-SAFE : le champ
+        est retiré par défaut (traité comme non-admin), jamais l'inverse.
+        """
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        est_admin_tenant = bool(
+            request and getattr(request, 'user', None) and request.user.is_authenticated
+            and getattr(request.user, 'is_superuser', False)
+        )
+        if not est_admin_tenant:
+            data.pop('prix_achat', None)
+        return data
 
 class FournisseurSerializer(serializers.ModelSerializer):
     class Meta:
