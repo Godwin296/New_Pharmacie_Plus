@@ -78,6 +78,31 @@ déboguer.
 
 ## 3. Docker (multi-conteneur + Docker Compose)
 
+**✅ Fichiers écrits (25/07)** : `docker-compose.yml` (racine du dépôt),
+`pharmacie-backend/Dockerfile`, `pharmacie-frontend/Dockerfile`, `.dockerignore` des deux
+côtés, `docker/postgres-init/01-pg_trgm.sql` (active automatiquement l'extension
+PostgreSQL nécessaire aux migrations, cf. section migrations plus loin dans ce fichier).
+
+**⚠️ Statut réel : "prêt à tester", PAS "testé"** — écrit et relu avec soin (dépendances
+système WeasyPrint vérifiées via la doc officielle à jour pour la version installée,
+variables d'environnement vérifiées dans `config/settings.py`), mais Docker n'était pas
+disponible dans l'environnement où ces fichiers ont été rédigés (sandbox sans Docker
+installé, réseau sans accès à Docker Hub) — impossible d'y faire tourner un vrai
+`docker compose up`. Conformément à la règle "tester réellement" de ce projet (voir
+[CONTRIBUTING.md](../CONTRIBUTING.md)), **le premier `docker compose up --build` réel
+reste à faire, en local**, avant de considérer ce chantier terminé. Points à surveiller
+en particulier lors de ce premier test : noms exacts des paquets système Debian dans le
+`Dockerfile` backend (peuvent varier légèrement selon la version de l'image `python:3.12-slim`
+utilisée au moment du build).
+
+**Démarrage prévu** une fois testé :
+```bash
+cp pharmacie-backend/.env.example pharmacie-backend/.env   # remplir les vraies valeurs
+docker compose up --build
+docker compose exec backend python manage.py migrate_schemas --shared
+docker compose exec backend python seed.py   # optionnel, données de démo
+```
+
 **Déclencheur pour s'y mettre :** dès que tu veux simplifier l'installation pour un futur
 collaborateur, ou au moment de choisir l'hébergement de production. Contrairement aux
 autres points, celui-ci peut se faire relativement tôt sans risque — ça n'implique aucun
@@ -87,54 +112,31 @@ changement de code applicatif, juste une couche d'emballage autour de ce qui exi
 possible serait indirect : si l'hébergement choisi facture différemment un déploiement par
 conteneurs vs un déploiement classique — à vérifier au cas par cas selon l'hébergeur.
 
-**Structure prévue** (4 conteneurs, un par service) :
+**Structure retenue** (4 conteneurs, un par service) :
+
 
 ```
 docker-compose.yml
 ├── backend       (Django + Daphne, à partir de pharmacie-backend/)
 ├── frontend       (Next.js, à partir de pharmacie-frontend/)
-├── db             (image officielle postgres:16)
+├── db             (image officielle postgres:16, + activation auto de pg_trgm)
 └── redis          (image officielle redis:7)
 ```
 
-**Squelette à reprendre le moment venu** (non testé, à valider quand on s'y met
-réellement — cf. règle "tester réellement" du projet) :
+Fichiers réels (plus un simple squelette, voir encadré "Statut réel" ci-dessus) :
+`docker-compose.yml` (racine), `pharmacie-backend/Dockerfile`,
+`pharmacie-frontend/Dockerfile`, `docker/postgres-init/01-pg_trgm.sql`.
 
-```yaml
-# docker-compose.yml (squelette, PAS encore testé)
-services:
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: pharmacie_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7
-
-  backend:
-    build: ./pharmacie-backend
-    depends_on: [db, redis]
-    env_file: ./pharmacie-backend/.env
-    ports: ["8000:8000"]
-
-  frontend:
-    build: ./pharmacie-frontend
-    depends_on: [backend]
-    ports: ["3000:3000"]
-
-volumes:
-  pgdata:
-```
-
-Il faudra aussi un `Dockerfile` dans `pharmacie-backend/` et `pharmacie-frontend/`
-(actuellement absents des deux dossiers). Point d'attention spécifique à ce projet :
-`python-magic-bin` dans `requirements.txt` est un paquet **Windows uniquement** — le
-`Dockerfile` backend devra utiliser `python-magic` (sans `-bin`) à la place, comme déjà
-fait pour tester ce dépôt sous Linux dans cette session.
+Points déjà réglés par rapport au brouillon initial de cette section :
+- `requirements.txt` ne contient plus `python-magic-bin` (paquet Windows) depuis un
+  moment déjà -- `python-magic` (Linux/Mac) suffit désormais, rien à substituer.
+- Dépendances système WeasyPrint mises à jour : ce projet utilise `weasyprint==68.1`
+  (architecture sans Cairo/GdkPixbuf depuis la v53) -- la liste `libcairo2`/
+  `libgdk-pixbuf2.0-0` qu'on trouve dans la plupart des tutoriels est **obsolète** pour
+  cette version et n'a pas été utilisée.
+- `pg_trgm` (nécessaire aux migrations `core.0006`/`clients_publics.0002`, voir plus haut
+  dans ce fichier) est activé automatiquement au premier démarrage du conteneur `db` via
+  un script d'init, pas besoin d'y penser manuellement comme en dev local sans Docker.
 
 ---
 

@@ -1,0 +1,19 @@
+# 🐳 Exclut du contexte de build tout ce qui n'a pas besoin d'être copié dans l'image.
+
+node_modules/
+.next/
+out/
+
+# Secrets -- JAMAIS dans l'image
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Git et éditeurs
+.git/
+.gitignore
+.vscode/
+.idea/
+
+npm-debug.log*
