@@ -95,18 +95,21 @@ export function CTAFooter() {
                 Produit
               </div>
               <div className="flex flex-col gap-3">
-                <a href="#pharmacies" className="text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                <Link href="/#pharmacies" className="text-[14px] text-white/60 hover:text-white no-underline transition-colors">
                   Pour les pharmacies
-                </a>
-                <a href="#clients" className="text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                </Link>
+                <Link href="/forfaits" className="text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                  Forfaits
+                </Link>
+                <Link href="/#clients" className="text-[14px] text-white/60 hover:text-white no-underline transition-colors">
                   Pour les patients
-                </a>
-                <a href="#confiance" className="text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                </Link>
+                <Link href="/#confiance" className="text-[14px] text-white/60 hover:text-white no-underline transition-colors">
                   Sécurité
-                </a>
-                <a href="#faq" className="text-[14px] text-white/60 hover:text-white no-underline transition-colors">
+                </Link>
+                <Link href="/#faq" className="text-[14px] text-white/60 hover:text-white no-underline transition-colors">
                   FAQ
-                </a>
+                </Link>
               </div>
             </div>
 

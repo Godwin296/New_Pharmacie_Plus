@@ -2,17 +2,18 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence, useScroll, useSpring } from "framer-motion";
 import { DEMO_WHATSAPP_LINK } from "@/lib/contact";
 import { ThemeToggle } from "./ThemeToggle";
 
 const links = [
-  { href: "#pharmacies", label: "Pour les pharmacies" },
+  { href: "/#pharmacies", label: "Pour les pharmacies" },
   { href: "/forfaits", label: "Forfaits" },
-  { href: "#clients", label: "Pour les patients" },
-  { href: "#confiance", label: "Sécurité" },
-  { href: "#faq", label: "FAQ" },
+  { href: "/#clients", label: "Pour les patients" },
+  { href: "/#confiance", label: "Sécurité" },
+  { href: "/#faq", label: "FAQ" },
   { href: "#contact", label: "Contact" },
 ];
 
@@ -29,7 +30,7 @@ export function Nav() {
       />
       <div className="mx-auto max-w-7xl px-5 sm:px-8">
         <div className="mt-4 flex items-center justify-between rounded-2xl border border-white/10 bg-[#053a30]/75 backdrop-blur-xl px-4 py-3 shadow-lg shadow-emerald-950/30">
-          <a href="#top" className="flex items-center gap-2.5 no-underline">
+          <Link href="/" className="flex items-center gap-2.5 no-underline">
             <Image
               src="/branding/icon-mark.png"
               alt="Pharmacie+"
@@ -41,18 +42,28 @@ export function Nav() {
             <span className="font-display font-bold text-white text-[15px] tracking-tight">
               Pharmacie<span className="text-emerald-400">+</span>
             </span>
-          </a>
+          </Link>
 
           <nav className="hidden md:flex items-center gap-7">
-            {links.map((l) => (
-              <a
-                key={l.href}
-                href={l.href}
-                className="text-[13px] font-medium text-white/70 hover:text-white transition-colors no-underline"
-              >
-                {l.label}
-              </a>
-            ))}
+            {links.map((l) =>
+              l.href.startsWith("#") ? (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  className="text-[13px] font-medium text-white/70 hover:text-white transition-colors no-underline"
+                >
+                  {l.label}
+                </a>
+              ) : (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  className="text-[13px] font-medium text-white/70 hover:text-white transition-colors no-underline"
+                >
+                  {l.label}
+                </Link>
+              )
+            )}
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
@@ -107,16 +118,27 @@ export function Nav() {
                 </button>
               </div>
               <div className="mt-8 flex flex-col gap-1">
-                {links.map((l) => (
-                  <a
-                    key={l.href}
-                    href={l.href}
-                    onClick={() => setOpen(false)}
-                    className="py-3.5 text-[15px] font-medium text-white/80 border-b border-white/10 no-underline"
-                  >
-                    {l.label}
-                  </a>
-                ))}
+                {links.map((l) =>
+                  l.href.startsWith("#") ? (
+                    <a
+                      key={l.href}
+                      href={l.href}
+                      onClick={() => setOpen(false)}
+                      className="py-3.5 text-[15px] font-medium text-white/80 border-b border-white/10 no-underline"
+                    >
+                      {l.label}
+                    </a>
+                  ) : (
+                    <Link
+                      key={l.href}
+                      href={l.href}
+                      onClick={() => setOpen(false)}
+                      className="py-3.5 text-[15px] font-medium text-white/80 border-b border-white/10 no-underline"
+                    >
+                      {l.label}
+                    </Link>
+                  )
+                )}
                 <a
                   href={DEMO_WHATSAPP_LINK}
                   target="_blank"
