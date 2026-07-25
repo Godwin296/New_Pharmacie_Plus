@@ -69,7 +69,7 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 ### 🔵 Documenté, implémentation volontairement différée (voir [docs/INFRASTRUCTURE_ROADMAP.md](docs/INFRASTRUCTURE_ROADMAP.md) pour le détail et le déclencheur de chaque point)
 - [ ] Index PostgreSQL sur `Commande.statut`/`payee`/`date` — attendre que le modèle de données soit stable (fin de refonte)
 - [ ] HTTPS/HSTS (`SECURE_SSL_REDIRECT` etc.) — attendre le choix de l'hébergement de production
-- [ ] Docker + Docker Compose (backend + frontend + postgres + redis) — squelette prêt dans la doc, peut se faire relativement tôt sans risque
+- [x] **Docker + Docker Compose** ✅ Fichiers écrits (25/07) — `docker-compose.yml`, `pharmacie-backend/Dockerfile`, `pharmacie-frontend/Dockerfile`, `docker/postgres-init/01-pg_trgm.sql`. **Statut réel : "prêt à tester", pas "testé"** — Docker indisponible dans l'environnement où ces fichiers ont été rédigés (voir avertissement en tête de `docker-compose.yml`). **Pas nécessaire tant que tu es en dev** : ton venv + `npm run dev` actuels n'ont aucun rapport avec Docker, ça reste ton workflow normal. Utile seulement pour (1) onboarding d'un futur collaborateur, (2) reproductibilité, (3) tremplin vers un hébergement qui accepte les images Docker — à reprendre le jour où l'un de ces trois besoins se présente vraiment, en lançant `docker compose up --build` à la racine du dépôt (pas dans un venv, Docker est indépendant de Python).
 - [ ] CDN pour les images produits — pas urgent tant que le trafic reste local/faible
 
 ### 🔴 Effort élevé / risque architectural
