@@ -2,286 +2,130 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Inventaire Global Stock</title>
+    <title>Inventaire des stocks</title>
     <style>
-        @page {
-            size: A4;
-            margin: 1.5cm;
-        }
+        /* 📄 Même langage visuel sobre que facture_pdf.html et pdf_financier.html
+           (corrigé le 21/07 -- ancienne version : émojis ⚠️✅🛰️🛡️, tableau zébré
+           multicolore, texte tout en majuscules -- peu adapté à une consultation
+           professionnelle par un cadre ou un partenaire). */
+        @page { size: A4; margin: 0; }
         body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            color: #0f172a;
+            font-family: 'Helvetica', Arial, sans-serif;
             background-color: #ffffff;
-            margin: 0;
-            padding: 0;
-            font-size: 11px;
-        }
-        .header {
-            border-bottom: 6px solid #10b981;
-            padding-bottom: 20px;
-            margin-bottom: 25px;
-        }
-        .header-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .logo-box {
-            width: 55px;
-            height: 55px;
-            background-color: #10b981;
-            border-radius: 12px;
-            text-align: center;
-            line-height: 55px;
-            color: #ffffff;
-            font-weight: 900;
-            font-size: 20px;
-        }
-        .logo-img {
-            width: 55px;
-            height: 55px;
-            border-radius: 12px;
-            object-fit: cover;
-        }
-        .company-name {
-            font-size: 20px;
-            font-weight: 900;
-            text-transform: uppercase;
-            margin: 0;
-            letter-spacing: -0.5px;
-        }
-        .subtitle {
-            font-size: 9px;
-            font-weight: 900;
-            color: #10b981;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin: 2px 0;
-            font-style: italic;
-        }
-        .address {
-            font-size: 8px;
-            color: #94a3b8;
-            font-weight: bold;
-            text-transform: uppercase;
-            margin: 0;
-        }
-        .title-right {
-            text-align: right;
-            font-size: 20px;
-            font-weight: 900;
-            color: #10b981;
-            text-transform: uppercase;
-            font-style: italic;
-            margin: 0;
-        }
-        .date-right {
-            text-align: right;
-            font-size: 8px;
-            font-weight: 900;
-            color: #94a3b8;
-            text-transform: uppercase;
-            margin: 2px 0 0 0;
-        }
-        .stats-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 15px 0;
-            margin-bottom: 30px;
-            margin-left: -15px;
-            margin-right: -15px;
-        }
-        .stat-card-total {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 16px;
-            padding: 15px;
-            text-align: center;
-            width: 50%;
-        }
-        .stat-card-alert {
-            background-color: #fef2f2;
-            border: 1px solid #fee2e2;
-            border-left: 4px solid #ef4444;
-            border-radius: 16px;
-            padding: 15px;
-            text-align: center;
-            width: 50%;
-        }
-        .stat-label {
-            font-size: 8px;
-            font-weight: 900;
-            text-transform: uppercase;
-            display: block;
-            margin-bottom: 4px;
-        }
-        .stat-number {
-            font-size: 20px;
-            font-weight: 900;
-        }
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            border: 1px solid #e2e8f0;
-        }
-        .data-table th {
-            background-color: #10b981;
-            color: #ffffff;
-            font-size: 10px;
-            font-weight: 900;
-            text-transform: uppercase;
-            padding: 10px;
-            text-align: left;
-            border-right: 1px solid rgba(255,255,255,0.2);
-        }
-        .data-table td {
-            padding: 10px;
-            border-bottom: 1px solid #e2e8f0;
-            border-right: 1px solid #e2e8f0;
-        }
-        .bg-row-even { background-color: #ffffff; }
-        .bg-row-odd { background-color: #f8fafc; }
-        .font-mono { font-family: monospace; color: #94a3b8; font-size: 9px; }
-        .text-center { text-align: center; }
-        .text-right { text-align: right; }
-        .font-bold { font-weight: 900; text-transform: uppercase; }
-        .text-danger { color: #ef4444 !important; }
-        .text-muted { color: #94a3b8; font-size: 9px; }
-        .footer {
-            margin-top: 35px;
-            text-align: center;
-        }
-        .certif-text {
-            color: #10b981;
-            font-weight: 900;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-style: italic;
-            margin-bottom: 5px;
-        }
-        .footer-address {
-            font-size: 9px;
-            color: #64748b;
-            font-weight: 900;
-            text-transform: uppercase;
+            margin: 0; padding: 0;
+            color: #1f2937;
+            font-size: 12.5px;
             line-height: 1.5;
         }
-        .thanks-msg {
-            color: #10b981;
-            font-style: italic;
-            font-size: 12px;
-            font-weight: bold;
-            margin-top: 5px;
-            display: block;
+        .page { padding: 40px 46px; }
+
+        .header { display: table; width: 100%; border-bottom: 2px solid #10b981; padding-bottom: 16px; margin-bottom: 24px; }
+        .header-left { display: table-cell; vertical-align: middle; width: 65%; }
+        .header-right { display: table-cell; vertical-align: middle; width: 35%; text-align: right; }
+        .logo-img { max-height: 48px; max-width: 200px; object-fit: contain; }
+        .logo-fallback {
+            display: inline-block; width: 48px; height: 48px; border-radius: 9px;
+            background-color: #10b981; color: #fff; font-weight: bold; font-size: 18px;
+            text-align: center; line-height: 48px;
         }
-        .signature-section {
-            margin-top: 40px;
-            width: 100%;
+        .pharmacie-nom { font-size: 16px; font-weight: bold; color: #111827; margin: 7px 0 2px 0; }
+        .pharmacie-contact { font-size: 10px; color: #6b7280; margin: 0; }
+        .doc-titre { font-size: 18px; font-weight: bold; color: #111827; margin: 0 0 5px 0; }
+        .doc-ref { font-size: 10.5px; color: #6b7280; margin: 0; }
+
+        .stats-table { width: 100%; border-collapse: collapse; margin-bottom: 26px; table-layout: fixed; }
+        .stats-table td { padding: 14px 0; vertical-align: top; }
+        .stat-cell { border-left: 3px solid #e5e7eb; padding-left: 16px !important; }
+        .stat-cell.alert { border-left-color: #dc2626; }
+        .stat-label { font-size: 9.5px; font-weight: bold; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .stat-value { font-size: 19px; font-weight: bold; color: #111827; }
+        .stat-value.alert { color: #dc2626; }
+
+        table.data { width: 100%; border-collapse: collapse; }
+        table.data thead th {
+            text-align: left; font-size: 9.5px; font-weight: bold; color: #6b7280;
+            text-transform: uppercase; letter-spacing: 0.4px;
+            padding: 8px 9px; border-bottom: 1.5px solid #e5e7eb;
         }
-        .signature-box {
-            width: 50%;
-            font-size: 9px;
-            font-weight: 900;
-            text-transform: uppercase;
-            color: #94a3b8;
+        table.data tbody td { padding: 9px 9px; border-bottom: 1px solid #f1f3f5; font-size: 12px; }
+        .col-ref { width: 12%; font-family: monospace; color: #9ca3af; font-size: 10.5px; }
+        .col-nom { width: 40%; font-weight: bold; color: #111827; }
+        .col-cat { width: 20%; color: #6b7280; }
+        .col-stock { width: 13%; text-align: center; font-weight: bold; }
+        .col-obs { width: 15%; text-align: right; font-weight: bold; }
+        .stock-alerte { color: #dc2626; }
+        .obs-ok { color: #059669; }
+        .obs-alerte { color: #dc2626; }
+
+        .footer {
+            border-top: 1px solid #e5e7eb; padding-top: 16px; margin-top: 30px; text-align: center;
         }
-        .signature-line {
-            margin-top: 45px;
-            border-bottom: 1px solid #e2e8f0;
-            width: 85%;
-        }
+        .footer-note { font-size: 10.5px; color: #6b7280; }
+        .footer-note strong { color: #374151; }
+        .page-number:after { content: counter(page) " / " counter(pages); }
     </style>
 </head>
 <body>
+    <div class="page">
+        <div class="header">
+            <div class="header-left">
+                {% if logo_url %}
+                    <img src="{{ logo_url }}" class="logo-img" alt="{{ config.nom|default:'Pharmacie' }}">
+                {% else %}
+                    <span class="logo-fallback">{{ config.nom|default:"P+"|slice:":1" }}</span>
+                {% endif %}
+                <div class="pharmacie-nom">{{ config.nom|default:"Pharmacie +" }}</div>
+                <div class="pharmacie-contact">{{ config.adresse }}</div>
+            </div>
+            <div class="header-right">
+                <div class="doc-titre">Inventaire des stocks</div>
+                <div class="doc-ref">&Eacute;tabli le {{ date_heure|date:"d/m/Y" }} &agrave; {{ date_heure|date:"H:i" }}</div>
+            </div>
+        </div>
 
-    <!-- HEADER -->
-    <div class="header">
-        <table class="header-table">
+        <table class="stats-table">
             <tr>
-                <td style="width: 65px; vertical-align: middle;">
-                    {% if logo_url %}
-                        <img src="{{ logo_url }}" class="logo-img" alt="Logo">
-                    {% else %}
-                        <div class="logo-box">P+</div>
-                    {% endif %}
+                <td class="stat-cell">
+                    <div class="stat-label">R&eacute;f&eacute;rences en catalogue</div>
+                    <div class="stat-value">{{ total_med }}</div>
                 </td>
-                <td style="vertical-align: middle;">
-                    <h1 class="company-name">{{ config.nom|default:"PHARMACIE PLUS +" }}</h1>
-                    <div class="subtitle">Inventaire Physique Stratégique 🛰️</div>
-                    <p class="address">{{ config.adresse }}</p>
-                </td>
-                <td style="vertical-align: middle; text-align: right;">
-                    <h2 class="title-right">État du Stock</h2>
-                    <p class="date-right">Fait le {{ date_heure|date:"l d F Y à H:i" }}</p>
+                <td class="stat-cell alert">
+                    <div class="stat-label">Articles sous le seuil d'alerte</div>
+                    <div class="stat-value alert">{{ stock_faible }}</div>
                 </td>
             </tr>
         </table>
+
+        <table class="data">
+            <thead>
+                <tr>
+                    <th class="col-ref">R&eacute;f.</th>
+                    <th class="col-nom">D&eacute;signation</th>
+                    <th class="col-cat">Cat&eacute;gorie</th>
+                    <th class="col-stock" style="text-align: center;">Stock</th>
+                    <th class="col-obs" style="text-align: right;">Observation</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in produits %}
+                <tr>
+                    <td class="col-ref">{{ p.identifiant }}</td>
+                    <td class="col-nom">{{ p.nom }}</td>
+                    <td class="col-cat">{{ p.categorie_pdf }}</td>
+                    <td class="col-stock {% if p.quantite <= p.seuil_alerte %}stock-alerte{% endif %}">{{ p.quantite }}</td>
+                    <td class="col-obs {% if p.quantite <= p.seuil_alerte %}obs-alerte{% else %}obs-ok{% endif %}">
+                        {% if p.quantite <= p.seuil_alerte %}&Agrave; r&eacute;approvisionner{% else %}Stock suffisant{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="footer">
+            <div class="footer-note">
+                <strong>{{ config.nom|default:"Pharmacie +" }}</strong> &middot; {{ config.adresse|default:"" }}{% if config.adresse and config.telephone %} &middot; {% endif %}{{ config.telephone }}
+            </div>
+        </div>
     </div>
-
-    <!-- STATS COMPTEURS -->
-    <table class="stats-table">
-        <tr>
-            <td class="stat-card-total">
-                <span class="stat-label" style="color: #94a3b8;">Total Références</span>
-                <span class="stat-number">{{ total_med }} Médicaments</span>
-            </td>
-            <td class="stat-card-alert">
-                <span class="stat-label" style="color: #ef4444;">Articles en Alerte</span>
-                <span class="stat-number text-danger">{{ stock_faible }}</span>
-            </td>
-        </tr>
-    </table>
-
-    <!-- TABLEAU DES PRODUITS -->
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th style="width: 12%;">Réf.</th>
-                <th style="width: 43%;">Désignation</th>
-                <th style="width: 20%;">Catégorie</th>
-                <th style="width: 10%; text-align: center;">Stock</th>
-                <th style="width: 15%; text-align: right;">Observation</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for p in produits %}
-            <tr class="{% if forloop.counter|divisibleby:2 %}bg-row-even{% else %}bg-row-odd{% endif %}">
-                <td class="font-mono">#PH-{{ p.id }}</td>
-                <td class="font-bold" style="color: #1e293b;">{{ p.nom }}</td>
-                <td style="color: #64748b; font-style: italic;">{{ p.get_categorie_display }}</td>
-                <td class="text-center font-bold {% if p.quantite <= p.seuil_alerte %}text-danger{% endif %}">
-                    {{ p.quantite }}
-                </td>
-                <td class="text-right font-bold text-muted" style="{% if p.quantite <= p.seuil_alerte %}color: #ef4444;{% endif %}">
-                    {% if p.quantite <= p.seuil_alerte %}⚠️ RÉAPPRO{% else %}✅ OK{% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <!-- SIGNATURES SECTION -->
-    <table class="signature-section">
-        <tr>
-            <td class="signature-box" style="text-align: left;">
-                <span>VISA DE LA DIRECTION</span>
-                <div class="signature-line" style="text-align: left;"></div>
-            </td>
-            <td class="signature-box" style="text-align: right;">
-                <span style="padding-right: 15%;">SIGNATURE DE L'AUDITEUR</span>
-                <div class="signature-line" style="margin-left: auto; text-align: right;"></div>
-            </td>
-        </tr>
-    </table>
-
-    <!-- FOOTER ENCHAÎNÉ -->
-    <div class="footer">
-        <div class="certif-text">🛡️ RAPPORT DE STOCKS CERTIFIÉ PAR {{ config.nom|default:"PHARMACIE+" }}</div>
-        <p class="footer-address">
-            {{ config.adresse|default:"ADRESSE NON CONFIGURÉE" }} | Tel: {{ config.telephone|default:"NUMÉRO NON CONFIGURÉ" }}
-            <span class="thanks-msg">" {{ config.message_remerciement|default:"Merci de votre confiance !" }} "</span>
-        </p>
-    </div>
-
 </body>
 </html>

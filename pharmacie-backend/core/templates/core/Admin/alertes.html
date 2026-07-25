@@ -2,163 +2,133 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <title>&Eacute;tat critique des stocks</title>
     <style>
+        /* 📄 Même langage visuel sobre que les autres PDF (corrigé le 21/07 -- ancienne
+           version : émojis 📦⚠️⌛, bandeau rouge épais en haut de page, texte tout en
+           majuscules). Le rouge reste utilisé (document d'alerte), mais avec parcimonie :
+           un seul liseré fin, pas un bloc de couleur agressif. */
         @page { size: A4; margin: 0; }
-        body { 
-            font-family: 'Helvetica', 'Arial', sans-serif; 
-            margin: 0; padding: 0; 
-            background-color: #f8fafc; 
-            color: #0f172a;
+        body {
+            font-family: 'Helvetica', Arial, sans-serif;
+            margin: 0; padding: 0;
+            background-color: #ffffff;
+            color: #1f2937;
+            font-size: 12.5px;
+            line-height: 1.5;
         }
-        .page-container {
-            width: 21cm;
-            min-height: 29.7cm;
-            margin: auto;
-            background: white;
-            padding: 1.5cm;
-            box-sizing: border-box;
-            border-top: 12px solid #dc2626; /* red-600 */
-        }
-        /* Header */
-        .header {
-            border-bottom: 2px solid #f1f5f9;
-            padding-bottom: 30px;
-            margin-bottom: 40px;
-            display: table;
-            width: 100%;
-        }
-        .header-left { display: table-cell; vertical-align: middle; }
-        .logo-box {
-            width: 60px; height: 60px;
-            background: #dc2626;
-            border-radius: 15px;
-            color: white;
-            text-align: center;
-            line-height: 60px;
-            font-weight: 900;
-            float: left;
-            margin-right: 20px;
-        }
-        .logo-img {
-            width: 80px; height: 80px;
-            object-fit: contain;
-            float: left;
-            margin-right: 20px;
-        }
-        .pharmacy-name { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; letter-spacing: -1px; }
-        .report-tag { font-size: 10px; font-weight: 900; color: #dc2626; text-transform: uppercase; letter-spacing: 2px; margin-top: 5px; }
-        .pharmacy-addr { font-size: 9px; color: #94a3b8; font-weight: bold; margin-top: 5px; max-width: 300px; }
+        .page { padding: 40px 46px; border-top: 3px solid #dc2626; }
 
-        .header-right { display: table-cell; text-align: right; vertical-align: top; }
-        .date-label { font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; }
-        .date-val { font-size: 14px; font-weight: 900; margin: 0; }
-
-        /* KPI Grid */
-        .kpi-container { width: 100%; display: table; border-spacing: 15px 0; margin-bottom: 40px; }
-        .kpi-card { 
-            display: table-cell; 
-            background: #f8fafc; 
-            padding: 20px; 
-            border-radius: 20px; 
-            border: 1px solid #f1f5f9;
-            text-align: center; 
-            width: 33.33%;
+        .header { display: table; width: 100%; border-bottom: 2px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 24px; }
+        .header-left { display: table-cell; vertical-align: middle; width: 65%; }
+        .header-right { display: table-cell; vertical-align: middle; width: 35%; text-align: right; }
+        .logo-img { max-height: 48px; max-width: 200px; object-fit: contain; }
+        .logo-fallback {
+            display: inline-block; width: 48px; height: 48px; border-radius: 9px;
+            background-color: #dc2626; color: #fff; font-weight: bold; font-size: 18px;
+            text-align: center; line-height: 48px;
         }
-        .kpi-label { font-size: 8px; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 10px; }
-        .kpi-val { font-size: 18px; font-weight: 900; }
-        .text-red { color: #dc2626; }
+        .pharmacie-nom { font-size: 16px; font-weight: bold; color: #111827; margin: 7px 0 2px 0; }
+        .pharmacie-contact { font-size: 10px; color: #6b7280; margin: 0; }
+        .doc-titre { font-size: 18px; font-weight: bold; color: #dc2626; margin: 0 0 5px 0; }
+        .doc-ref { font-size: 10.5px; color: #6b7280; margin: 0; }
 
-        /* Table */
-        .section-title { font-size: 12px; font-weight: 900; text-transform: uppercase; color: #dc2626; margin-bottom: 20px; }
-        
-        .table-wrapper { border: 2px solid #fef2f2; border-radius: 15px; overflow: hidden; }
-        table { width: 100%; border-collapse: collapse; }
-        thead tr { background: #dc2626; color: white; text-align: left; font-size: 10px; font-weight: 900; text-transform: uppercase; }
-        th { padding: 15px; }
-        td { padding: 15px; border-bottom: 1px solid #fef2f2; font-size: 12px; }
-        .bg-alert { background-color: rgba(254, 242, 242, 0.5); }
-        .med-nom { font-weight: 900; text-transform: uppercase; color: #1e293b; font-size: 11px; }
-        .med-lab { color: #64748b; font-weight: bold; text-transform: uppercase; font-size: 10px; }
-        .med-date { font-family: monospace; font-weight: 900; color: #dc2626; text-align: center; }
-        .qty-badge { background: #dc2626; color: white; padding: 4px 10px; border-radius: 10px; font-weight: 900; font-size: 11px; }
+        .stats-table { width: 100%; border-collapse: collapse; margin-bottom: 26px; table-layout: fixed; }
+        .stats-table td { padding: 14px 0; vertical-align: top; }
+        .stat-cell { border-left: 3px solid #e5e7eb; padding-left: 16px !important; }
+        .stat-cell.alert { border-left-color: #dc2626; }
+        .stat-label { font-size: 9.5px; font-weight: bold; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .stat-value { font-size: 19px; font-weight: bold; color: #111827; }
+        .stat-value.alert { color: #dc2626; }
 
-        /* Footer */
-        .footer { margin-top: auto; padding-top: 30px; border-top: 1px solid #f1f5f9; text-align: center; }
-        .footer-note { font-size: 10px; color: #64748b; font-weight: bold; font-style: italic; text-transform: uppercase; }
-        .footer-sys { font-size: 8px; color: #cbd5e1; font-weight: 900; text-transform: uppercase; margin-top: 15px; }
+        .section-title { font-size: 12.5px; font-weight: bold; color: #111827; margin: 0 0 14px 0; }
+
+        table.data { width: 100%; border-collapse: collapse; }
+        table.data thead th {
+            text-align: left; font-size: 9.5px; font-weight: bold; color: #6b7280;
+            text-transform: uppercase; letter-spacing: 0.4px;
+            padding: 8px 9px; border-bottom: 1.5px solid #e5e7eb;
+        }
+        table.data tbody td { padding: 9px 9px; border-bottom: 1px solid #f1f3f5; font-size: 12px; }
+        .col-nom { width: 40%; font-weight: bold; color: #111827; }
+        .col-lab { width: 25%; color: #6b7280; }
+        .col-date { width: 20%; text-align: center; font-family: monospace; color: #dc2626; font-weight: bold; }
+        .col-qte { width: 15%; text-align: center; font-weight: bold; }
+        .empty-row { text-align: center; color: #9ca3af; font-style: italic; padding: 24px; }
+
+        .footer { border-top: 1px solid #e5e7eb; padding-top: 16px; margin-top: 30px; text-align: center; }
+        .footer-note { font-size: 10.5px; color: #6b7280; }
+        .footer-note strong { color: #374151; }
     </style>
 </head>
 <body>
-    <div class="page-container">
+    <div class="page">
         <div class="header">
             <div class="header-left">
                 {% if logo_url %}
-                    <img src="{{ logo_url }}" class="logo-img">
+                    <img src="{{ logo_url }}" class="logo-img" alt="{{ config.nom|default:'Pharmacie' }}">
                 {% else %}
-                    <div class="logo-box">⚠</div>
+                    <span class="logo-fallback">{{ config.nom|default:"P+"|slice:":1" }}</span>
                 {% endif %}
-                <div style="display: inline-block; vertical-align: middle;">
-                    <h1 class="pharmacy-name">{{ config.nom_pharmacie|default:"PHARMACIE +" }}</h1>
-                    <p class="report-tag">📦 État des Stocks & Risques</p>
-                    <p class="pharmacy-addr">{{ config.adresse|default:"" }}</p>
-                </div>
+                <!-- 🔴 CORRECTIF (bug remonté en test, session du 21/07) : cette ligne lisait
+                     config.nom_pharmacie, un champ qui N'EXISTE PAS sur PharmacieConfig (le
+                     bon champ s'appelle nom) -- le nom réel de la pharmacie n'apparaissait
+                     donc JAMAIS ici, retombant systématiquement sur "Pharmacie +" par défaut,
+                     contrairement aux 3 autres documents PDF qui utilisaient déjà le bon champ. -->
+                <div class="pharmacie-nom">{{ config.nom|default:"Pharmacie +" }}</div>
+                <div class="pharmacie-contact">{{ config.adresse|default:"" }}</div>
             </div>
             <div class="header-right">
-                <span class="date-label">Émis le</span>
-                <p class="date-val">{{ date_heure|date:"d F Y" }}</p>
+                <div class="doc-titre">&Eacute;tat critique des stocks</div>
+                <div class="doc-ref">&Eacute;mis le {{ date_heure|date:"d/m/Y" }} &agrave; {{ date_heure|date:"H:i" }}</div>
             </div>
         </div>
 
-        <div class="kpi-container">
-            <div class="kpi-card">
-                <span class="kpi-label">Total Produits</span>
-                <b class="kpi-val">{{ nb_produits }}</b>
-            </div>
-            <div class="kpi-card">
-                <span class="kpi-label">Alertes Seuil</span>
-                <b class="kpi-val text-red">⚠️ {{ nb_produits_critiques }}</b>
-            </div>
-            <div class="kpi-card">
-                <span class="kpi-label">Expirations (60j)</span>
-                <b class="kpi-val text-red">⌛ {{ produits_expirant_bientot|length }}</b>
-            </div>
-        </div>
+        <table class="stats-table">
+            <tr>
+                <td class="stat-cell">
+                    <div class="stat-label">Total produits</div>
+                    <div class="stat-value">{{ nb_produits }}</div>
+                </td>
+                <td class="stat-cell alert">
+                    <div class="stat-label">Sous le seuil d'alerte</div>
+                    <div class="stat-value alert">{{ nb_produits_critiques }}</div>
+                </td>
+                <td class="stat-cell alert">
+                    <div class="stat-label">P&eacute;remption sous 60 jours</div>
+                    <div class="stat-value alert">{{ produits_expirant_bientot|length }}</div>
+                </td>
+            </tr>
+        </table>
 
-        <div class="section-title">⌛ Médicaments critiques (Péremption & Seuil)</div>
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Médicament</th>
-                        <th>Laboratoire</th>
-                        <th style="text-align: center;">Date Expiration</th>
-                        <th style="text-align: center;">Quantité</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for p in produits_expirant_bientot %}
-                    <tr class="bg-alert">
-                        <td><div class="med-nom">{{ p.nom }}</div></td>
-                        <td><div class="med-lab">{{ p.laboratoire|default:"N/A" }}</div></td>
-                        <td class="med-date">{{ p.date_expiration|date:"d/m/Y" }}</td>
-                        <td style="text-align: center;"><span class="qty-badge">{{ p.quantite }}</span></td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="4" style="text-align: center; padding: 40px; color: #94a3b8; font-style: italic;">
-                            Aucune alerte critique à signaler pour le moment.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        <div class="section-title">M&eacute;dicaments &agrave; surveiller (p&eacute;remption ou seuil de stock)</div>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th class="col-nom">M&eacute;dicament</th>
+                    <th class="col-lab">Laboratoire</th>
+                    <th class="col-date" style="text-align: center;">Date d'expiration</th>
+                    <th class="col-qte" style="text-align: center;">Quantit&eacute;</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in produits_expirant_bientot %}
+                <tr>
+                    <td class="col-nom">{{ p.nom }}</td>
+                    <td class="col-lab">{{ p.laboratoire|default:"N/A" }}</td>
+                    <td class="col-date">{{ p.date_expiration|date:"d/m/Y" }}</td>
+                    <td class="col-qte">{{ p.quantite }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="empty-row">Aucune alerte critique &agrave; signaler pour le moment.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
 
         <div class="footer">
-            <p class="footer-note">
-                {{ config.message_remerciement|default:"Note stratégique : Veuillez procéder au retrait immédiat ou à la promotion des lots concernés." }}
-            </p>
-            <p class="footer-sys">Document généré par le système de gestion PHARMACIE +</p>
+            <div class="footer-note">
+                {{ config.message_remerciement|default:"Merci de proc&eacute;der au retrait ou &agrave; la promotion des lots concern&eacute;s dans les meilleurs d&eacute;lais." }}
+            </div>
         </div>
     </div>
 </body>

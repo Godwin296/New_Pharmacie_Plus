@@ -14,7 +14,7 @@ from io import BytesIO
 
 # Imports de tes modèles locaux requis pour les requêtes d'impression
 from .models import Commande, Produit, PharmacieConfig
-from .utils import generate_qr_base64, obtenir_logo_base64_pour_pdf
+from .utils import generate_qr_base64, obtenir_logo_base64_pour_pdf, nettoyer_libelle_pour_pdf
 from .chiffrement import dechiffrer_si_necessaire
 from .cache_utils import cache_get, cache_set
 
@@ -253,10 +253,15 @@ def export_rapport_stock(request):
 
     try:
         config = PharmacieConfig.objects.first()
-        produits = Produit.objects.all().order_by('nom')
-        
-        total_med = produits.count()
-        stock_faible = produits.filter(quantite__lte=F('seuil_alerte')).count()
+        produits = list(Produit.objects.all().order_by('nom'))
+
+        total_med = len(produits)
+        stock_faible = sum(1 for p in produits if p.quantite <= p.seuil_alerte)
+
+        # 🧾 Libellé de catégorie "propre" (sans émoji) réservé à ce PDF -- voir
+        # nettoyer_libelle_pour_pdf() dans core/utils.py. Ne modifie rien en base.
+        for p in produits:
+            p.categorie_pdf = nettoyer_libelle_pour_pdf(p.get_categorie_display())
 
         context = {
             'config': config,

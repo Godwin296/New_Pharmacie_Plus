@@ -30,6 +30,31 @@ def generate_qr_base64(data_string):
 # explicitement ce fichier pour "en-tête de facture/rapport PDF, papier à en-tête".
 _LOGO_DEFAUT_STATIC_PATH = "core/branding/logo-defaut-pdf.png"
 
+import re
+_EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F300-\U0001FAFF"  # symboles/pictogrammes divers, émojis récents
+    "\U00002600-\U000027BF"  # symboles divers + dingbats (inclut ❤️ ☀️ ✨)
+    "\U0001F1E6-\U0001F1FF"  # drapeaux
+    "\uFE0F"                 # variation selector (rend un caractère "emoji-style")
+    "]+",
+    flags=re.UNICODE,
+)
+
+
+def nettoyer_libelle_pour_pdf(texte):
+    """
+    🧾 Retire les émojis d'un libellé pour un contexte PDF professionnel (rapports
+    destinés à être présentés à un dirigeant/partenaire), SANS toucher aux choix
+    `Produit.CATEGORIES` eux-mêmes -- ces émojis restent utiles et volontaires dans
+    l'interface de l'application (catalogue, POS...), juste pas dans un document imprimé
+    formel. On ne modifie donc jamais les données en base, seulement l'affichage au
+    moment de générer le PDF.
+    """
+    if not texte:
+        return texte
+    return _EMOJI_PATTERN.sub("", texte).strip()
+
 
 def obtenir_logo_base64_pour_pdf(config):
     """
