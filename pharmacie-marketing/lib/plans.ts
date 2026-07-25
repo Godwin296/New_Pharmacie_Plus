@@ -18,6 +18,7 @@ export const PLANS: Plan[] = [
     yearlyPrice: 150000,
     features: [
       "Gestion du stock en temps réel avec alertes de rupture",
+      "Suivi par lot et date de péremption, sortie automatique FEFO (le plus proche de la péremption sort en premier)",
       "Vente au guichet (caisse rapide dédiée)",
       "Encaissement Mobile Money (Orange Money, MTN MoMo) avec vérification avant décrémentation du stock",
       "Tickets de caisse et factures imprimables (format thermique 80mm)",
@@ -41,6 +42,7 @@ export const PLANS: Plan[] = [
     features: [
       "Tout le forfait Essentiel",
       "Boutique en ligne pour vos patients (catalogue, recherche, commande depuis leur téléphone)",
+      "Catalogue et panier utilisables même sans connexion, synchronisation automatique au retour du réseau",
       "Suivi de commande en temps réel côté patient (mise à jour instantanée)",
       "Upload sécurisé d'ordonnances (vérification automatique + validation par le pharmacien)",
       "Application installable sur le téléphone du patient (PWA, sans passer par un store)",
