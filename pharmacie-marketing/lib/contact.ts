@@ -17,3 +17,7 @@ export const GENERAL_WHATSAPP_LINK = waLink("Bonjour, j'ai une question sur Phar
 export const CLIENT_WHATSAPP_LINK = waLink(
   "Bonjour, ma pharmacie n'utilise pas encore Pharmacie+, je voudrais la leur recommander."
 );
+
+export function planWhatsappLink(planName: string) {
+  return waLink(`Bonjour, je suis intéressé(e) par le forfait ${planName} de Pharmacie+.`);
+}

@@ -9,6 +9,7 @@ import { ThemeToggle } from "./ThemeToggle";
 
 const links = [
   { href: "#pharmacies", label: "Pour les pharmacies" },
+  { href: "/forfaits", label: "Forfaits" },
   { href: "#clients", label: "Pour les patients" },
   { href: "#confiance", label: "Sécurité" },
   { href: "#faq", label: "FAQ" },
