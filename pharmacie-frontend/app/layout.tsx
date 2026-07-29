@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Menu, X, House,  
-  Power, ShoppingCart, LogIn, Pill, History, LayoutDashboard, User
+  Power, ShoppingCart, LogIn, Pill, History, LayoutDashboard, User, ClipboardList
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
@@ -15,6 +15,7 @@ import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { PharmacyBrandName } from '../components/PharmacyBrandName';
 import { PharmacyIcon } from '../components/PharmacyIcon';
 import { useOfflinePanier } from '../lib/hooks/useOfflinePanier';
+import apiClient from '../lib/apiClient';
 import { useOfflineCatalogue } from '../lib/hooks/useOfflineCatalogue';
 
 
@@ -44,6 +45,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // synchronisation -- rappel discret pour ne pas oublier de repasser en ligne, sans devoir
   // se rendre sur /panier pour s'en rendre compte.
   const { file: fileAttenteOffline } = useOfflinePanier();
+
+  // 🛒 REFONTE UI/UX (25/07) : badge panier dans le header + nav du bas -- uniquement
+  // pertinent pour un client (le staff n'a pas de panier personnel, api_panier renvoie
+  // même un 403 explicite pour is_staff sans ?id=, cf. son commentaire dans core/api.py).
+  const [cartCount, setCartCount] = useState(0);
+  const estClient = user.loggedIn && user.role !== 'ADMIN' && user.role !== 'CAISSIERE';
+  const fetchCartCount = async () => {
+    if (!estClient) { setCartCount(0); return; }
+    try {
+      const res = await apiClient.get('/api/v1/panier/');
+      const items = res.data?.items || [];
+      setCartCount(items.reduce((s: number, it: any) => s + (it.quantite || 0), 0));
+    } catch { setCartCount(0); }
+  };
+  useEffect(() => { fetchCartCount(); }, [user.loggedIn, user.role]);
+  useEffect(() => {
+    const rafraichir = () => fetchCartCount();
+    window.addEventListener('panier-maj', rafraichir);
+    return () => window.removeEventListener('panier-maj', rafraichir);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estClient]);
 
   // 🚀 MODE OFFLINE (brique 4/4) : synchronise silencieusement la copie locale du catalogue
   // en arrière-plan (montage + retour réseau) -- purement un effet de fond ici, pas de rendu ;
@@ -138,28 +160,42 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {!isSpecialRoute && (
           <>
-            <nav className="sticky top-0 z-50 bg-emerald-600/90 dark:bg-emerald-900/80 backdrop-blur-md p-4 text-white shadow-lg border-b border-white/10">
-              <div className="container mx-auto flex justify-between items-center">
-                <Link href="/" className="flex items-center gap-3 text-white no-underline group">
-                  <div className="h-10 w-10 bg-white rounded-lg shadow-md flex items-center justify-center p-1.5 overflow-hidden group-hover:rotate-12 transition-transform">
+            <nav className="sticky top-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-5 py-3 shadow-sm border-b border-slate-100 dark:border-slate-800">
+              <div className="container mx-auto flex justify-between items-center gap-3">
+                <button aria-label="Ouvrir le menu" onClick={() => setIsMenuOpen(true)} className="relative bg-transparent border-none p-2 -ml-2 cursor-pointer text-slate-700 dark:text-slate-200">
+                  <Menu size={22} />
+                  {fileAttenteOffline.length > 0 && (
+                    <span
+                      title={`${fileAttenteOffline.length} article(s) en attente de synchronisation`}
+                      className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-white dark:border-slate-900"
+                    >
+                      {fileAttenteOffline.length}
+                    </span>
+                  )}
+                </button>
+
+                <Link href="/" className="flex items-center gap-2.5 text-slate-800 dark:text-white no-underline group min-w-0">
+                  <div className="h-9 w-9 shrink-0 flex items-center justify-center overflow-hidden group-hover:rotate-6 transition-transform">
                     <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
                   </div>
-                  <PharmacyBrandName className="font-bold text-xl tracking-tighter uppercase italic" />
+                  <div className="min-w-0">
+                    <PharmacyBrandName className="font-black text-base leading-tight tracking-tighter block truncate" />
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold leading-tight truncate">Votre santé, notre priorité</p>
+                  </div>
                 </Link>
-        
-                <div className="flex items-center gap-3">
+
+                <div className="flex items-center gap-2 shrink-0">
                   <ThemeToggleButton />
-                  <button aria-label="Ouvrir le menu" onClick={() => setIsMenuOpen(true)} className="relative bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all shadow-inner outline-none">
-                    <Menu size={20} />
-                    {fileAttenteOffline.length > 0 && (
-                      <span
-                        title={`${fileAttenteOffline.length} article(s) en attente de synchronisation`}
-                        className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-amber-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-emerald-600"
-                      >
-                        {fileAttenteOffline.length}
-                      </span>
-                    )}
-                  </button>
+                  {estClient && (
+                    <Link href="/panier" aria-label="Mon panier" className="relative bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 p-2.5 rounded-2xl text-slate-700 dark:text-slate-200 transition-colors no-underline">
+                      <ShoppingCart size={19} />
+                      {cartCount > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-white dark:border-slate-900">
+                          {cartCount}
+                        </span>
+                      )}
+                    </Link>
+                  )}
                 </div>
               </div>
             </nav>
@@ -249,7 +285,47 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           )}
         </AnimatePresence>
 
-        <main className="flex-grow">{children}</main>
+        <main className={`flex-grow ${!isSpecialRoute && estClient ? 'pb-24' : ''}`}>{children}</main>
+
+        {/* 📱 NAV DU BAS — réservée à l'expérience client (adaptée à son usage : parcourir,
+            acheter, suivre ses commandes), fidèle à la maquette fournie le 25/07. */}
+        {!isSpecialRoute && estClient && (
+          <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+            <div className="container mx-auto max-w-md flex items-end justify-between relative">
+              {[
+                { href: '/', label: 'Accueil', Icon: House },
+                { href: '/catalogue', label: 'Catalogue', Icon: Pill },
+              ].map(({ href, label, Icon }) => (
+                <Link key={href} href={href} className={`no-underline flex flex-col items-center gap-1 px-3 py-1.5 ${pathname === href ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  <Icon size={22} strokeWidth={pathname === href ? 2.5 : 2} />
+                  <span className="text-[10px] font-bold">{label}</span>
+                </Link>
+              ))}
+
+              {/* Bouton panier flottant central, comme sur la maquette */}
+              <Link href="/panier" aria-label="Mon panier" className="relative no-underline -mt-7">
+                <div className="w-14 h-14 rounded-full bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/30 flex items-center justify-center border-4 border-white dark:border-slate-900 transition-colors">
+                  <ShoppingCart size={22} className="text-white" />
+                </div>
+                {cartCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[19px] h-[19px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-white dark:border-slate-900">
+                    {cartCount}
+                  </span>
+                )}
+              </Link>
+
+              {[
+                { href: '/commandes', label: 'Commandes', Icon: ClipboardList },
+                { href: '/profil', label: 'Profil', Icon: User },
+              ].map(({ href, label, Icon }) => (
+                <Link key={href} href={href} className={`no-underline flex flex-col items-center gap-1 px-3 py-1.5 ${pathname === href ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  <Icon size={22} strokeWidth={pathname === href ? 2.5 : 2} />
+                  <span className="text-[10px] font-bold">{label}</span>
+                </Link>
+              ))}
+            </div>
+          </nav>
+        )}
 
         {!isSpecialRoute && (
           <footer className="bg-slate-950 text-white p-10 border-t-[5px] border-emerald-600 mt-20">
