@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation'; 
-import StockPrintPage from './print/page'; 
+import { imprimerPdf } from '../../../lib/voirFacture';
 import apiClient from '../../../lib/apiClient';
 import Prix from '../../../lib/components/Prix';
 
@@ -173,7 +173,7 @@ export default function InventoryPage() {
         <div className="mt-12 flex flex-col items-center gap-4">
           <div className="flex bg-slate-900 rounded-full overflow-hidden shadow-2xl">
             <button 
-              onClick={() => window.print()}
+              onClick={() => imprimerPdf('/api/export-pdf/rapport-stock/', "l'état des stocks")}
               className="bg-transparent text-white px-10 py-5 font-black text-xs uppercase tracking-widest border-none cursor-pointer hover:bg-emerald-600 transition-all flex items-center gap-3"
               aria-label="Imprimer l'état"
             >
@@ -205,11 +205,6 @@ export default function InventoryPage() {
           </div>
         )}
       </AnimatePresence>
-
-      {/* --- COMPOSANT D'IMPRESSION --- */}
-      <div className="hidden print:block">
-        <StockPrintPage />
-      </div>
 
       <style jsx global>{`
         @media screen { .print-only { display: none; } }

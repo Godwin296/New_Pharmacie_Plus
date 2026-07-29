@@ -1,9 +1,10 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, FileText, History, Power, X, Menu, ArrowLeft, Home, LayoutGrid, Wallet } from 'lucide-react';
+import { ShoppingCart, FileText, History, Power, X, Menu, ArrowLeft, Home, LayoutGrid, Wallet, Sun, Moon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { PharmacyIcon } from '../../components/PharmacyIcon';
 
 export default function CaisseLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -12,13 +13,27 @@ export default function CaisseLayout({ children }: { children: React.ReactNode }
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [userName, setUserName] = useState('');
   const [greeting, setGreeting] = useState('');
+  const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
     const name = localStorage.getItem('username') || 'Caissière';
     setUserName(name);
     const hour = new Date().getHours();
     setGreeting(hour >= 18 ? 'Bonsoir' : 'Bonjour');
+
+    // 🔧 CORRECTIF (logo générique + pas de bascule de thème dans toute la caisse) :
+    // même logique que app/admin/layout.tsx, jusqu'ici jamais reprise ici.
+    if (localStorage.getItem('color-theme') === 'dark') {
+      setIsDark(true);
+      document.documentElement.classList.add('dark');
+    }
   }, []);
+
+  const toggleTheme = () => {
+    setIsDark(!isDark);
+    document.documentElement.classList.toggle('dark');
+    localStorage.setItem('color-theme', !isDark ? 'dark' : 'light');
+  };
 
   const confirmLogout = () => {
     localStorage.clear();
@@ -41,15 +56,35 @@ export default function CaisseLayout({ children }: { children: React.ReactNode }
       <nav className="sticky top-0 z-50 bg-emerald-700 text-white p-4 shadow-xl">
         <div className="container mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-white rounded-lg flex items-center justify-center text-emerald-700 font-black italic">C+</div>
+            {/* 🔧 CORRECTIF (logo cassé/absent dans toute la caisse) : ce bloc affichait un
+                badge "C+" codé en dur, jamais le vrai logo uploadé par le tenant dans
+                /admin/settings -- <PharmacyIcon/> lit le même contexte partagé
+                (useConfigPharmacie, déjà englobant toute l'app via ConfigPharmacieProvider
+                dans app/layout.tsx) qu'utilise déjà l'en-tête admin, avec repli automatique
+                sur l'icône générique si aucun logo n'a encore été uploadé. */}
+            <div className="h-10 w-10 bg-white rounded-lg flex items-center justify-center p-1 shadow-lg">
+              <PharmacyIcon className="w-full h-full object-contain rounded" alt="Pharmacie+" />
+            </div>
             <div className="flex flex-col">
                 <span className="font-black uppercase italic tracking-tighter text-lg leading-none">ESPACE CAISSE</span>
                 <span className="text-[8px] font-bold opacity-60 uppercase tracking-[0.3em]">Empire v1.0</span>
             </div>
           </div>
-          <button aria-label="Ouvrir le menu" onClick={() => setIsMenuOpen(true)} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-none text-white cursor-pointer transition-colors">
-            <Menu size={20}/>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 🔧 CORRECTIF (aucune option de mode clair/sombre dans toute la caisse) : même
+                bascule que app/admin/layout.tsx, jusqu'ici jamais reprise ici. */}
+            <button
+              onClick={toggleTheme}
+              title="Basculer le thème de couleur (Clair / Sombre)"
+              aria-label="Basculer le thème de couleur (Clair / Sombre)"
+              className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-none text-white cursor-pointer transition-colors"
+            >
+              {isDark ? <Sun size={20} className="text-yellow-300" /> : <Moon size={20} />}
+            </button>
+            <button aria-label="Ouvrir le menu" onClick={() => setIsMenuOpen(true)} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-none text-white cursor-pointer transition-colors">
+              <Menu size={20}/>
+            </button>
+          </div>
         </div>
       </nav>
 

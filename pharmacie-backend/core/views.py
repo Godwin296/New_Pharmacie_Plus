@@ -3,6 +3,7 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.template.loader import render_to_string
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Sum, Q, F
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -14,7 +15,7 @@ from io import BytesIO
 
 # Imports de tes modèles locaux requis pour les requêtes d'impression
 from .models import Commande, Produit, PharmacieConfig
-from .utils import generate_qr_base64, obtenir_logo_base64_pour_pdf, nettoyer_libelle_pour_pdf
+from .utils import generate_qr_base64, obtenir_logo_base64_pour_pdf, nettoyer_libelle_pour_pdf, construire_contenu_qr_facture
 from .chiffrement import dechiffrer_si_necessaire
 from .cache_utils import cache_get, cache_set
 
@@ -110,7 +111,10 @@ def export_facture_pdf(request, commande_id):
         nom_client = commande.compte_client.nom
     else:
         nom_client = "Client au Guichet"
-    qr_data = f"FACTURE:{commande.id}|CLIENT:{nom_client}|TOTAL:{commande.total()} CFA"
+    # 🐛 CORRECTIF (QR code incomplet) : voir construire_contenu_qr_facture() dans
+    # core/utils.py -- ce QR n'affichait auparavant que facture/client/total, sans la
+    # liste des articles, contrairement à l'aperçu React qui, lui, l'affichait déjà.
+    qr_data = construire_contenu_qr_facture(commande, nom_client)
 
     # 🔴 CORRECTIF (bug remonté en test, session du 20/07) : le code ré-implémentait ici
     # à la main la génération du QR code (qrcode.make + base64.b64encode), en oubliant de
@@ -190,8 +194,15 @@ def export_pdf_financier(request):
     nb_trans = ventes.count()
     moyenne = ca_total / nb_trans if nb_trans > 0 else 0
     
+    # 🐛 CORRECTIF (top produits affichant "0 unités" pour tous, y compris de vrais
+    # best-sellers) : Sum(..., filter=...) renvoie NULL (pas 0) pour un produit jamais
+    # vendu -- et PostgreSQL trie les NULL EN PREMIER par défaut sur un ORDER BY DESC
+    # (doc Postgres : "NULLS FIRST" est le défaut en DESC, contre-intuitif). Le top 10
+    # remontait donc des produits jamais vendus (vendu=NULL) AVANT les vrais
+    # best-sellers, quel que soit leur volume réel. Coalesce force un 0 explicite, qui
+    # se trie correctement à la fin d'un tri DESC sur des entiers.
     top_produits = Produit.objects.annotate(
-        vendu=Sum('itemcommande__quantite', filter=Q(itemcommande__commande__payee=True))
+        vendu=Coalesce(Sum('itemcommande__quantite', filter=Q(itemcommande__commande__payee=True)), 0)
     ).order_by('-vendu')[:10]
 
     context = {

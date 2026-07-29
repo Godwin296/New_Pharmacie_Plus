@@ -6,8 +6,7 @@ import {
   Scale, Trophy, AlertCircle, Loader2, Search, Printer, Download, ChevronDown 
 } from 'lucide-react';
 import Link from 'next/link';
-import StockAlertReport from '../stocks/alertes/page';
-import FinancialReport from './print/page'; 
+import { imprimerPdf } from '../../../lib/voirFacture';
 
 // 🌟 CONFIGURATION : Importation de l'apiClient unifié
 import apiClient from '../../../lib/apiClient';
@@ -21,7 +20,6 @@ export default function ReportsDashboard() {
 
   // States pour les menus et le déclenchement de l'impression
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
-  const [printType, setPrintType] = useState<'financier' | 'stock' | null>(null);
 
   // 🌟 ÉTAPE 1 : Récupération des KPI du Boss sécurisée
   useEffect(() => {
@@ -40,15 +38,16 @@ export default function ReportsDashboard() {
   }, [periode]);
 
   // 🚀 LOGIQUE D'IMPRESSION CIBLÉE
-  const handlePrint = (type: 'financier' | 'stock') => {
+  // 🚀 LOGIQUE D'IMPRESSION CIBLÉE
+  // 🔧 CORRECTIF (voir le docstring détaillé de imprimerPdf, lib/voirFacture.ts) : imprimait
+  // auparavant une recréation React du rapport (données différentes du vrai PDF, page unique,
+  // délai fixe de 300ms non fiable, ET double déclenchement de window.print() avec le
+  // composant enfant -- jusqu'à 3 impressions cumulées constatées en test). On imprime
+  // maintenant directement le VRAI PDF généré par WeasyPrint, identique à celui téléchargé.
+  const handlePrint = async (type: 'financier' | 'stock') => {
     setActiveMenu(null);
-    setPrintType(type); 
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => {
-        setPrintType(null);
-      }, 500);
-    }, 150)
+    const endpoint = type === 'financier' ? 'financier' : 'stocks';
+    await imprimerPdf(`/api/export-pdf/${endpoint}/`, type === 'financier' ? 'le rapport financier' : "l'état des stocks");
   };
 
   // 🌟 ÉTAPE 2 : Téléchargement authentifié du rapport PDF (Évite le document blanc/bloqué)
@@ -261,19 +260,6 @@ export default function ReportsDashboard() {
           </div>
         </motion.div>
       </div>
-
-      {/* --- ZONE D'IMPRESSION CONDITIONNELLE (GARDÉE À 100% INTACTE) --- */}
-      {printType === 'financier' && (
-        <div className="fixed inset-0 bg-white z-9999 print:block hidden overflow-visible">
-          <FinancialReport />
-        </div>
-      )}
-      
-      {printType === 'stock' && (
-        <div className="fixed inset-0 bg-white z-9999 print:block hidden overflow-visible">
-          <StockAlertReport />
-        </div>
-      )}
     </div>
   );
 }

@@ -96,3 +96,34 @@ def obtenir_logo_base64_pour_pdf(config):
             print(f"⚠️ Impossible de lire le logo par défaut : {e}")
 
     return None
+
+
+def construire_contenu_qr_facture(commande, nom_client):
+    """
+    🔗 Construit le contenu textuel embarqué dans le QR code d'une facture.
+
+    🐛 CORRECTIF (QR code incomplet sur la facture PDF, remonté en test) : deux
+    implémentations INDÉPENDANTES du contenu du QR code coexistaient -- une riche
+    (CommandeSerializer.get_qr_code, aperçu React /facture : facture, client, date,
+    ARTICLES détaillés, total) et une appauvrie, dupliquée à la main dans
+    export_facture_pdf (juste facture, client, total -- sans la liste des articles).
+    Un même document affichait donc un QR différent selon qu'on le consultait en
+    aperçu ou en PDF téléchargé. Point d'entrée UNIQUE désormais, utilisé par les deux.
+    """
+    num_facture = f"FAC-{commande.id}"
+    date_info = commande.date.strftime('%d/%m/%Y %H:%M') if commande.date else "N/A"
+
+    liste_produits = ""
+    for item in commande.items.all():
+        nom_p = item.produit.nom[:12]
+        liste_produits += f"{item.quantite}x {nom_p}\n"
+
+    total_prix = f"{commande.total()} CFA"
+
+    return (
+        f"FACTURE: {num_facture}\n"
+        f"CLIENT: {nom_client}\n"
+        f"DATE: {date_info}\n"
+        f"ARTICLES:\n{liste_produits}"
+        f"TOTAL: {total_prix}"
+    )

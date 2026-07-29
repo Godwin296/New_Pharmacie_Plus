@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Produit, Mouvement_stock, Commande, ItemCommande, Fournisseur, PharmacieConfig, LotProduit
-from .utils import generate_qr_base64
+from .utils import generate_qr_base64, construire_contenu_qr_facture
 
 class PharmacieConfigSerializer(serializers.ModelSerializer):
     class Meta:
@@ -110,24 +110,13 @@ class CommandeSerializer(serializers.ModelSerializer):
 
     def get_qr_code(self, obj):
         try:
-            num_facture = f"FAC-{obj.id}"
             nom_client = self.get_client_nom(obj)
-            date_info = obj.date.strftime('%d/%m/%Y %H:%M') if obj.date else "N/A"
-        
-            liste_produits = ""
-            for item in obj.items.all():
-                nom_p = item.produit.nom[:12] 
-                liste_produits += f"{item.quantite}x {nom_p}\n"
-
-            total_prix = f"{obj.total()} CFA"
-
-            contenu_qr = (
-                f"FACTURE: {num_facture}\n"
-                f"CLIENT: {nom_client}\n"
-                f"DATE: {date_info}\n"
-                f"ARTICLES:\n{liste_produits}"
-                f"TOTAL: {total_prix}"
-            )
+            # 🐛 CORRECTIF (duplication) : cette méthode reconstruisait le contenu du QR
+            # code à la main -- logique désormais centralisée dans
+            # construire_contenu_qr_facture() (core/utils.py), partagée avec
+            # export_facture_pdf() (core/views.py), pour garantir un QR rigoureusement
+            # identique entre l'aperçu React et le PDF téléchargé.
+            contenu_qr = construire_contenu_qr_facture(obj, nom_client)
             return generate_qr_base64(contenu_qr)
 
         except Exception as e:
