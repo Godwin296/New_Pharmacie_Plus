@@ -27,6 +27,7 @@ from .serializers import (
 )
 from .validators import valider_et_desinfecter_ordonnance, valider_et_desinfecter_photo_produit
 from .chiffrement import chiffrer_contenu, dechiffrer_si_necessaire
+from pharmacovigilance.detection import verifier_interactions_produits
 from django.core.files.base import ContentFile
 from .pagination import CataloguePagination
 from .throttles import LoginRateThrottle, SoumettrePaiementRateThrottle
@@ -1261,6 +1262,46 @@ def api_inventaire_stock(request):
 
     except Exception as e:
         return Response({"detail": "Erreur technique lors de la récupération de l'inventaire."}, status=500)
+
+
+# --- 💊 DÉTECTION D'INTERACTIONS MÉDICAMENTEUSES (règles statiques, PAS d'IA) ---
+@api_view(['POST'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_verifier_interactions(request):
+    """
+    Vérifie les interactions médicamenteuses connues entre une liste de produits (typiquement
+    le contenu d'un panier/commande en cours de constitution, côté guichet ou en ligne).
+
+    ⚠️ GARDE-FOU D'APPOINT, PAS UN DIAGNOSTIC : voir la docstring complète de
+    pharmacovigilance/models.py sur la portée volontairement restreinte du jeu de règles et
+    les limites de cette fonctionnalité (produits sans `principe_actif` renseigné ignorés
+    silencieusement, synonymes non couverts non détectés). Ne remplace jamais la vigilance
+    professionnelle du pharmacien.
+
+    Ouvert à tout utilisateur authentifié (staff ET client) : un client qui compose son
+    panier en ligne mérite la même alerte qu'un agent au comptoir -- l'information n'a rien
+    de confidentiel (ce sont des règles pharmacologiques publiques, pas des données patient).
+
+    Requête : {"produit_ids": [1, 2, 3]}
+    Réponse : {"alertes": [{"produit_a": {...}, "produit_b": {...}, "gravite": ...,
+                             "description": ..., "conduite_a_tenir": ...}, ...]}
+    """
+    produit_ids = request.data.get("produit_ids")
+    if not isinstance(produit_ids, list) or not produit_ids:
+        return Response({"error": "produit_ids doit être une liste non vide d'identifiants produit."}, status=400)
+
+    try:
+        produit_ids = [int(pid) for pid in produit_ids]
+    except (ValueError, TypeError):
+        return Response({"error": "produit_ids doit contenir uniquement des entiers."}, status=400)
+
+    # Le queryset ne porte que sur les produits DU TENANT COURANT (django-tenants a déjà
+    # positionné le bon schéma) -- aucun risque de vérifier des produits d'une autre pharmacie.
+    produits = Produit.objects.filter(id__in=produit_ids)
+
+    alertes = verifier_interactions_produits(produits)
+    return Response({"alertes": alertes}, status=200)
 
 
 # --- 📊 PRÉDICTION DE STOCK (statistiques classiques, PAS de LLM -- décision ferme) ---

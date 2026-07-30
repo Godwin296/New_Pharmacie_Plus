@@ -78,6 +78,24 @@ class Produit(models.Model):
     # réel possible : don, échantillon fournisseur...), ce qu'un simple `default=0` ne
     # permettrait pas de distinguer sans ambiguïté dans les futurs calculs de marge.
     prix_achat = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Prix d'achat (coût) 💰")
+
+    # 💊 DÉTECTION D'INTERACTIONS MÉDICAMENTEUSES (25/07, voir app `pharmacovigilance`) :
+    # texte libre volontairement (pas une FK vers pharmacovigilance.PrincipeActif) -- ce
+    # champ vit dans `core` (TENANT_APPS, par pharmacie) alors que les règles d'interaction
+    # vivent dans `pharmacovigilance` (SHARED_APPS, schéma public) ; une FK inter-schéma
+    # n'est de toute façon pas supportée nativement par django-tenants. Le rapprochement se
+    # fait par texte normalisé (accents/casse) au moment de la vérification, voir
+    # pharmacovigilance/detection.py::normaliser_texte.
+    # Nullable et à remplissage PROGRESSIF, même logique que `prix_achat` juste au-dessus :
+    # tous les produits existants (créés avant ce champ) ne l'ont pas -- la détection
+    # d'interactions ignore silencieusement (sans planter) tout produit sans cette donnée,
+    # c'est une limite connue et assumée, pas un bug.
+    principe_actif = models.CharField(
+        max_length=150, blank=True, null=True,
+        verbose_name="Principe actif (DCI) 💊",
+        help_text="Dénomination Commune Internationale, ex. 'Paracétamol'. Utilisé pour détecter les interactions médicamenteuses.",
+    )
+
     date_ajout = models.DateTimeField(auto_now_add=True)
     # 🚀 MODE OFFLINE (session 12/07, brique 2/4) : horodatage mis à jour automatiquement à
     # CHAQUE sauvegarde (auto_now=True). C'est le curseur utilisé par l'endpoint de synchro
