@@ -7,10 +7,46 @@
    jamais au clic, seulement quand l'OS change de thème. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* 🎨 REFONTE UI/UX (30/07) : palette et polices reprises À L'IDENTIQUE du site
+   marketing (pharmacie-marketing/app/globals.css) pour qu'il n'y ait plus de
+   rupture visuelle entre le site vitrine et l'application -- même vert
+   "pharmacie profond" (pas le émeraude menthe par défaut de Tailwind), mêmes
+   polices Poppins (titres) / Inter (texte) / JetBrains Mono (petits libellés). */
+@theme inline {
+  --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-ink: #0b1220;
+  --color-ink-soft: #131c2e;
+  --color-blue: #2563eb;
+  --color-blue-light: #4f8cff;
+  --color-emerald: #0e9f6e;
+  --color-emerald-deep: #076b49;
+  --color-mist: #f3faf7;
+  --color-mist-deep: #e7f3ee;
+  --color-amber: #f59e0b;
+
+  --color-emerald-50: #eafaf1;
+  --color-emerald-100: #cdf2dd;
+  --color-emerald-200: #9de5bf;
+  --color-emerald-300: #67d29e;
+  --color-emerald-400: #34b57c;
+  --color-emerald-500: #158f5f;
+  --color-emerald-600: #0e7a4e;
+  --color-emerald-700: #0b6440;
+  --color-emerald-800: #0a5033;
+  --color-emerald-900: #08402a;
+  --color-emerald-950: #04241a;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
 /* Variables de thème clair (défaut) */
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0b1220;
 }
 
 /* Variables de thème sombre — activées par next-themes via la classe .dark sur <html>.
@@ -19,15 +55,15 @@
    Sans cette règle, le fond de page restait blanc même après avoir cliqué
    sur le toggle, car --background n'était mis à jour que par l'OS. */
 .dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #050e0c;
+  --foreground: #eafaf1;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Même dégradé "brand-deep" que le Hero et le footer du site marketing --
+   utilisé ici pour le splash screen et tout écran plein écran à forte
+   présence visuelle, pour que la transition site -> app ne se voie pas. */
+.bg-brand-deep {
+  background: linear-gradient(150deg, #04241a 0%, #0b6440 38%, #0a5570 68%, #0c3a6e 100%);
 }
 
 @media print {
@@ -39,6 +75,14 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
