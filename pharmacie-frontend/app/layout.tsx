@@ -144,31 +144,94 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AnimatePresence>
           {showSplash && (
             <motion.div 
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.35 }}
-              className="fixed inset-0 z-[150] flex flex-col items-center justify-center bg-emerald-600"
+              exit={{ opacity: 0, scale: 1.08 }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              className="fixed inset-0 z-[150] flex flex-col items-center justify-center bg-gradient-to-br from-emerald-700 via-emerald-600 to-emerald-500 overflow-hidden"
             >
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.35 }} className="flex flex-col items-center">
-                <div className="h-24 w-24 bg-white rounded-[1.75rem] flex items-center justify-center shadow-lg p-4 mb-5">
-                  <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
-                </div>
-                <h1 className="text-2xl font-black text-white tracking-tight">Pharmacie Plus</h1>
-                <p className="text-emerald-100 text-xs font-semibold mt-1.5">
-                  {user.loggedIn ? `${getGreeting()}, ${user.name}` : "Votre santé, notre priorité"}
-                </p>
-              </motion.div>
+              {/* 🌿 FOND VIVANT : 3 masses lumineuses floutées qui dérivent lentement --
+                  donne de la profondeur et du mouvement sans jamais distraire du logo
+                  (tout reste dans la même famille de vert, rien de figuratif qui parasite). */}
+              <motion.div
+                animate={{ x: [0, 40, -20, 0], y: [0, -30, 20, 0], scale: [1, 1.15, 0.95, 1] }}
+                transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+                className="absolute -top-24 -left-16 w-80 h-80 rounded-full bg-emerald-300/30 blur-[80px]"
+              />
+              <motion.div
+                animate={{ x: [0, -30, 25, 0], y: [0, 25, -15, 0], scale: [1, 0.9, 1.1, 1] }}
+                transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+                className="absolute -bottom-32 -right-20 w-96 h-96 rounded-full bg-lime-200/20 blur-[90px]"
+              />
+              <motion.div
+                animate={{ x: [0, 20, -25, 0], y: [0, -20, 15, 0] }}
+                transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+                className="absolute top-1/3 right-1/4 w-56 h-56 rounded-full bg-teal-200/20 blur-[70px]"
+              />
 
-              {/* Petit indicateur de chargement discret en bas -- seul élément additionnel,
-                  comme sur la plupart des splash natifs (WhatsApp, etc.) */}
-              <div className="absolute bottom-14 flex gap-1.5">
+              <div className="relative flex flex-col items-center px-6">
+                {/* 💓 Anneaux "pouls" -- écho discret du thème santé, sans icône figurative */}
                 {[0, 1, 2].map((i) => (
-                  <motion.span
+                  <motion.div
                     key={i}
-                    animate={{ opacity: [0.3, 1, 0.3] }}
-                    transition={{ duration: 1.2, delay: i * 0.2, repeat: Infinity }}
-                    className="w-1.5 h-1.5 rounded-full bg-white"
+                    initial={{ scale: 1, opacity: 0 }}
+                    animate={{ scale: [1, 2.1], opacity: [0.35, 0] }}
+                    transition={{ duration: 2.6, repeat: Infinity, delay: i * 0.7, ease: 'easeOut' }}
+                    className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-24 rounded-[1.75rem] border-2 border-white/40"
                   />
                 ))}
+
+                {/* Logo -- entrée avec ressort (pas un simple fade), léger settle de rotation */}
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.4, rotate: -12 }}
+                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                  transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.05 }}
+                  className="relative h-24 w-24 bg-white rounded-[1.75rem] flex items-center justify-center shadow-2xl shadow-black/20 p-4"
+                >
+                  <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
+                </motion.div>
+
+                <motion.h1
+                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.45, duration: 0.4 }}
+                  className="text-2xl font-black text-white tracking-tight mt-5"
+                >
+                  Pharmacie Plus
+                </motion.h1>
+
+                {/* 👋 Le "moment" personnalisé : la salutation arrive d'abord, puis le prénom
+                    "pop" juste après avec son propre petit ressort -- pour que l'app donne
+                    vraiment l'impression de RECONNAÎTRE la personne, pas juste d'afficher une
+                    variable dans une phrase figée. */}
+                <motion.p
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}
+                  className="text-emerald-50 text-sm font-semibold mt-2 flex items-center gap-1.5"
+                >
+                  {user.loggedIn ? (
+                    <>
+                      {getGreeting()},
+                      <motion.span
+                        initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.95, type: 'spring', stiffness: 300, damping: 12 }}
+                        className="font-black text-white"
+                      >
+                        {user.name}
+                      </motion.span>
+                      👋
+                    </>
+                  ) : (
+                    "Votre santé, notre priorité"
+                  )}
+                </motion.p>
+              </div>
+
+              {/* ⏳ Barre de progression -- se remplit sur toute la durée d'affichage du
+                  splash : donne l'impression concrète que quelque chose se prépare pour
+                  l'utilisateur, plutôt qu'une simple attente passive. */}
+              <div className="absolute bottom-16 w-40 h-1 rounded-full bg-white/20 overflow-hidden">
+                <motion.div
+                  initial={{ width: '0%' }} animate={{ width: '100%' }}
+                  transition={{ duration: 3.2, ease: 'easeInOut' }}
+                  className="h-full bg-white rounded-full"
+                />
               </div>
             </motion.div>
           )}
