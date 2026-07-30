@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Menu, X, House,  
-  Power, ShoppingCart, LogIn, Pill, History, LayoutDashboard, User, ClipboardList
+  Power, ShoppingCart, LogIn, Pill, History, LayoutDashboard, User, ClipboardList,
+  Heart, ShieldCheck, Sparkles
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
@@ -99,9 +100,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     router.push('/login');
   };
 
+  // 🎨 REFONTE UI/UX (splash screen, 30/07) : plus nuancée qu'un simple avant/après 18h --
+  // petite touche pour que l'app donne l'impression de "connaître" la personne plutôt qu'une
+  // salutation générique à toute heure. Toujours utilisée à l'identique dans la modale de
+  // déconnexion plus bas (pas de duplication).
   const getGreeting = () => {
     const hour = new Date().getHours();
-    return hour >= 18 ? 'Bonsoir' : 'Bonjour';
+    if (hour < 5) return 'Bonne nuit';
+    if (hour < 12) return 'Bonjour';
+    if (hour < 18) return 'Bon après-midi';
+    return 'Bonsoir';
   };
 
   return (
@@ -137,22 +145,54 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AnimatePresence>
           {showSplash && (
             <motion.div 
-              exit={{ opacity: 0, scale: 1.1 }}
-              className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/90 backdrop-blur-2xl"
+              exit={{ opacity: 0, scale: 1.05 }}
+              transition={{ duration: 0.4 }}
+              className="fixed inset-0 z-[150] flex items-center justify-center bg-gradient-to-br from-white via-emerald-50/60 to-white dark:from-slate-950 dark:via-emerald-950/20 dark:to-slate-950 overflow-hidden"
             >
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center">
-                <div className="relative inline-block mb-6">
-                  <div className="absolute inset-0 bg-emerald-500 rounded-full blur-3xl opacity-20 animate-pulse" />
-                  <div className="h-32 w-32 bg-white rounded-3xl flex items-center justify-center shadow-2xl relative border border-white/10 mx-auto p-5">
+              {/* 🎈 Icônes décoratives flottantes -- même esprit que la maquette (petites
+                  icônes santé qui gravitent doucement autour du logo), rendu ici en CSS/
+                  framer-motion plutôt qu'en illustration statique. */}
+              {[
+                { Icon: Pill, top: '18%', left: '15%', delay: 0 },
+                { Icon: Heart, top: '22%', left: '80%', delay: 0.4 },
+                { Icon: ShieldCheck, top: '75%', left: '18%', delay: 0.8 },
+                { Icon: Sparkles, top: '72%', left: '78%', delay: 1.2 },
+              ].map(({ Icon, top, left, delay }, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 0 }}
+                  animate={{ opacity: [0, 0.5, 0.5, 0], y: [-6, 6, -6] }}
+                  transition={{ duration: 4, delay, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ position: 'absolute', top, left }}
+                  className="text-emerald-400 dark:text-emerald-600"
+                >
+                  <Icon size={22} />
+                </motion.div>
+              ))}
+
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="text-center px-6 relative">
+                <div className="relative inline-block mb-7">
+                  <div className="absolute inset-0 bg-emerald-400 rounded-full blur-3xl opacity-25 animate-pulse" />
+                  <div className="h-28 w-28 bg-white dark:bg-slate-900 rounded-[2rem] flex items-center justify-center shadow-xl shadow-emerald-500/10 relative border border-emerald-100 dark:border-emerald-900/40 mx-auto p-5">
                     <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
                   </div>
                 </div>
-                <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter mb-4">
-                  Salut, <span className="text-emerald-500">{user.name}</span> !
+
+                <h1 className="text-3xl md:text-4xl font-black text-slate-800 dark:text-white tracking-tight mb-2">
+                  {getGreeting()}, <span className="text-emerald-500">{user.name}</span> 👋
                 </h1>
-                <p className="text-emerald-400 font-black uppercase tracking-[0.5em] text-sm italic">
-                  {user.loggedIn ? `Session : ${user.role} 🏥` : "Bienvenue sur Pharmacie +"}
+                <p className="text-slate-400 dark:text-slate-500 text-xs font-semibold uppercase tracking-[0.35em] mb-6">
+                  Pharmacie Plus
                 </p>
+
+                <div className="inline-flex items-center gap-2 bg-white dark:bg-slate-900 border border-emerald-100 dark:border-emerald-900/40 rounded-full px-5 py-2.5 shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                    {user.loggedIn
+                      ? (estClient ? "Heureux de vous revoir 🌿" : `Session ${user.role === 'ADMIN' ? 'administrateur' : 'caisse'} active`)
+                      : "Votre santé, notre priorité"}
+                  </span>
+                </div>
               </motion.div>
             </motion.div>
           )}
