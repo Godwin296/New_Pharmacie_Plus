@@ -51,6 +51,13 @@ export default function CataloguePage() {
   // n'empêchait un client ou une caissière de VOIR le bouton et de se heurter à un 403.
   // Purement déclaratif : ne remplace pas la vérification backend, l'améliore.
   const [isAdmin, setIsAdmin] = useState(false);
+  const [peutAcheter, setPeutAcheter] = useState(false);
+  // 🛒 (30/07) : bottom sheet de quantité -- avant, taper sur le panier ajoutait toujours 1
+  // unité sans possibilité de choisir (régression remontée par l'utilisateur). Plutôt qu'un
+  // stepper inline dans la ligne (trop étroit), on ouvre une feuille glissée depuis le bas
+  // -- même pattern que la modale catégories plus bas, cohérent avec la consigne "pas de
+  // popup centrée façon desktop sur mobile".
+  const [produitPourQuantite, setProduitPourQuantite] = useState<Produit | null>(null);
   // 🎠 Bannière promo en diaporama (mockup 25/07) -- contenu réel pour l'instant (pas de
   // placeholder vide), mais l'emplacement est prévu pour accueillir de vraies visuels/
   // promotions gérées par la pharmacie plus tard (hors scope aujourd'hui).
@@ -66,6 +73,13 @@ export default function CataloguePage() {
   }, []);
   useEffect(() => {
     setIsAdmin(typeof window !== 'undefined' && localStorage.getItem('user_role') === 'admin');
+    // 🔐 (30/07) : "ajouter au panier" n'a de sens que pour un CLIENT. Vérifié dans
+    // core/api.py::api_panier -- `if request.user.is_staff and not facture_id: return 403`
+    // s'applique à TOUT le personnel (admin ET caissière), pas seulement l'admin : la
+    // caissière ne peut pas non plus avoir de panier client (son flux de vente passe par
+    // /caisse/pos, pas par ce catalogue). Masqué pour is_staff au sens large.
+    const role = typeof window !== 'undefined' ? localStorage.getItem('user_role') : null;
+    setPeutAcheter(role !== 'admin' && role !== 'caissiere' && role !== 'caissière');
   }, []);
   const [loading, setLoading] = useState(true);
   // 🔐 CORRECTIF (bug remonté en test, session 12/07) : `loading` était utilisé pour un
@@ -412,18 +426,21 @@ export default function CataloguePage() {
                 </div>
               </div>
 
-              {/* Stock + bouton panier */}
+              {/* Stock + bouton panier -- réservé au client (cf. peutAcheter) : ni l'admin
+                  ni la caissière n'ont de panier personnel utilisable depuis ce catalogue. */}
               <div className="flex flex-col items-end gap-1.5 shrink-0">
                 <span className="text-[10px] text-slate-400 text-right leading-tight">Stock<br/><span className="font-semibold text-slate-600 dark:text-slate-300">{p.quantite} unités</span></span>
-                <button
-                  disabled={p.quantite <= 0}
-                  onClick={() => handleAddToCart(p.id)}
-                  title="Ajouter au panier"
-                  aria-label="Ajouter au panier"
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white h-11 w-11 flex items-center justify-center rounded-2xl transition-all active:scale-90 border-none cursor-pointer disabled:opacity-20 disabled:grayscale"
-                >
-                  <ShoppingCart size={18} strokeWidth={2.5} />
-                </button>
+                {peutAcheter && (
+                  <button
+                    disabled={p.quantite <= 0}
+                    onClick={() => setProduitPourQuantite(p)}
+                    title="Ajouter au panier"
+                    aria-label="Ajouter au panier"
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white h-11 w-11 flex items-center justify-center rounded-2xl transition-all active:scale-90 border-none cursor-pointer disabled:opacity-20 disabled:grayscale"
+                  >
+                    <ShoppingCart size={18} strokeWidth={2.5} />
+                  </button>
+                )}
               </div>
             </motion.div>
           ))}
@@ -465,6 +482,65 @@ export default function CataloguePage() {
                     {nom} {activeCat === code && <Check size={16}/>}
                   </button>
                 ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 🛒 FEUILLE DE QUANTITÉ (bottom sheet) -- même pattern que la modale catégories
+          au-dessus : glisse depuis le bas sur mobile, carte centrée à partir de sm:. */}
+      <AnimatePresence>
+        {produitPourQuantite && (
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setProduitPourQuantite(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div
+              initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="relative bg-white dark:bg-[#0b1a16] w-full sm:max-w-sm sm:mb-4 rounded-t-[28px] sm:rounded-[28px] shadow-2xl overflow-hidden border border-slate-100 dark:border-white/10"
+            >
+              <div className="sm:hidden flex justify-center pt-3">
+                <div className="h-1.5 w-10 rounded-full bg-slate-200 dark:bg-white/20" />
+              </div>
+              <div className="px-6 py-5 border-b border-slate-100 dark:border-white/10 flex justify-between items-center">
+                <h3 className="font-display text-lg font-bold text-slate-800 dark:text-white truncate pr-4">{produitPourQuantite.nom}</h3>
+                <button onClick={() => setProduitPourQuantite(null)} title="Fermer" aria-label="Fermer" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-500 border-none cursor-pointer"><X size={18} /></button>
+              </div>
+
+              <div className="p-6" style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom))" }}>
+                <div className="flex items-center justify-between mb-6">
+                  <Prix montant={produitPourQuantite.prix} className="text-xl font-bold text-slate-800 dark:text-white" />
+                  <span className="text-xs font-semibold text-slate-400">{produitPourQuantite.quantite} unités en stock</span>
+                </div>
+
+                <div className="flex items-center justify-center gap-5 mb-6">
+                  <button
+                    onClick={() => updateLocalQte(produitPourQuantite.id, -1, produitPourQuantite.quantite)}
+                    disabled={(quantites[produitPourQuantite.id] || 1) <= 1}
+                    title="Diminuer la quantité" aria-label="Diminuer la quantité"
+                    className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 flex items-center justify-center border-none cursor-pointer active:scale-90 transition-all disabled:opacity-30"
+                  >
+                    <Minus size={18} />
+                  </button>
+                  <span className="text-2xl font-bold text-slate-800 dark:text-white w-10 text-center tabular-nums">
+                    {quantites[produitPourQuantite.id] || 1}
+                  </span>
+                  <button
+                    onClick={() => updateLocalQte(produitPourQuantite.id, 1, produitPourQuantite.quantite)}
+                    disabled={(quantites[produitPourQuantite.id] || 1) >= produitPourQuantite.quantite}
+                    title="Augmenter la quantité" aria-label="Augmenter la quantité"
+                    className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 flex items-center justify-center border-none cursor-pointer active:scale-90 transition-all disabled:opacity-30"
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => { handleAddToCart(produitPourQuantite.id); setProduitPourQuantite(null); }}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm py-4 rounded-2xl transition-all active:scale-[0.98] border-none cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <ShoppingCart size={17} /> Ajouter au panier
+                </button>
               </div>
             </motion.div>
           </div>
