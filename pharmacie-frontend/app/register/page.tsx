@@ -97,7 +97,7 @@ export default function RegisterPage() {
           <div className="h-24 w-24 bg-white rounded-[2rem] flex items-center justify-center shadow-2xl relative border-2 border-emerald-400 mx-auto p-4">
             {/* 🔧 FIX LOGO (bug remonté en test, session du 19/07) : même correctif que
                 app/layout.tsx, app/admin/layout.tsx et app/login/page.tsx. */}
-            <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
+            <PharmacyIcon className="w-full h-full object-cover" alt="Pharmacie+" />
           </div>
           <h1 className="text-5xl font-black text-white tracking-tighter italic uppercase mt-4">Pharmacie +</h1>
           <p className="text-emerald-400 text-[10px] font-black uppercase tracking-[0.4em] mt-3">Ouverture de Dossier Client 🛰️</p>

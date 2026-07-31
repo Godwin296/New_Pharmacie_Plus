@@ -56,7 +56,7 @@ def nettoyer_libelle_pour_pdf(texte):
     return _EMOJI_PATTERN.sub("", texte).strip()
 
 
-def obtenir_logo_base64_pour_pdf(config):
+def obtenir_logo_base64(config):
     """
     🖼️ CORRECTIF (logo systématiquement cassé dans TOUS les PDF -- facture, rapports,
     ticket) : l'ancien code passait une URL HTTP (`request.build_absolute_uri(config.logo.url)`)
@@ -96,6 +96,12 @@ def obtenir_logo_base64_pour_pdf(config):
             print(f"⚠️ Impossible de lire le logo par défaut : {e}")
 
     return None
+
+
+# Alias rétrocompatible : les 4 exports PDF (core/views.py) appelaient cette fonction sous
+# son ancien nom avant qu'elle serve aussi à infos_pharmacie (core/api.py) -- pas la peine
+# de retoucher 4 call sites pour un simple renommage.
+obtenir_logo_base64_pour_pdf = obtenir_logo_base64
 
 
 def construire_contenu_qr_facture(commande, nom_client):

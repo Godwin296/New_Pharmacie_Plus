@@ -225,7 +225,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.05 }}
                   className="relative h-24 w-24 bg-white rounded-[1.75rem] flex items-center justify-center shadow-2xl shadow-black/20 p-4"
                 >
-                  <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
+                  <PharmacyIcon className="w-full h-full object-cover" alt="Pharmacie+" />
                 </motion.div>
 
                 <motion.h1
@@ -293,7 +293,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
                 <Link href="/" className="flex items-center gap-2.5 text-slate-800 dark:text-white no-underline group min-w-0">
                   <div className="h-9 w-9 shrink-0 flex items-center justify-center overflow-hidden group-hover:rotate-6 transition-transform">
-                    <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
+                    <PharmacyIcon className="w-full h-full object-cover" alt="Pharmacie+" />
                   </div>
                   <div className="min-w-0">
                     <PharmacyBrandName className="font-black text-base leading-tight tracking-tighter block truncate" />
