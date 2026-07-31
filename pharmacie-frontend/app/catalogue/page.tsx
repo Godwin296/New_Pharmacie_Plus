@@ -275,7 +275,7 @@ export default function CataloguePage() {
           <input 
             type="text" 
             placeholder="Rechercher un produit, médicament..." 
-            className="w-full pl-12 pr-12 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-white text-sm font-medium focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 outline-none transition-all"
+            className="w-full pl-12 pr-12 py-3.5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-800 dark:text-white text-sm font-medium focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 outline-none transition-all"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />
@@ -298,7 +298,7 @@ export default function CataloguePage() {
       <div className="flex gap-2 overflow-x-auto pb-1 mb-6 -mx-1 px-1 scrollbar-none">
         <button
           onClick={() => changerCategorie('all')}
-          className={`shrink-0 px-4 py-2.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${activeCat === 'all' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}
+          className={`shrink-0 px-4 py-2.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${activeCat === 'all' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10'}`}
         >
           Tous
         </button>
@@ -306,14 +306,14 @@ export default function CataloguePage() {
           <button
             key={code}
             onClick={() => changerCategorie(code)}
-            className={`shrink-0 px-4 py-2.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${activeCat === code ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}
+            className={`shrink-0 px-4 py-2.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${activeCat === code ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10'}`}
           >
             {nom}
           </button>
         ))}
         <button
           onClick={() => setIsModalOpen(true)}
-          className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 cursor-pointer"
+          className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 cursor-pointer"
         >
           <Filter size={13} /> Filtres
         </button>
@@ -375,13 +375,13 @@ export default function CataloguePage() {
           {!loading && filteredProduits.map((p) => (
             <motion.div
               key={p.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-slate-900 rounded-[20px] p-3 border border-slate-100 dark:border-slate-800 flex items-center gap-3 group active:scale-[0.99] transition-transform"
+              className="bg-white dark:bg-white/[0.04] rounded-[20px] p-3 border border-slate-100 dark:border-white/10 flex items-center gap-3 group active:scale-[0.99] transition-transform"
             >
               {/* Vignette produit + zone d'upload (admin uniquement, cf. isAdmin). Le badge
                   d'édition reste légèrement visible en permanence (pas seulement au survol
                   group-hover) : sur mobile/tactile il n'existe pas de "survol", un admin sur
                   téléphone ne découvrirait donc jamais cette fonctionnalité sinon. */}
-              <div className="relative w-16 h-16 shrink-0 bg-emerald-50 dark:bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center">
+              <div className="relative w-16 h-16 shrink-0 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl overflow-hidden flex items-center justify-center">
                 {p.image ? (
                   <img src={p.image} alt={p.nom} loading="lazy" className="w-full h-full object-cover" />
                 ) : (
@@ -438,21 +438,21 @@ export default function CataloguePage() {
             <motion.div 
               initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="relative bg-white dark:bg-slate-900 w-full sm:max-w-md sm:mb-4 rounded-t-[28px] sm:rounded-[28px] shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-800 max-h-[85vh] flex flex-col"
+              className="relative bg-white dark:bg-[#0b1a16] w-full sm:max-w-md sm:mb-4 rounded-t-[28px] sm:rounded-[28px] shadow-2xl overflow-hidden border border-slate-100 dark:border-white/10 max-h-[85vh] flex flex-col"
             >
               {/* Poignée façon feuille mobile (bottom sheet), signal visuel de "glisser pour fermer" */}
               <div className="sm:hidden flex justify-center pt-3">
-                <div className="h-1.5 w-10 rounded-full bg-slate-200 dark:bg-slate-700" />
+                <div className="h-1.5 w-10 rounded-full bg-slate-200 dark:bg-white/20" />
               </div>
-              <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+              <div className="px-6 py-5 border-b border-slate-100 dark:border-white/10 flex justify-between items-center">
                 <h3 className="font-display text-lg font-bold text-slate-800 dark:text-white">Catégories</h3>
-                <button onClick={() => setIsModalOpen(false)} title="Fermer" aria-label="Fermer" className="h-9 w-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 border-none cursor-pointer"><X size={18} /></button>
+                <button onClick={() => setIsModalOpen(false)} title="Fermer" aria-label="Fermer" className="h-9 w-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-500 border-none cursor-pointer"><X size={18} /></button>
               </div>
 
               <div className="p-4 overflow-y-auto space-y-2 custom-scrollbar" style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
                 <button 
                   onClick={() => changerCategorie("all")}
-                  className={`w-full p-4 rounded-2xl text-left font-semibold text-sm transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === 'all' ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100'}`}
+                  className={`w-full p-4 rounded-2xl text-left font-semibold text-sm transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === 'all' ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08]'}`}
                 >
                   Toutes les catégories {activeCat === 'all' && <Check size={16}/>}
                 </button>
@@ -460,7 +460,7 @@ export default function CataloguePage() {
                   <button 
                     key={code}
                     onClick={() => changerCategorie(code)}
-                    className={`w-full p-4 rounded-2xl text-left font-semibold text-sm transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === code ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100'}`}
+                    className={`w-full p-4 rounded-2xl text-left font-semibold text-sm transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === code ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08]'}`}
                   >
                     {nom} {activeCat === code && <Check size={16}/>}
                   </button>
@@ -480,7 +480,7 @@ export default function CataloguePage() {
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={!hasPrevious}
             aria-label="Page précédente"
-            className="h-11 w-11 flex items-center justify-center rounded-full border-none cursor-pointer bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all"
+            className="h-11 w-11 flex items-center justify-center rounded-full border-none cursor-pointer bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all"
           >
             ←
           </button>
@@ -493,7 +493,7 @@ export default function CataloguePage() {
             onClick={() => setPage(p => p + 1)}
             disabled={!hasNext}
             aria-label="Page suivante"
-            className="h-11 w-11 flex items-center justify-center rounded-full border-none cursor-pointer bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all"
+            className="h-11 w-11 flex items-center justify-center rounded-full border-none cursor-pointer bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all"
           >
             →
           </button>

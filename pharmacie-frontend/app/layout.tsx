@@ -157,7 +157,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-title" content="Pharmacie +" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body className="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300">
+      <body className="bg-slate-50 dark:bg-[#050e0c] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300">
         <ThemeProvider>
         <SerwistProvider swUrl="/serwist/sw.js">
 
@@ -277,14 +277,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {!isSpecialRoute && (
           <>
-            <nav className="sticky top-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-5 py-3 shadow-sm border-b border-slate-100 dark:border-slate-800">
+            <nav className="sticky top-0 z-50 bg-white/95 dark:bg-[#0b1a16]/95 backdrop-blur-md px-5 py-3 shadow-sm border-b border-slate-100 dark:border-white/10">
               <div className="container mx-auto flex justify-between items-center gap-3">
                 <button aria-label="Ouvrir le menu" onClick={() => setIsMenuOpen(true)} className="relative bg-transparent border-none p-2 -ml-2 cursor-pointer text-slate-700 dark:text-slate-200">
                   <Menu size={22} />
                   {fileAttenteOffline.length > 0 && (
                     <span
                       title={`${fileAttenteOffline.length} article(s) en attente de synchronisation`}
-                      className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-white dark:border-slate-900"
+                      className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-white dark:border-[#0b1a16]"
                     >
                       {fileAttenteOffline.length}
                     </span>
@@ -304,10 +304,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <div className="flex items-center gap-2 shrink-0">
                   <ThemeToggleButton />
                   {estClient && (
-                    <Link href="/panier" aria-label="Mon panier" className="relative bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 p-2.5 rounded-2xl text-slate-700 dark:text-slate-200 transition-colors no-underline">
+                    <Link href="/panier" aria-label="Mon panier" className="relative bg-slate-50 dark:bg-white/[0.06] hover:bg-emerald-50 dark:hover:bg-emerald-900/20 p-2.5 rounded-2xl text-slate-700 dark:text-slate-200 transition-colors no-underline">
                       <ShoppingCart size={19} />
                       {cartCount > 0 && (
-                        <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-white dark:border-slate-900">
+                        <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-white dark:border-[#0b1a16]">
                           {cartCount}
                         </span>
                       )}
@@ -323,11 +323,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMenuOpen(false)} className="fixed inset-0 z-[60] bg-slate-950/60 backdrop-blur-md" />
                   <motion.div 
                     initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-                    className="fixed top-0 right-0 h-full w-full max-w-sm bg-white dark:bg-slate-900 z-[70] shadow-2xl flex flex-col"
+                    className="fixed top-0 right-0 h-full w-full max-w-sm bg-white dark:bg-[#0b1a16] z-[70] shadow-2xl flex flex-col"
                   >
-                    <div className="p-8 flex justify-between items-center border-b dark:border-slate-800">
+                    <div className="p-8 flex justify-between items-center border-b dark:border-white/10">
                       <h3 className="text-xl font-black dark:text-white uppercase tracking-tighter italic text-emerald-600">Navigation</h3>
-                      <button aria-label="Fermer le menu" onClick={() => setIsMenuOpen(false)} className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border-none text-slate-500 hover:text-red-500 cursor-pointer transition-colors"><X size={20} /></button>
+                      <button aria-label="Fermer le menu" onClick={() => setIsMenuOpen(false)} className="p-3 rounded-xl bg-slate-100 dark:bg-white/[0.06] border-none text-slate-500 hover:text-red-500 cursor-pointer transition-colors"><X size={20} /></button>
                     </div>
 
                     <div className="flex-grow overflow-y-auto p-8 space-y-2">
@@ -373,7 +373,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     </div>
 
                     {user.loggedIn && (
-                      <div className="p-8 border-t dark:border-slate-800">
+                      <div className="p-8 border-t dark:border-white/10">
                         <button onClick={() => setShowLogoutConfirm(true)} className="w-full flex items-center justify-center gap-3 text-red-500 font-black text-xs uppercase hover:bg-red-50 dark:hover:bg-red-500/10 p-4 rounded-2xl transition border border-red-100 bg-transparent cursor-pointer outline-none">
                           <Power size={20} /> Terminer la session
                         </button>
@@ -389,12 +389,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AnimatePresence>
           {showLogoutConfirm && (
             <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-              <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity: 1}} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] max-w-sm w-full text-center shadow-2xl border border-white/10">
+              <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity: 1}} className="bg-white dark:bg-[#0b1a16] p-8 rounded-[2.5rem] max-w-sm w-full text-center shadow-2xl border border-white/10">
                   <div className="text-5xl mb-4">👋</div>
                   <h3 className="text-xl font-black mb-2 dark:text-white">{getGreeting()}, {user.name} !</h3>
                   <p className="text-slate-500 dark:text-slate-400 mb-8 text-sm font-medium italic">Voulez-vous vraiment vous déconnecter ?</p>
                   <div className="grid grid-cols-2 gap-4">
-                      <button onClick={() => setShowLogoutConfirm(false)} className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 font-bold border-none text-slate-500 cursor-pointer">Annuler</button>
+                      <button onClick={() => setShowLogoutConfirm(false)} className="p-4 rounded-2xl bg-slate-100 dark:bg-white/[0.06] font-bold border-none text-slate-500 cursor-pointer">Annuler</button>
                       <button onClick={confirmLogout} className="p-4 rounded-2xl bg-red-600 text-white font-black border-none cursor-pointer shadow-lg shadow-red-600/20">Quitter</button>
                   </div>
               </motion.div>
@@ -407,7 +407,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* 📱 NAV DU BAS — réservée à l'expérience client (adaptée à son usage : parcourir,
             acheter, suivre ses commandes), fidèle à la maquette fournie le 25/07. */}
         {!isSpecialRoute && estClient && (
-          <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+          <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#0b1a16]/95 backdrop-blur-md border-t border-slate-100 dark:border-white/10 px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
             <div className="container mx-auto max-w-md flex items-end justify-between relative">
               {[
                 { href: '/', label: 'Accueil', Icon: House },
@@ -421,11 +421,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
               {/* Bouton panier flottant central, comme sur la maquette */}
               <Link href="/panier" aria-label="Mon panier" className="relative no-underline -mt-7">
-                <div className="w-14 h-14 rounded-full bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/30 flex items-center justify-center border-4 border-white dark:border-slate-900 transition-colors">
+                <div className="w-14 h-14 rounded-full bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/30 flex items-center justify-center border-4 border-white dark:border-[#0b1a16] transition-colors">
                   <ShoppingCart size={22} className="text-white" />
                 </div>
                 {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[19px] h-[19px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-white dark:border-slate-900">
+                  <span className="absolute -top-1 -right-1 min-w-[19px] h-[19px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-white dark:border-[#0b1a16]">
                     {cartCount}
                   </span>
                 )}
