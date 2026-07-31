@@ -67,6 +67,18 @@ export default function CataloguePage() {
   useEffect(() => {
     setIsAdmin(typeof window !== 'undefined' && localStorage.getItem('user_role') === 'admin');
   }, []);
+  // 🔐 CORRECTIF (bug remonté en test) : le bouton "ajouter au panier" (et le sélecteur de
+  // quantité juste en dessous) s'affichait pour TOUT visiteur du catalogue, y compris le
+  // personnel (admin, caissière) qui n'a pas de panier client -- seul un CompteClient (ou un
+  // visiteur pas encore connecté, invité à se connecter au clic) peut réellement passer un
+  // achat via cette page. isStaff est volontairement séparé de isAdmin ci-dessus (qui ne
+  // contrôle QUE l'upload de photo produit, réservé à l'admin -- la caissière, elle, n'a pas
+  // ce droit mais n'a pas non plus de panier, d'où un état distinct).
+  const [isStaff, setIsStaff] = useState(false);
+  useEffect(() => {
+    const role = typeof window !== 'undefined' ? localStorage.getItem('user_role') : null;
+    setIsStaff(role === 'admin' || role === 'caissiere');
+  }, []);
   const [loading, setLoading] = useState(true);
   // 🔐 CORRECTIF (bug remonté en test, session 12/07) : `loading` était utilisé pour un
   // early-return "plein écran" (voir plus bas) qui démontait TOUT le composant -- y compris
@@ -412,18 +424,58 @@ export default function CataloguePage() {
                 </div>
               </div>
 
-              {/* Stock + bouton panier */}
+              {/* Stock + sélecteur de quantité + bouton panier */}
               <div className="flex flex-col items-end gap-1.5 shrink-0">
                 <span className="text-[10px] text-slate-400 text-right leading-tight">Stock<br/><span className="font-semibold text-slate-600 dark:text-slate-300">{p.quantite} unités</span></span>
-                <button
-                  disabled={p.quantite <= 0}
-                  onClick={() => handleAddToCart(p.id)}
-                  title="Ajouter au panier"
-                  aria-label="Ajouter au panier"
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white h-11 w-11 flex items-center justify-center rounded-2xl transition-all active:scale-90 border-none cursor-pointer disabled:opacity-20 disabled:grayscale"
-                >
-                  <ShoppingCart size={18} strokeWidth={2.5} />
-                </button>
+                {/* 🔐 CORRECTIF (panier visible pour le personnel, qui n'en a pas) : admin et
+                    caissière ne doivent jamais voir cette zone -- seul un client (ou un
+                    visiteur pas encore connecté) peut réellement acheter via le catalogue. */}
+                {!isStaff && (
+                  p.quantite > 0 ? (
+                    <div className="flex items-center gap-1">
+                      {/* 🔧 CORRECTIF (bug remonté en test) : le sélecteur de quantité avait
+                          disparu de la carte produit lors d'une refonte récente -- un clic
+                          sur le panier ajoutait donc toujours 1 seule unité, sans moyen d'en
+                          choisir davantage. updateLocalQte() existait déjà (jamais retiré),
+                          seuls ces boutons +/- manquaient pour l'utiliser réellement.
+                          Cibles tactiles 44px (h-11 w-11) : cohérent avec le reste de la refonte. */}
+                      <button
+                        onClick={() => updateLocalQte(p.id, -1, p.quantite)}
+                        aria-label={`Diminuer la quantité de ${p.nom}`}
+                        className="h-11 w-11 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-none cursor-pointer font-semibold text-base active:scale-90 transition-transform"
+                      >
+                        −
+                      </button>
+                      <span className="w-6 text-center text-sm font-semibold text-slate-800 dark:text-white tabular-nums">
+                        {quantites[p.id] || 1}
+                      </span>
+                      <button
+                        onClick={() => updateLocalQte(p.id, 1, p.quantite)}
+                        aria-label={`Augmenter la quantité de ${p.nom}`}
+                        className="h-11 w-11 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-none cursor-pointer font-semibold text-base active:scale-90 transition-transform"
+                      >
+                        +
+                      </button>
+                      <button
+                        onClick={() => handleAddToCart(p.id)}
+                        title="Ajouter au panier"
+                        aria-label="Ajouter au panier"
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white h-11 w-11 flex items-center justify-center rounded-2xl transition-all active:scale-90 border-none cursor-pointer"
+                      >
+                        <ShoppingCart size={18} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      disabled
+                      title="Ajouter au panier"
+                      aria-label="Ajouter au panier"
+                      className="bg-emerald-500 text-white h-11 w-11 flex items-center justify-center rounded-2xl border-none cursor-pointer opacity-20 grayscale"
+                    >
+                      <ShoppingCart size={18} strokeWidth={2.5} />
+                    </button>
+                  )
+                )}
               </div>
             </motion.div>
           ))}

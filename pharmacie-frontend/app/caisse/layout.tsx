@@ -1,10 +1,11 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, FileText, History, Power, X, Menu, ArrowLeft, Home, LayoutGrid, Wallet, Sun, Moon } from 'lucide-react';
+import { ShoppingCart, FileText, History, Power, X, Menu, ArrowLeft, Home, LayoutGrid, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PharmacyIcon } from '../../components/PharmacyIcon';
+import { ThemeToggleButton } from '../../components/ThemeToggleButton';
 
 export default function CaisseLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -13,27 +14,13 @@ export default function CaisseLayout({ children }: { children: React.ReactNode }
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [userName, setUserName] = useState('');
   const [greeting, setGreeting] = useState('');
-  const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
     const name = localStorage.getItem('username') || 'Caissière';
     setUserName(name);
     const hour = new Date().getHours();
     setGreeting(hour >= 18 ? 'Bonsoir' : 'Bonjour');
-
-    // 🔧 CORRECTIF (logo générique + pas de bascule de thème dans toute la caisse) :
-    // même logique que app/admin/layout.tsx, jusqu'ici jamais reprise ici.
-    if (localStorage.getItem('color-theme') === 'dark') {
-      setIsDark(true);
-      document.documentElement.classList.add('dark');
-    }
   }, []);
-
-  const toggleTheme = () => {
-    setIsDark(!isDark);
-    document.documentElement.classList.toggle('dark');
-    localStorage.setItem('color-theme', !isDark ? 'dark' : 'light');
-  };
 
   const confirmLogout = () => {
     localStorage.clear();
@@ -71,16 +58,16 @@ export default function CaisseLayout({ children }: { children: React.ReactNode }
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* 🔧 CORRECTIF (aucune option de mode clair/sombre dans toute la caisse) : même
-                bascule que app/admin/layout.tsx, jusqu'ici jamais reprise ici. */}
-            <button
-              onClick={toggleTheme}
-              title="Basculer le thème de couleur (Clair / Sombre)"
-              aria-label="Basculer le thème de couleur (Clair / Sombre)"
-              className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-none text-white cursor-pointer transition-colors"
-            >
-              {isDark ? <Sun size={20} className="text-yellow-300" /> : <Moon size={20} />}
-            </button>
+            {/* 🔧 CORRECTIF (icône du thème qui disparaît en mode clair) : ce bouton
+                réimplémentait SA PROPRE bascule clair/sombre à la main (classList.toggle +
+                clé localStorage "color-theme"), en parallèle du système next-themes déjà en
+                place (lib/context/ThemeProvider.tsx, clé "theme") qui gère la <html
+                class="dark"> RÉELLEMENT utilisée par les styles dark: partout dans l'app.
+                Les deux systèmes se disputaient la même classe sur <html> -- next-themes
+                pouvait la réécrire après le clic manuel, désynchronisant l'icône affichée
+                (isDark local) de l'apparence réelle de la page. <ThemeToggleButton/> est le
+                même composant déjà utilisé ailleurs dans l'app -- une seule source de vérité. */}
+            <ThemeToggleButton className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-none text-white cursor-pointer transition-colors" />
             <button aria-label="Ouvrir le menu" onClick={() => setIsMenuOpen(true)} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-none text-white cursor-pointer transition-colors">
               <Menu size={20}/>
             </button>
