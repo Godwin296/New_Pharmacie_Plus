@@ -1,13 +1,15 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Pill, ShoppingCart, Info, Loader2, Filter, Plus, Minus, AlertCircle, X, Check, Camera, WifiOff, ScanLine } from 'lucide-react';
+import { Search, Pill, ShoppingCart, Loader2, Filter, Plus, Minus, X, Check, Camera, WifiOff, ScanLine } from 'lucide-react';
 
 // 🌟 CONFIGURATION : Utilisation de l'instance unifiée apiClient (Gère l'URL de base et le JWT)
 import apiClient from '../../lib/apiClient';
 import Prix from '../../lib/components/Prix';
 import { ajouterAuPanierHorsLigne } from '../../lib/offline/panierQueue';
 import { chargerCatalogueLocal, catalogueLocalDisponible } from '../../lib/offline/syncCatalogue';
+import { useToast, ToastContainer } from '../../lib/hooks/useToast';
+import { useRouter } from 'next/navigation';
 
 interface Produit {
   id: number;
@@ -21,24 +23,8 @@ interface Produit {
   image?: string;
 }
 
-// 🍞 TOAST MAISON -- remplace les alert()/confirm() du navigateur, qui bloquent le fil
-// d'exécution et ont l'air d'une page web, pas d'une app. Volontairement local à ce
-// fichier pour l'instant (pas encore un composant partagé) : à extraire vers
-// components/ si le même besoin apparaît sur d'autres pages lors de la refonte.
-type ToastType = "success" | "error" | "info";
-interface ToastState { id: number; message: string; type: ToastType }
-
-function useToast() {
-  const [toasts, setToasts] = useState<ToastState[]>([]);
-  const showToast = (message: string, type: ToastType = "info") => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3000);
-  };
-  return { toasts, showToast };
-}
-
 export default function CataloguePage() {
+  const router = useRouter();
   const { toasts, showToast } = useToast();
   const [produits, setProduits] = useState<Produit[]>([]);
   const [categories, setCategories] = useState<Record<string, string>>({});
@@ -389,7 +375,15 @@ export default function CataloguePage() {
           {!loading && filteredProduits.map((p) => (
             <motion.div
               key={p.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-white/[0.04] rounded-[20px] p-3 border border-slate-100 dark:border-white/10 flex items-center gap-3 group active:scale-[0.99] transition-transform"
+              onClick={() => router.push(`/produit/${p.id}`)}
+              // 🆕 NAVIGATION VERS LA FICHE PRODUIT (refonte UI/UX, 30/07) : `active:scale-[0.99]`
+              // existait déjà ici sans jamais avoir de vrai onClick associé -- la carte
+              // avait donc l'AIR tapable sans jamais rien faire (violation directe de la
+              // règle "aucun bouton qui a l'air interactif mais ne fait rien"). Le bouton
+              // "Ajouter au panier" ci-dessous appelle `e.stopPropagation()` pour rester
+              // une action indépendante (ouvrir la feuille de quantité sans quitter le
+              // catalogue).
+              className="bg-white dark:bg-white/[0.04] rounded-[20px] p-3 border border-slate-100 dark:border-white/10 flex items-center gap-3 group active:scale-[0.99] transition-transform cursor-pointer"
             >
               {/* Vignette produit + zone d'upload (admin uniquement, cf. isAdmin). Le badge
                   d'édition reste légèrement visible en permanence (pas seulement au survol
@@ -402,7 +396,10 @@ export default function CataloguePage() {
                   <Pill size={22} className="text-emerald-300 dark:text-emerald-700" />
                 )}
                 {isAdmin && (
-                  <label className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-end justify-end p-1 cursor-pointer transition-colors z-20">
+                  <label
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-end justify-end p-1 cursor-pointer transition-colors z-20"
+                  >
                     <span className="h-6 w-6 rounded-full bg-white/90 dark:bg-slate-900/90 shadow flex items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity">
                       <Camera className="text-slate-700 dark:text-white" size={12} />
                     </span>
@@ -433,7 +430,7 @@ export default function CataloguePage() {
                 {peutAcheter && (
                   <button
                     disabled={p.quantite <= 0}
-                    onClick={() => setProduitPourQuantite(p)}
+                    onClick={(e) => { e.stopPropagation(); setProduitPourQuantite(p); }}
                     title="Ajouter au panier"
                     aria-label="Ajouter au panier"
                     className="bg-emerald-500 hover:bg-emerald-600 text-white h-11 w-11 flex items-center justify-center rounded-2xl transition-all active:scale-90 border-none cursor-pointer disabled:opacity-20 disabled:grayscale"
@@ -576,28 +573,9 @@ export default function CataloguePage() {
         </div>
       )}
 
-      {/* 🍞 TOASTS -- empilés en bas d'écran, au-dessus de la nav du bas (z-[140] < 150 du
-          splash mais > la nav fixe à z-40). Remplacent les alert()/confirm() natifs. */}
-      <div className="fixed bottom-24 left-0 right-0 z-[140] flex flex-col items-center gap-2 px-4 pointer-events-none">
-        <AnimatePresence>
-          {toasts.map((t) => (
-            <motion.div
-              key={t.id}
-              initial={{ opacity: 0, y: 20, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.9 }}
-              transition={{ type: "spring", damping: 22, stiffness: 300 }}
-              className={`pointer-events-auto flex items-center gap-2 max-w-sm px-4 py-3 rounded-2xl shadow-xl text-sm font-medium text-white backdrop-blur-md ${
-                t.type === "success" ? "bg-emerald-600/95" : t.type === "error" ? "bg-red-600/95" : "bg-slate-800/95"
-              }`}
-            >
-              {t.type === "success" && <Check size={16} className="shrink-0" />}
-              {t.type === "error" && <AlertCircle size={16} className="shrink-0" />}
-              {t.message}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+      {/* 🍞 TOASTS -- composant partagé (lib/hooks/useToast.tsx), réutilisé aussi par
+          app/produit/[id]/page.tsx. Remplace les alert()/confirm() natifs. */}
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }
