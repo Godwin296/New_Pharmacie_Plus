@@ -43,21 +43,21 @@ class ClientGuichet(models.Model):
 
 class Produit(models.Model):
     CATEGORIES = [
-        ('antalgique', 'Antalgiques 💊'), ('anti_inflam', 'Anti-inflammatoires 🔥'),
-        ('antipyrétique', 'Antipyrétiques 🤒'), ('anti_acide', 'Anti-acides 🥛'),
-        ('antispasmodique', 'Antispasmodiques 🌀'), ('antidiarrhéique', 'Antidiarrhéiques 🛑'),
-        ('laxatif', 'Laxatifs 🚽'), ('antidiabétique', 'Antidiabétiques 🩸'),
-        ('antihypertenseur', 'Antihypertenseurs ❤️'), ('anticoagulant', 'Anticoagulants 💉'),
-        ('antiagrégant', 'Antiagrégants plaquettaires 🛡️'), ('hypolipémiant', 'Hypolipémiants 📉'),
-        ('antibiotique', 'Antibiotiques 🧬'), ('antiviral', 'Antiviraux 👾'),
-        ('antifongique', 'Antifongiques 🍄'), ('antihistaminique', 'Antihistaminiques 🤧'),
-        ('bronchodilatateur', 'Bronchodilatateurs 🫁'), ('antitussif', 'Antitussifs 🗣️'),
-        ('expectorant', 'Expectorants 💧'), ('anxiolytique', 'Anxiolytiques 🧘'),
-        ('hypnotique', 'Hypnotiques 😴'), ('antidépresseur', 'Antidépresseurs ☀️'),
-        ('neuroleptique', 'Neuroleptiques 🧠'), ('dermo_corticoide', 'Dermo-corticoïdes 🧴'),
-        ('antiseptique', 'Antiseptiques 🧼'), ('contraceptif', 'Contraceptifs 🛡️'),
-        ('vitamine', 'Vitamines ✨'), ('complement', 'Compléments alimentaires 🥦'),
-        ('homeopathie', 'Homéopathie 🌿'), ('phytotherapie', 'Phytothérapie 🍃'),
+        ('antalgique', 'Antalgiques'), ('anti_inflam', 'Anti-inflammatoires'),
+        ('antipyrétique', 'Antipyrétiques'), ('anti_acide', 'Anti-acides'),
+        ('antispasmodique', 'Antispasmodiques'), ('antidiarrhéique', 'Antidiarrhéiques'),
+        ('laxatif', 'Laxatifs'), ('antidiabétique', 'Antidiabétiques '),
+        ('antihypertenseur', 'Antihypertenseurs'), ('anticoagulant', 'Anticoagulants'),
+        ('antiagrégant', 'Antiagrégants plaquettaires'), ('hypolipémiant', 'Hypolipémiants'),
+        ('antibiotique', 'Antibiotiques'), ('antiviral', 'Antiviraux'),
+        ('antifongique', 'Antifongiques'), ('antihistaminique', 'Antihistaminiques'),
+        ('bronchodilatateur', 'Bronchodilatateurs'), ('antitussif', 'Antitussifs'),
+        ('expectorant', 'Expectorants'), ('anxiolytique', 'Anxiolytiques'),
+        ('hypnotique', 'Hypnotiques'), ('antidépresseur', 'Antidépresseurs'),
+        ('neuroleptique', 'Neuroleptiques'), ('dermo_corticoide', 'Dermo-corticoïdes'),
+        ('antiseptique', 'Antiseptiques'), ('contraceptif', 'Contraceptifs'),
+        ('vitamine', 'Vitamines'), ('complement', 'Compléments alimentaires'),
+        ('homeopathie', 'Homéopathie'), ('phytotherapie', 'Phytothérapie'),
     ]
     
     identifiant = models.CharField(max_length=20, unique=True, blank=True, verbose_name="Code Produit 🏷️")
