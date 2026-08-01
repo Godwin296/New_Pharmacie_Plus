@@ -1,10 +1,11 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogIn, UserPlus, ShieldCheck, Pill, Truck, Smartphone } from 'lucide-react';
+import { LogIn, UserPlus, ShieldCheck, Pill, Truck, Smartphone, ShoppingCart, ClipboardList, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import apiClient from '../lib/apiClient';
+import Prix from '../lib/components/Prix';
 import { PharmacyIcon } from '../components/PharmacyIcon';
 import { PharmacyBrandName } from '../components/PharmacyBrandName';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
@@ -12,38 +13,43 @@ import { ThemeToggleButton } from '../components/ThemeToggleButton';
 // 🎨 REFONTE UI/UX (30/07) : l'ancien accueil était une page vitrine desktop (nav sticky,
 // hero 7xl, grille "avantages", footer trois colonnes) -- hors sujet pour l'écran d'ouverture
 // d'une PWA mobile-first, en plus de dupliquer le vrai site vitrine (pharmacie-marketing/).
-// Reconstruit à partir de la maquette "Bienvenue sur Pharmacie Plus" : logo, message court,
-// deux actions claires. Même langage que /login (déjà refait) -- fond clair, masses
-// lumineuses douces, carte du logo avec halo pulsé.
+// Reconstruit à partir de la maquette "Bienvenue sur Pharmacie Plus".
 const messages = [
   { icon: Pill, texte: "Commandez vos médicaments en ligne, retirez en pharmacie" },
   { icon: Truck, texte: "Suivez votre commande en temps réel, du panier au retrait" },
   { icon: Smartphone, texte: "Payez par Orange Money ou MTN MoMo, vérifié par la pharmacie" },
 ];
 
+interface StatsClient {
+  nom: string;
+  nb_commandes: number;
+  montant_total_depense: number;
+}
+
 export default function HomePage() {
   const router = useRouter();
-  const [checkingSession, setCheckingSession] = useState(true);
+  const [statutSession, setStatutSession] = useState<'verification' | 'visiteur' | 'client'>('verification');
+  const [stats, setStats] = useState<StatsClient | null>(null);
   const [messageIndex, setMessageIndex] = useState(0);
 
-  // 🔀 Un visiteur déjà connecté n'a rien à faire sur un écran "Bienvenue, connectez-vous" --
-  // redirection immédiate vers son espace plutôt que de lui remontrer l'accueil à chaque fois.
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     const role = localStorage.getItem('user_role');
-    if (!token || !role) { setCheckingSession(false); return; }
+    if (!token || !role) { setStatutSession('visiteur'); return; }
 
-    const destinations: Record<string, string> = {
-      admin: '/admin/dashboard',
-      caissiere: '/caisse/pos',
-      client: '/catalogue',
-    };
-    const cible = destinations[role];
-    if (cible) {
-      router.replace(cible);
-    } else {
-      setCheckingSession(false);
-    }
+    // 🔧 CORRECTIF (bug remonté en test, 01/08) : un client déjà connecté était renvoyé vers
+    // /catalogue -- si le clic sur "Accueil" (bottom nav) venait JUSTEMENT de /catalogue, ça
+    // donnait l'impression d'un simple rafraîchissement sans rien faire, pris à raison pour
+    // un bug. Un client a maintenant un VRAI accueil ici (salutation + stats + accès rapide),
+    // distinct du catalogue -- seul le personnel (admin/caissière, qui n'ont pas besoin d'un
+    // écran de bienvenue, juste de leur outil de travail) est encore redirigé automatiquement.
+    if (role === 'admin') { router.replace('/admin/dashboard'); return; }
+    if (role === 'caissiere' || role === 'caissière') { router.replace('/caisse/pos'); return; }
+
+    setStatutSession('client');
+    apiClient.get('/api/v1/client/me/')
+      .then((res) => setStats(res.data))
+      .catch(() => {});
   }, [router]);
 
   useEffect(() => {
@@ -52,9 +58,57 @@ export default function HomePage() {
   }, []);
 
   // Rien à afficher pendant la vérification de session -- évite un flash de l'écran de
-  // bienvenue avant la redirection pour un visiteur déjà connecté.
-  if (checkingSession) {
+  // bienvenue avant la redirection pour un membre du personnel déjà connecté.
+  if (statutSession === 'verification') {
     return <div className="min-h-screen bg-[var(--color-mist)] dark:bg-[#050e0c]" />;
+  }
+
+  if (statutSession === 'client') {
+    return (
+      <div className="relative min-h-screen w-full bg-[var(--color-mist)] dark:bg-[#050e0c] overflow-hidden">
+        <div className="absolute -top-24 -left-16 w-72 h-72 rounded-full bg-emerald-300/20 dark:bg-emerald-500/10 blur-[90px] pointer-events-none" />
+
+        <div className="relative z-10 max-w-md md:max-w-2xl mx-auto px-5 pt-8 pb-6">
+          {stats ? (
+            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+              <p className="text-slate-500 dark:text-slate-400 text-sm">Bon retour,</p>
+              <h1 className="font-display text-2xl font-bold text-[var(--color-ink,#0b1220)] dark:text-white tracking-tight">{stats.nom} 👋</h1>
+
+              <div className="grid grid-cols-2 gap-3 mt-5">
+                <div className="bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-2xl px-4 py-3">
+                  <p className="text-2xl font-bold text-[var(--color-ink,#0b1220)] dark:text-white">{stats.nb_commandes}</p>
+                  <p className="text-[11px] font-medium text-slate-400">Commande{stats.nb_commandes > 1 ? 's' : ''} ici</p>
+                </div>
+                <div className="bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-2xl px-4 py-3">
+                  <p className="text-2xl font-bold text-[var(--color-ink,#0b1220)] dark:text-white"><Prix montant={stats.montant_total_depense} /></p>
+                  <p className="text-[11px] font-medium text-slate-400">Dépensé ici</p>
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <div className="flex items-center gap-2 text-slate-400 text-sm mb-6"><Loader2 size={16} className="animate-spin" /> Chargement...</div>
+          )}
+
+          <Link
+            href="/catalogue"
+            className="block bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm py-4 rounded-2xl no-underline text-center mb-3 transition-all active:scale-[0.98]"
+          >
+            Parcourir le catalogue
+          </Link>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Link href="/panier" className="no-underline bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-2xl p-4 flex flex-col items-center gap-2">
+              <ShoppingCart size={20} className="text-emerald-500" />
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Mon panier</span>
+            </Link>
+            <Link href="/commandes" className="no-underline bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-2xl p-4 flex flex-col items-center gap-2">
+              <ClipboardList size={20} className="text-emerald-500" />
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Mes commandes</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const MessageIcon = messages[messageIndex].icon;
