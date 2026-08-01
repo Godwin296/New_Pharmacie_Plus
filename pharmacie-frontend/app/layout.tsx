@@ -39,7 +39,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // tenant). Sans exclure "/" ici, ce nav générique (texte "PHARMACIE +" codé en dur)
   // s'affichait EN PLUS de celui de la page d'accueil -- d'où les "2 bandeaux" visibles
   // au scroll, et le nom de la pharmacie qui restait "Pharmacie +" sur l'un des deux.
-  const isSpecialRoute = pathname.startsWith('/admin') || pathname.startsWith('/caisse') || pathname === '/login' || pathname === '/register' || pathname === '/';
+  // 🆕 (30/07) : /produit ajouté à la liste -- cette page a son propre en-tête (flèche
+  // retour) ET sa propre barre d'action fixe en bas (sélecteur de quantité + "Ajouter au
+  // panier"). Sans cette exclusion, la nav du bas générique du client (elle aussi fixed
+  // bottom-0) se serait superposée exactement à cet endroit -- collision visuelle directe,
+  // deux barres au même endroit à l'écran.
+  const isSpecialRoute = pathname.startsWith('/admin') || pathname.startsWith('/caisse') || pathname.startsWith('/produit') || pathname === '/login' || pathname === '/register' || pathname === '/';
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
@@ -225,7 +230,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.05 }}
                   className="relative h-24 w-24 bg-white rounded-[1.75rem] flex items-center justify-center shadow-2xl shadow-black/20 p-4"
                 >
-                  <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
+                  <PharmacyIcon className="w-full h-full object-cover" alt="Pharmacie+" />
                 </motion.div>
 
                 <motion.h1
@@ -279,7 +284,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <>
             <nav className="sticky top-0 z-50 bg-white/95 dark:bg-[#0b1a16]/95 backdrop-blur-md px-5 py-3 shadow-sm border-b border-slate-100 dark:border-white/10">
               <div className="container mx-auto flex justify-between items-center gap-3">
-                <button aria-label="Ouvrir le menu" onClick={() => setIsMenuOpen(true)} className="relative bg-transparent border-none p-2 -ml-2 cursor-pointer text-slate-700 dark:text-slate-200">
+                <button aria-label="Ouvrir le menu" onClick={() => setIsMenuOpen(true)} className="relative min-h-11 min-w-11 flex items-center justify-center bg-transparent border-none -ml-2 cursor-pointer text-slate-700 dark:text-slate-200 active:scale-90 transition-transform">
                   <Menu size={22} />
                   {fileAttenteOffline.length > 0 && (
                     <span
@@ -293,7 +298,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
                 <Link href="/" className="flex items-center gap-2.5 text-slate-800 dark:text-white no-underline group min-w-0">
                   <div className="h-9 w-9 shrink-0 flex items-center justify-center overflow-hidden group-hover:rotate-6 transition-transform">
-                    <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
+                    <PharmacyIcon className="w-full h-full object-cover" alt="Pharmacie+" />
                   </div>
                   <div className="min-w-0">
                     <PharmacyBrandName className="font-black text-base leading-tight tracking-tighter block truncate" />
@@ -321,17 +326,33 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {isMenuOpen && (
                 <>
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMenuOpen(false)} className="fixed inset-0 z-[60] bg-slate-950/60 backdrop-blur-md" />
-                  <motion.div 
-                    initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-                    className="fixed top-0 right-0 h-full w-full max-w-sm bg-white dark:bg-[#0b1a16] z-[70] shadow-2xl flex flex-col"
+                  {/* 📱 Feuille mobile (bottom sheet), pas un tiroir latéral façon desktop : glisse
+                      depuis le bas (zone naturellement accessible au pouce), coins arrondis en
+                      haut, poignée de glissement visible, et se referme au swipe vers le bas --
+                      exactement le comportement attendu d'une vraie app native iOS/Android. */}
+                  <motion.div
+                    drag="y"
+                    dragConstraints={{ top: 0, bottom: 0 }}
+                    dragElastic={{ top: 0, bottom: 0.5 }}
+                    onDragEnd={(_e, info) => {
+                      if (info.offset.y > 100 || info.velocity.y > 500) setIsMenuOpen(false);
+                    }}
+                    initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+                    transition={{ type: 'spring', damping: 32, stiffness: 320 }}
+                    className="fixed bottom-0 left-0 right-0 z-[70] max-h-[88vh] bg-white dark:bg-[#0b1a16] rounded-t-[2rem] shadow-2xl flex flex-col touch-none"
                   >
-                    <div className="p-8 flex justify-between items-center border-b dark:border-white/10">
-                      <h3 className="text-xl font-black dark:text-white uppercase tracking-tighter italic text-emerald-600">Navigation</h3>
-                      <button aria-label="Fermer le menu" onClick={() => setIsMenuOpen(false)} className="p-3 rounded-xl bg-slate-100 dark:bg-white/[0.06] border-none text-slate-500 hover:text-red-500 cursor-pointer transition-colors"><X size={20} /></button>
+                    {/* Poignée de glissement -- l'affordance universelle du bottom sheet mobile */}
+                    <div className="flex justify-center pt-3 pb-1 shrink-0 cursor-grab active:cursor-grabbing">
+                      <div className="w-10 h-1.5 rounded-full bg-slate-200 dark:bg-white/15" />
                     </div>
 
-                    <div className="flex-grow overflow-y-auto p-8 space-y-2">
-                      <Link href="/" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-all no-underline">
+                    <div className="px-8 pb-5 pt-2 flex justify-between items-center border-b dark:border-white/10 shrink-0">
+                      <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white">Navigation</h3>
+                      <button aria-label="Fermer le menu" onClick={() => setIsMenuOpen(false)} className="min-h-11 min-w-11 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-white/[0.06] border-none text-slate-500 hover:text-red-500 active:scale-90 cursor-pointer transition-all"><X size={20} /></button>
+                    </div>
+
+                    <div className="flex-grow overflow-y-auto p-6 space-y-1 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+                      <Link href="/" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-white/[0.04] active:scale-[0.98] transition-all no-underline">
                         <House size={20} /> Accueil
                       </Link>
               
@@ -340,41 +361,41 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                           {/* SECTION ADMIN : Uniquement Accueil, Catalogue et Dashboard */}
                           {user.role === 'ADMIN' ? (
                             <>
-                              <div className="text-[10px] font-black text-red-500 uppercase tracking-widest pt-6 pb-2 px-4 italic opacity-50 underline">Mode Gestionnaire 🛰️</div>
-                              <Link href="/catalogue" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all no-underline"><Pill size={20} /> Catalogue Produits</Link>
-                              <Link href="/admin/dashboard" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all no-underline italic">
-                                <LayoutDashboard size={20} className="text-red-500" /> Panneau de Contrôle
+                              <div className="text-[11px] font-semibold text-red-500/80 dark:text-red-400/70 pt-6 pb-2 px-4">Mode gestionnaire</div>
+                              <Link href="/catalogue" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 active:scale-[0.98] transition-all no-underline"><Pill size={20} /> Catalogue produits</Link>
+                              <Link href="/admin/dashboard" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-red-50 dark:hover:bg-red-950/30 active:scale-[0.98] transition-all no-underline">
+                                <LayoutDashboard size={20} className="text-red-500" /> Panneau de contrôle
                               </Link>
                             </>
                           ) : user.role === 'CAISSIERE' ? (
                             <>
-                              <div className="text-[10px] font-black text-emerald-600 uppercase tracking-widest pt-6 pb-2 px-4 italic opacity-50 underline">Ma Session Caisse 💰</div>
-                              <Link href="/catalogue" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all no-underline"><Pill size={20} /> Catalogue Produits</Link>
-                              <Link href="/caisse/pos" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all no-underline italic">
-                                <ShoppingCart size={20} className="text-emerald-500" /> Accéder au Guichet
+                              <div className="text-[11px] font-semibold text-emerald-600/80 dark:text-emerald-400/70 pt-6 pb-2 px-4">Session caisse</div>
+                              <Link href="/catalogue" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 active:scale-[0.98] transition-all no-underline"><Pill size={20} /> Catalogue produits</Link>
+                              <Link href="/caisse/pos" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 active:scale-[0.98] transition-all no-underline">
+                                <ShoppingCart size={20} className="text-emerald-500" /> Accéder au guichet
                               </Link>
                             </>
                           ) : (
                             /* SECTION CLIENT CLASSIQUE */
                             <>
-                              <div className="text-[10px] font-black text-blue-500 uppercase tracking-widest pt-6 pb-2 px-4 italic opacity-50 underline">Espace Pharmacie 🏥</div>
-                              <Link href="/catalogue" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all no-underline"><Pill size={20} /> Catalogue Produits</Link>
-                              <Link href="/panier" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all no-underline"><ShoppingCart size={20} /> Mon Panier</Link>
-                              <Link href="/commandes" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all no-underline"><History size={20} /> Mes Commandes</Link>
-                              <Link href="/profil" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all no-underline"><User size={20} /> Mon Profil</Link>
+                              <div className="text-[11px] font-semibold text-blue-500/80 dark:text-blue-400/70 pt-6 pb-2 px-4">Espace pharmacie</div>
+                              <Link href="/catalogue" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 active:scale-[0.98] transition-all no-underline"><Pill size={20} /> Catalogue produits</Link>
+                              <Link href="/panier" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 active:scale-[0.98] transition-all no-underline"><ShoppingCart size={20} /> Mon panier</Link>
+                              <Link href="/commandes" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 active:scale-[0.98] transition-all no-underline"><History size={20} /> Mes commandes</Link>
+                              <Link href="/profil" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 active:scale-[0.98] transition-all no-underline"><User size={20} /> Mon profil</Link>
                             </>
                           )}
                         </>
                       ) : (
-                        <Link href="/login" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-black text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-all no-underline border border-emerald-500/20 shadow-lg mt-10">
-                          <LogIn size={20} /> Se Connecter 🔐
+                        <Link href="/login" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl font-bold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 active:scale-[0.98] transition-all no-underline border border-emerald-500/20 shadow-lg mt-6">
+                          <LogIn size={20} /> Se connecter
                         </Link>
                       )}
                     </div>
 
                     {user.loggedIn && (
-                      <div className="p-8 border-t dark:border-white/10">
-                        <button onClick={() => setShowLogoutConfirm(true)} className="w-full flex items-center justify-center gap-3 text-red-500 font-black text-xs uppercase hover:bg-red-50 dark:hover:bg-red-500/10 p-4 rounded-2xl transition border border-red-100 bg-transparent cursor-pointer outline-none">
+                      <div className="p-6 border-t dark:border-white/10 shrink-0" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
+                        <button onClick={() => setShowLogoutConfirm(true)} className="w-full min-h-11 flex items-center justify-center gap-3 text-red-500 font-bold text-sm hover:bg-red-50 dark:hover:bg-red-500/10 active:scale-[0.98] p-4 rounded-2xl transition-all border border-red-100 dark:border-red-500/20 bg-transparent cursor-pointer outline-none">
                           <Power size={20} /> Terminer la session
                         </button>
                       </div>

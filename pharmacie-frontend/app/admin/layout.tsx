@@ -118,7 +118,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 le faisait correctement. <PharmacyIcon/> lit le même contexte partagé
                 (useConfigPharmacie), avec repli sur l'icône générique si aucun logo n'a
                 encore été uploadé. */}
-            <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
+            <PharmacyIcon className="w-full h-full object-cover" alt="Pharmacie+" />
           </div>
           <div>
             <span className="font-bold text-xl uppercase tracking-tighter block">PHARMACIE +</span>

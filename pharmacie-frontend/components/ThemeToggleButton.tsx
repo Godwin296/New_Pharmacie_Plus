@@ -30,7 +30,13 @@ export function ThemeToggleButton({ className }: { className?: string }) {
       onClick={() => setTheme(isDark ? "light" : "dark")}
       className={
         className ??
-        "bg-white/10 hover:bg-white/20 p-3 rounded-2xl border-0 text-white cursor-pointer transition-all outline-none"
+        // 🔧 CORRECTIF (bug remonté en test, 30/07) : "text-white" codé en dur était pensé
+        // pour un header sombre -- avec le header clair (bg-white/95), l'icône blanche
+        // devenait invisible en mode clair (blanc sur blanc). Couleur adaptative désormais,
+        // cohérente avec les autres boutons du header (hamburger, panier). active:scale-95
+        // ajouté pour le retour tactile (spec app native -- aucun bouton ne doit paraître
+        // inerte au toucher).
+        "bg-slate-50 dark:bg-white/[0.06] hover:bg-emerald-50 dark:hover:bg-emerald-900/20 active:scale-95 p-2.5 rounded-2xl border-0 text-slate-700 dark:text-slate-200 cursor-pointer transition-all outline-none"
       }
     >
       {mounted && (isDark ? <Sun size={20} /> : <Moon size={20} />)}

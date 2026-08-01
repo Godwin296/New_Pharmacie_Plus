@@ -117,7 +117,7 @@ export default function LoginPage() {
                 className="absolute inset-0 bg-emerald-400/40 rounded-[1.75rem] blur-xl"
               />
               <div className="relative h-[4.5rem] w-[4.5rem] bg-white rounded-[1.75rem] flex items-center justify-center shadow-lg shadow-emerald-950/10 mx-auto p-3.5">
-                <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
+                <PharmacyIcon className="w-full h-full object-cover" alt="Pharmacie+" />
               </div>
             </div>
             <h1 className="font-display text-2xl font-bold text-[var(--color-ink,#0b1220)] dark:text-white tracking-tight">Bienvenue !</h1>

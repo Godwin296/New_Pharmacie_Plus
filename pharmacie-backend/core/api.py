@@ -27,6 +27,7 @@ from .serializers import (
 )
 from .validators import valider_et_desinfecter_ordonnance, valider_et_desinfecter_photo_produit
 from .chiffrement import chiffrer_contenu, dechiffrer_si_necessaire
+from .utils import obtenir_logo_base64
 from pharmacovigilance.detection import verifier_interactions_produits
 from django.core.files.base import ContentFile
 from .pagination import CataloguePagination
@@ -116,8 +117,23 @@ def infos_pharmacie(request):
     # `config.logo` est bien "truthy" côté React. Avec le contexte, DRF renvoie l'URL
     # absolue correcte (http://dupont.localhost:8000/media/config/logo.png).
     serializer = PharmacieConfigSerializer(config, context={'request': request})
-    cache_set("infos_pharmacie", serializer.data, timeout=3600)  # 1h : invalidé au besoin de toute façon
-    return Response(serializer.data)
+    data = serializer.data
+
+    # 🖼️ CORRECTIF (logo qui retape le disque à chaque appel + flash du logo de secours sur
+    # connexion lente, remonté en test) : le JSON de cette route est bien caché en Redis
+    # ci-dessus, MAIS le logo restait une simple URL -- le NAVIGATEUR devait donc refaire une
+    # requête HTTP séparée, non cachée, pour charger l'image à CHAQUE chargement de page/app
+    # (splashscreen inclus). Sur connexion lente, cette requête séparée arrivait après le
+    # reste de la config, d'où le flash visible de l'icône de secours avant que le vrai logo
+    # n'apparaisse. En intégrant le logo en base64 directement DANS ce JSON (même principe
+    # que obtenir_logo_base64() pour les PDF, voir core/utils.py), il est mis en cache Redis
+    # EN MÊME TEMPS que le reste -- zéro requête réseau séparée, zéro re-lecture disque tant
+    # que le cache est chaud (1h), et plus aucun flash puisque nom/logo arrivent atomiquement
+    # dans la même réponse.
+    data["logo"] = obtenir_logo_base64(config)
+
+    cache_set("infos_pharmacie", data, timeout=3600)  # 1h : invalidé au besoin de toute façon
+    return Response(data)
 
 @api_view(['POST','PUT', 'PATCH'])
 @permission_classes([IsAdminUser])
@@ -503,6 +519,39 @@ def api_catalogue(request):
     })
     cache_set(cache_key_base, reponse.data, timeout=60, request=request)
     return reponse
+
+
+@api_view(['GET'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
+@permission_classes([AllowAny])
+# 🆕 NOUVEL ENDPOINT (refonte UI/UX, 30/07) : jusqu'ici il n'existait aucune route pour
+# récupérer UN SEUL produit -- le catalogue (api_catalogue ci-dessus) ne renvoie que des
+# pages de résultats. Nécessaire pour un vrai écran "Détail du produit" accessible par
+# URL directe (partage de lien, retour arrière, rafraîchissement de page) plutôt que de
+# dépendre des données déjà chargées en mémoire côté catalogue.
+#
+# Mêmes précautions que api_catalogue, réappliquées à l'identique :
+# - `ClientOrStaffJWTAuthentication` + `AllowAny` : accessible aux visiteurs anonymes ET
+#   aux clients connectés, sans jamais lever de 401 (même bug de fond déjà rencontré 3 fois
+#   sur ce projet -- StaffJWTAuthentication par défaut rejette les jetons client).
+# - `ProduitSerializer` masque déjà `prix_achat` sauf pour l'admin (serializers.py) -- mais
+#   la clé de cache DOIT distinguer admin/non-admin, sinon le cache Redis (partagé) pourrait
+#   servir la réponse contenant le prix d'achat à un client qui tombe sur la même clé dans
+#   la fenêtre de 60s.
+def api_produit_detail(request, produit_id):
+    est_admin_tenant = bool(
+        request.user and request.user.is_authenticated and getattr(request.user, 'is_superuser', False)
+    )
+    cache_key_base = f"produit_detail_admin_{produit_id}" if est_admin_tenant else f"produit_detail_{produit_id}"
+
+    cached = cache_get(cache_key_base)
+    if cached is not None:
+        return Response(cached)
+
+    produit = get_object_or_404(Produit, id=produit_id)
+    serializer = ProduitSerializer(produit, context={'request': request})
+    cache_set(cache_key_base, serializer.data, timeout=60)
+    return Response(serializer.data)
 
 
 # --- 🚀 MODE OFFLINE (session 12/07, brique 2/4) : SYNCHRO DELTA DU CATALOGUE ---

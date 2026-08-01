@@ -1,278 +1,198 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { 
-  ArrowRight, Phone, Mail, LogIn,
-  MessageCircle, Moon, Sun, MapPin, HeartPulse, Clock, ShieldCheck, FileText, Receipt, LayoutDashboard, ShoppingBag
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { LogIn, UserPlus, ShieldCheck, Pill, Truck, Smartphone, ShoppingCart, ClipboardList } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import apiClient from '../lib/apiClient';
-import { useConfigPharmacie } from '../lib/context/ConfigPharmacieContext';
+import { PharmacyIcon } from '../components/PharmacyIcon';
+import { PharmacyBrandName } from '../components/PharmacyBrandName';
+import { PulseLine } from '../components/PulseLine';
+
+// 🎨 REFONTE (01/08, v2) : la version précédente traitait cet écran comme un mini-dashboard
+// client (cartes de statistiques -- nombre de commandes, montant dépensé). Ce n'est pas ce
+// qu'est cette page : `/` est le PREMIER CONTACT de quiconque arrive sur le sous-domaine
+// d'UNE pharmacie précise (dupont.localhost, martin.localhost...) -- visiteur anonyme ou
+// client déjà connecté. C'est une vitrine d'accueil pour CETTE pharmacie, pas un tableau de
+// bord personnel (ça, c'est le rôle de /profil et /commandes). Reconstruit sur le même
+// langage visuel immersif que le hero du site marketing (pharmacie-marketing/components/Hero.tsx)
+// -- fond bg-brand-deep, halos, tracé ECG, révélation du titre mot par mot -- pour que la
+// transition site vitrine -> app ne se voie pas, plutôt que le fond clair "écran de
+// paramètres" qu'avait la version précédente.
+const messages = [
+  { icon: Pill, texte: "Commandez vos médicaments en ligne, retirez en pharmacie" },
+  { icon: Truck, texte: "Suivez votre commande en temps réel, du panier au retrait" },
+  { icon: Smartphone, texte: "Payez par Orange Money ou MTN MoMo, vérifié par la pharmacie" },
+];
 
 export default function HomePage() {
-  const [isDark, setIsDark] = useState(false);
-  const [user, setUser] = useState<any>(null); 
-  const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
+  const router = useRouter();
+  const [statutSession, setStatutSession] = useState<'verification' | 'visiteur' | 'client'>('verification');
+  const [prenomClient, setPrenomClient] = useState<string | null>(null);
+  const [messageIndex, setMessageIndex] = useState(0);
 
-  // Config pharmacie depuis le Context partagé — évite un double appel à /api/infos-pharmacie/
-  // (le layout.tsx l'appelle déjà une fois via ConfigPharmacieProvider)
-  const { config } = useConfigPharmacie();
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    const role = localStorage.getItem('user_role');
+    if (!token || !role) { setStatutSession('visiteur'); return; }
 
-    useEffect(() => {
-    setMounted(true);
+    // Seul le personnel (admin/caissière, qui n'a pas besoin d'un écran d'accueil, juste de
+    // son outil de travail) est redirigé automatiquement -- un client a un vrai accueil ici.
+    if (role === 'admin') { router.replace('/admin/dashboard'); return; }
+    if (role === 'caissiere' || role === 'caissière') { router.replace('/caisse/pos'); return; }
 
-    const checkSessionAndConfig = async () => {
-      const savedUser = localStorage.getItem('user');
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
-      } else {
-        setUser(null);
-      }
+    setStatutSession('client');
+    apiClient.get('/api/v1/client/me/')
+      .then((res) => setPrenomClient(res.data?.nom?.split(' ')[0] || null))
+      .catch(() => {});
+  }, [router]);
 
-      const token = localStorage.getItem('access_token');
-
-      if (token) {
-        try {
-          const resAuth = await apiClient.get('/api/current-user/');
-          
-          if (resAuth.data.is_authenticated) {
-            setUser(resAuth.data);
-            localStorage.setItem('user', JSON.stringify(resAuth.data));
-          } else {
-            setUser(null);
-            localStorage.removeItem('user');
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-          }
-        } catch (err) {
-          console.error("Vérification session en attente...");
-        }
-      } else {
-        setUser(null);
-        localStorage.removeItem('user');
-      }
-
-      setLoading(false);
-    };
-
-    checkSessionAndConfig();
+  useEffect(() => {
+    const timer = setInterval(() => setMessageIndex((i) => (i + 1) % messages.length), 3800);
+    return () => clearInterval(timer);
   }, []);
 
+  // Rien à afficher pendant la vérification de session -- évite un flash de l'accueil avant
+  // la redirection pour un membre du personnel déjà connecté.
+  if (statutSession === 'verification') {
+    return <div className="min-h-screen bg-brand-deep" />;
+  }
 
-  const toggleDarkMode = () => {
-    document.documentElement.classList.toggle('dark');
-    setIsDark(!isDark);
-  };
-
-  // --- 🧠 LOGIQUE DU BOUTON DYNAMIQUE SÉCURISÉE ---
-  const renderAuthButton = () => {
-    if (loading) return <div className="w-32 h-10 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-full"></div>;
-
-    if (!user) {
-      return (
-        <Link 
-          href="/login" 
-          title="Accéder au portail de connexion"
-          aria-label="Accéder au portail de connexion"
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-full text-sm font-bold no-underline flex items-center gap-2 transition-all"
-        >
-          <LogIn size={16} /> Espace de connexion
-        </Link>
-      );
-    }
-
-    if (user.role === 'admin' || user.is_superuser) {
-      return (
-        <Link 
-          href="/admin/dashboard" 
-          title="Accéder à la console d'administration"
-          aria-label="Accéder à la console d'administration"
-          className="bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-2.5 rounded-full text-sm font-bold no-underline flex items-center gap-2 transition-all"
-        >
-          <LayoutDashboard size={16} /> Tableau de bord
-        </Link>
-      );
-    }
-
-    if (user.role === 'caissiere' || user.is_staff) {
-      return (
-        <Link 
-          href="/caisse/pos" 
-          title="Accéder au terminal de vente"
-          aria-label="Accéder au terminal de vente"
-          className="bg-blue-600 text-white px-6 py-2.5 rounded-full text-sm font-bold no-underline flex items-center gap-2 transition-all"
-        >
-          <ShoppingBag size={16} /> Espace vente au guichet
-        </Link>
-      );
-    }
-
-    return null;
-  };
-
-  if (!mounted) return null;
-
+  const MessageIcon = messages[messageIndex].icon;
+  const estClient = statutSession === 'client';
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-500 font-sans">
-      
-      {/* 🧭 NAVIGATION DYNAMIQUE */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            {config?.logo ? (
-              <img src={config.logo} alt="Logo" className="w-10 h-10 object-contain rounded-lg" />
-            ) : (
-              <HeartPulse className="text-emerald-600" size={28} />
-            )}
-            <span className="font-bold text-xl tracking-tight uppercase">
-              {config?.nom || "Pharmacie"}
+    <div className="relative min-h-screen w-full bg-brand-deep overflow-hidden flex flex-col">
+      {/* 🌿 Même langage visuel que le hero du site marketing : halos flous + tracé ECG
+          discret en fond -- une pharmacie n'est pas une app générique, ce motif le rappelle
+          sans être appuyé. */}
+      <motion.div
+        aria-hidden
+        animate={{ opacity: [0.5, 0.75, 0.5] }}
+        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+        className="pointer-events-none absolute -top-32 left-1/2 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-emerald-500/25 blur-[100px]"
+      />
+      <div className="pointer-events-none absolute top-1/3 -right-24 h-[340px] w-[340px] rounded-full bg-blue-500/15 blur-[100px]" />
+      <div className="pointer-events-none absolute left-0 right-0 top-[22%] opacity-40">
+        <PulseLine className="w-full h-16" stroke="#67d29e" width={480} height={80} />
+      </div>
+
+      <div className="relative z-10 flex-grow flex flex-col items-center justify-center px-6 py-16">
+        <div className="w-full max-w-md text-center">
+
+          {/* 🟢 Badge de confiance discret -- vrai (l'app tourne bel et bien), pas un chiffre
+              inventé. Reprend le motif du site marketing (point qui pulse + libellé). */}
+          <motion.span
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-[11px] font-mono uppercase tracking-[0.15em] text-emerald-300 mb-8"
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
             </span>
-          </div>
+            Pharmacie en ligne
+          </motion.span>
 
-          <div className="flex items-center gap-6">
-            <button onClick={toggleDarkMode} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 border-none bg-transparent cursor-pointer transition-colors">
-              {isDark ? <Sun className="text-yellow-500" size={20} /> : <Moon className="text-slate-500" size={20} />}
-            </button>
-            <Link href="/catalogue" className="hidden md:block text-sm font-bold text-slate-600 dark:text-slate-300 no-underline hover:text-emerald-600 transition-colors">Catalogue</Link>
-            
-            {/* 🎯 INTEGRATION DU BOUTON JWT */}
-            {renderAuthButton()}
-          </div>
-        </div>
-      </nav>
-
-      {/* 🏥 HERO SECTION */}
-      <section className="pt-40 pb-20 px-6 text-center max-w-4xl mx-auto">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-          <span className="text-emerald-600 dark:text-emerald-400 font-bold text-xs uppercase tracking-[0.2em] bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2 rounded-full">
-            Votre santé, notre engagement quotidien
-          </span>
-          <h1 className="text-5xl md:text-7xl font-bold mt-8 mb-6 leading-tight tracking-tight text-slate-900 dark:text-white">
-            Prendre soin de vous, <br /> <span className="text-emerald-600">en toute simplicité.</span>
-          </h1>
-          <p className="text-lg md:text-xl text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl mx-auto">
-            Accédez à vos médicaments, envoyez vos ordonnances et recevez des conseils d'experts depuis chez vous.
-          </p>
-
-          <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/catalogue" className="w-full sm:w-auto bg-slate-900 dark:bg-emerald-600 text-white px-10 py-4 rounded-xl font-bold no-underline flex items-center justify-center gap-2 hover:shadow-lg transition-all text-sm uppercase tracking-widest">
-              Commander un produit <ArrowRight size={18} />
-            </Link>
-      
-            <a 
-              href={`tel:${config?.telephone || '+237'}`} 
-              className="w-full sm:w-auto relative px-10 py-4 rounded-xl font-bold no-underline flex items-center justify-center gap-2 transition-all text-sm uppercase tracking-widest bg-white dark:bg-slate-800 text-slate-700 dark:text-white border border-slate-200 dark:border-slate-700 hover:border-emerald-500 overflow-hidden group"
-            >
-              <motion.span
-                animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.3, 0.1] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 bg-emerald-500 pointer-events-none"
+          <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <div className="relative inline-block mb-6">
+              <motion.div
+                animate={{ scale: [1, 1.1, 1], opacity: [0.35, 0.55, 0.35] }}
+                transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+                className="absolute inset-0 bg-emerald-400/40 rounded-[2rem] blur-xl"
               />
-              <Phone size={18} className="text-emerald-600 group-hover:rotate-12 transition-transform z-10" /> 
-              <span className="z-10">Nous Appeler</span>
-            </a>
-          </div>
-        </motion.div>
-      </section>
+              <div className="relative h-24 w-24 bg-white rounded-[2rem] flex items-center justify-center shadow-2xl shadow-black/20 mx-auto p-4">
+                <PharmacyIcon className="w-full h-full object-cover" alt="Pharmacie+" />
+              </div>
+            </div>
 
-      {/* 🌿 NOS AVANTAGES */}
-      <section className="py-24 px-6 max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
-          <div>
-            <h2 className="text-4xl font-bold mb-8 italic tracking-tighter">Pourquoi choisir {config?.nom || "notre officine"} ?</h2>
-            <p className="text-slate-500 dark:text-slate-400 leading-relaxed mb-8 font-medium text-lg">
-              Nous mettons la technologie au service de votre sécurité. Chaque transaction est rigoureusement tracée pour vous offrir une transparence totale sur vos soins.
+            {/* 👋 Pour un client connu : accueil personnel en guise de titre. Pour un
+                visiteur : la promesse de l'app, pas juste le nom déjà lisible sur le logo
+                juste au-dessus -- éviter la répétition inutile. */}
+            <h1 className="font-display text-3xl font-bold text-white tracking-tight leading-tight">
+              {estClient
+                ? (prenomClient ? <>Bon retour, {prenomClient}</> : 'Bon retour parmi nous')
+                : <>Vos médicaments,<br />à portée de main</>}
+            </h1>
+            <p className="text-white/50 text-sm mt-2 flex items-center justify-center gap-1.5">
+              <PharmacyBrandName /> · Votre santé, notre priorité
             </p>
-            <div className="space-y-6">
-              <div className="flex items-start gap-4">
-                <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-emerald-600"><ShieldCheck size={24} /></div>
-                <div>
-                  <h4 className="font-bold text-slate-900 dark:text-white">Traçabilité Intégrale</h4>
-                  <p className="text-sm text-slate-500">Chaque médicament possède un identifiant unique pour un suivi précis de son origine.</p>
+          </motion.div>
+
+          {/* 💬 Message tournant -- 3 capacités réelles de l'app, pas des slogans creux */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+            className="bg-white/[0.06] border border-white/10 rounded-[28px] p-6 mt-8 backdrop-blur-sm min-h-[104px] flex items-center"
+          >
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={messageIndex}
+                initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
+                transition={{ duration: 0.35 }}
+                className="flex items-center gap-4 text-left"
+              >
+                <div className="h-11 w-11 shrink-0 rounded-2xl bg-emerald-400/15 flex items-center justify-center text-emerald-300">
+                  <MessageIcon size={20} />
                 </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-emerald-600"><Receipt size={24} /></div>
-                <div>
-                  <h4 className="font-bold text-slate-900 dark:text-white">Historique & Factures</h4>
-                  <p className="text-sm text-slate-500">Retrouvez toutes vos factures et votre historique de soins dans votre espace personnel.</p>
-                </div>
-              </div>
-            </div>
+                <p className="text-sm font-medium text-white/80 leading-snug">
+                  {messages[messageIndex].texte}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
+
+          <div className="flex justify-center gap-1.5 mt-4">
+            {messages.map((_, i) => (
+              <span key={i} className={`h-1.5 rounded-full transition-all ${i === messageIndex ? 'w-5 bg-emerald-400' : 'w-1.5 bg-white/20'}`} />
+            ))}
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-900/50 p-12 rounded-[40px] border border-slate-100 dark:border-slate-800">
-            <h4 className="font-black text-emerald-600 text-xs uppercase tracking-[0.2em] mb-8">Services Disponibles</h4>
-            <div className="space-y-10">
-              <div className="flex gap-5">
-                <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center text-emerald-600"><FileText size={24}/></div>
-                <div>
-                  <h5 className="font-bold text-lg">Gestion d'Ordonnances</h5>
-                  <p className="text-sm text-slate-500 leading-relaxed">Téléchargez vos documents en ligne pour une préparation anticipée en officine.</p>
-                </div>
+          {/* 🎯 ACTIONS -- cibles tactiles 44px+, retour au toucher, pas de survol requis.
+              Le catalogue est accessible SANS connexion (core/api.py::api_catalogue,
+              AllowAny) : c'est donc l'action principale pour tout le monde, visiteur ou
+              client -- la vraie porte d'entrée, pas la connexion. */}
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mt-8 space-y-3">
+            <Link
+              href="/catalogue"
+              className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-[0_0_30px_-6px_rgba(16,185,129,0.5)]"
+            >
+              <Pill size={18} /> Parcourir le catalogue
+            </Link>
+
+            {estClient ? (
+              <div className="grid grid-cols-2 gap-3">
+                <Link href="/panier" className="no-underline bg-white/[0.06] border border-white/10 rounded-2xl py-4 flex items-center justify-center gap-2 text-white/80 font-semibold text-sm active:scale-[0.98] transition-all">
+                  <ShoppingCart size={17} /> Mon panier
+                </Link>
+                <Link href="/commandes" className="no-underline bg-white/[0.06] border border-white/10 rounded-2xl py-4 flex items-center justify-center gap-2 text-white/80 font-semibold text-sm active:scale-[0.98] transition-all">
+                  <ClipboardList size={17} /> Commandes
+                </Link>
               </div>
-              <div className="flex gap-5">
-                <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center text-emerald-600"><Clock size={24}/></div>
-                <div>
-                  <h5 className="font-bold text-lg">Disponibilité 24h/24</h5>
-                  <p className="text-sm text-slate-500 leading-relaxed">Accédez à notre catalogue et à vos informations de santé à tout moment.</p>
-                </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <Link
+                  href="/login"
+                  className="w-full bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                >
+                  <LogIn size={17} /> Connexion
+                </Link>
+                <Link
+                  href="/register"
+                  className="w-full bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                >
+                  <UserPlus size={17} /> Créer un compte
+                </Link>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
+            )}
+          </motion.div>
 
-      {/* 🛠️ CONTACTS DIRECTS */}
-      <section className="py-20 px-6 bg-slate-50 dark:bg-slate-900/50">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-          <a href={`https://wa.me/${config?.telephone?.replace(/\s+/g, '')}`} target="_blank" rel="noreferrer" className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-100 dark:border-slate-700 no-underline text-center hover:border-emerald-500 transition-all shadow-sm">
-            <MessageCircle className="text-emerald-600 mx-auto mb-4" size={32} />
-            <h3 className="font-bold text-slate-900 dark:text-white">WhatsApp</h3>
-            <p className="text-xs text-slate-500 mt-2 uppercase font-black tracking-widest">Conseil Direct</p>
-          </a>
-          <a href={`mailto:${config?.email_contact}`} className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-100 dark:border-slate-700 no-underline text-center hover:border-emerald-500 transition-all shadow-sm">
-            <Mail className="text-emerald-600 mx-auto mb-4" size={32} />
-            <h3 className="font-bold text-slate-900 dark:text-white">E-mail</h3>
-            <p className="text-xs text-slate-500 mt-2 uppercase font-black tracking-widest">Demandes & Devis</p>
-          </a>
-          <a href={`tel:${config?.telephone}`} className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-100 dark:border-slate-700 no-underline text-center hover:border-emerald-500 transition-all shadow-sm">
-            <Phone className="text-emerald-600 mx-auto mb-4" size={32} />
-            <h3 className="font-bold text-slate-900 dark:text-white">Appel Direct</h3>
-            <p className="text-xs text-slate-500 mt-2 uppercase font-black tracking-widest">Ligne Officine</p>
-          </a>
+          <motion.p
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }}
+            className="flex items-center justify-center gap-1.5 text-xs font-medium text-white/40 mt-6"
+          >
+            <ShieldCheck size={14} className="text-emerald-400" /> Vos données sont sécurisées avec nous
+          </motion.p>
         </div>
-      </section>
-
-      {/* 🌿 FOOTER */}
-      <footer className="py-24 px-6 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-900">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16">
-          <div className="space-y-6">
-            <div className="flex items-center gap-3 text-2xl font-black uppercase tracking-tighter">
-              {config?.logo ? (
-                <img src={config.logo} alt="Logo" className="w-8 h-8 object-contain" />
-              ) : (
-                <HeartPulse className="text-emerald-600" />
-              )}
-              {config?.nom || "Pharmacie Plus"}
-            </div>
-            <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400 font-bold text-sm">
-              <MapPin className="text-emerald-600" size={20} />
-              {config?.adresse || "Adresse en attente de configuration"}
-            </div>
-          </div>
-
-          <div className="flex flex-col md:items-end gap-4 text-slate-600 dark:text-slate-300 font-black text-sm uppercase tracking-widest">
-            <div className="flex items-center gap-3"><Clock className="text-emerald-600" size={18} /> Ouvert 24h/24 — 7j/7</div>
-            <div className="flex items-center gap-3"><Phone className="text-emerald-600" size={18} /> {config?.telephone || "+237 ..."}</div>
-          </div>
-        </div>
-        <div className="text-center mt-20 pt-10 border-t border-slate-50 dark:border-slate-900 text-[10px] text-slate-400 font-black uppercase tracking-[0.5em] opacity-40">
-          © 2026 {config?.nom || "Pharmacie Plus"} — Éthique & Santé Numérique
-        </div>
-      </footer>
+      </div>
     </div>
   );
 }
