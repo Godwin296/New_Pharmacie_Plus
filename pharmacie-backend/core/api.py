@@ -521,6 +521,39 @@ def api_catalogue(request):
     return reponse
 
 
+@api_view(['GET'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
+@permission_classes([AllowAny])
+# 🆕 NOUVEL ENDPOINT (refonte UI/UX, 30/07) : jusqu'ici il n'existait aucune route pour
+# récupérer UN SEUL produit -- le catalogue (api_catalogue ci-dessus) ne renvoie que des
+# pages de résultats. Nécessaire pour un vrai écran "Détail du produit" accessible par
+# URL directe (partage de lien, retour arrière, rafraîchissement de page) plutôt que de
+# dépendre des données déjà chargées en mémoire côté catalogue.
+#
+# Mêmes précautions que api_catalogue, réappliquées à l'identique :
+# - `ClientOrStaffJWTAuthentication` + `AllowAny` : accessible aux visiteurs anonymes ET
+#   aux clients connectés, sans jamais lever de 401 (même bug de fond déjà rencontré 3 fois
+#   sur ce projet -- StaffJWTAuthentication par défaut rejette les jetons client).
+# - `ProduitSerializer` masque déjà `prix_achat` sauf pour l'admin (serializers.py) -- mais
+#   la clé de cache DOIT distinguer admin/non-admin, sinon le cache Redis (partagé) pourrait
+#   servir la réponse contenant le prix d'achat à un client qui tombe sur la même clé dans
+#   la fenêtre de 60s.
+def api_produit_detail(request, produit_id):
+    est_admin_tenant = bool(
+        request.user and request.user.is_authenticated and getattr(request.user, 'is_superuser', False)
+    )
+    cache_key_base = f"produit_detail_admin_{produit_id}" if est_admin_tenant else f"produit_detail_{produit_id}"
+
+    cached = cache_get(cache_key_base)
+    if cached is not None:
+        return Response(cached)
+
+    produit = get_object_or_404(Produit, id=produit_id)
+    serializer = ProduitSerializer(produit, context={'request': request})
+    cache_set(cache_key_base, serializer.data, timeout=60)
+    return Response(serializer.data)
+
+
 # --- 🚀 MODE OFFLINE (session 12/07, brique 2/4) : SYNCHRO DELTA DU CATALOGUE ---
 DATE_MODIFICATION_MIN = "1970-01-01T00:00:00+00:00"  # sentinelle "depuis toujours" (1er sync)
 CATALOGUE_SYNC_BATCH_SIZE = 300  # cf. docstring api_catalogue_sync : compromis payload/round-trips

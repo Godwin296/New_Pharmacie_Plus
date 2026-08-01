@@ -39,7 +39,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // tenant). Sans exclure "/" ici, ce nav générique (texte "PHARMACIE +" codé en dur)
   // s'affichait EN PLUS de celui de la page d'accueil -- d'où les "2 bandeaux" visibles
   // au scroll, et le nom de la pharmacie qui restait "Pharmacie +" sur l'un des deux.
-  const isSpecialRoute = pathname.startsWith('/admin') || pathname.startsWith('/caisse') || pathname === '/login' || pathname === '/register' || pathname === '/';
+  // 🆕 (30/07) : /produit ajouté à la liste -- cette page a son propre en-tête (flèche
+  // retour) ET sa propre barre d'action fixe en bas (sélecteur de quantité + "Ajouter au
+  // panier"). Sans cette exclusion, la nav du bas générique du client (elle aussi fixed
+  // bottom-0) se serait superposée exactement à cet endroit -- collision visuelle directe,
+  // deux barres au même endroit à l'écran.
+  const isSpecialRoute = pathname.startsWith('/admin') || pathname.startsWith('/caisse') || pathname.startsWith('/produit') || pathname === '/login' || pathname === '/register' || pathname === '/';
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
