@@ -5,7 +5,7 @@ import {
   ShoppingCart, FilePlus, ClipboardCheck,
   AlertTriangle, XCircle, RefreshCw,
   CreditCard, ChevronLeft, Loader2,
-  CheckCircle2, Minus, Plus, Trash2, Check, AlertCircle
+  CheckCircle2, Minus, Plus, Trash2
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -17,20 +17,7 @@ import Prix from '../../lib/components/Prix';
 import { useOfflinePanier } from '../../lib/hooks/useOfflinePanier';
 import { supprimerDeFileAttente } from '../../lib/offline/panierQueue';
 import { WifiOff, RotateCw } from 'lucide-react';
-
-// 🍞 TOAST -- même pattern que app/catalogue/page.tsx (à extraire en composant partagé
-// lors du passage sur le reste des pages). Remplace les erreurs muettes en console.
-type ToastType = "success" | "error" | "info";
-interface ToastState { id: number; message: string; type: ToastType }
-function useToast() {
-  const [toasts, setToasts] = useState<ToastState[]>([]);
-  const showToast = (message: string, type: ToastType = "info") => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3000);
-  };
-  return { toasts, showToast };
-}
+import { useToast, ToastContainer } from '../../lib/hooks/useToast';
 
 export default function PanierPage() {
   const router = useRouter();
@@ -528,27 +515,7 @@ export default function PanierPage() {
         )}
       </AnimatePresence>
 
-      {/* 🍞 TOASTS */}
-      <div className="fixed bottom-24 left-0 right-0 z-[140] flex flex-col items-center gap-2 px-4 pointer-events-none">
-        <AnimatePresence>
-          {toasts.map((t) => (
-            <motion.div
-              key={t.id}
-              initial={{ opacity: 0, y: 20, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.9 }}
-              transition={{ type: "spring", damping: 22, stiffness: 300 }}
-              className={`pointer-events-auto flex items-center gap-2 max-w-sm px-4 py-3 rounded-2xl shadow-xl text-sm font-medium text-white backdrop-blur-md ${
-                t.type === "success" ? "bg-emerald-600/95" : t.type === "error" ? "bg-red-600/95" : "bg-slate-800/95"
-              }`}
-            >
-              {t.type === "success" && <Check size={16} className="shrink-0" />}
-              {t.type === "error" && <AlertCircle size={16} className="shrink-0" />}
-              {t.message}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }
