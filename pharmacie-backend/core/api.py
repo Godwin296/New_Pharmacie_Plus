@@ -702,6 +702,49 @@ def api_panier(request):
     return Response(CommandeClientSerializer(commande).data)
 
 
+@api_view(['PATCH', 'DELETE'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_panier_item(request, item_id):
+    """
+    🆕 (30/07) Modifier la quantité d'un article du panier (PATCH) ou le retirer entièrement
+    (DELETE) -- fonctionnalité absente jusqu'ici : seul un ajout/incrément existait
+    (api_panier POST), impossible de corriger une quantité ou annuler un article sans
+    vider tout le panier. Même garde-fous que api_panier : uniquement le propriétaire du
+    panier, uniquement tant que la commande n'est pas déjà soumise en paiement.
+    """
+    client_instance, client_field = resoudre_identite_client(request.user)
+    if client_instance is None:
+        return Response({"error": "Réservé aux comptes clients"}, status=403)
+
+    STATUTS_PANIER_MODIFIABLE = ("en_cours", "attente_validation")
+    item = get_object_or_404(
+        ItemCommande,
+        id=item_id,
+        commande__statut__in=STATUTS_PANIER_MODIFIABLE,
+        **{f"commande__{client_field}": client_instance},
+    )
+
+    if request.method == 'DELETE':
+        item.delete()
+        return Response(CommandeClientSerializer(item.commande).data)
+
+    # PATCH : ajuste la quantité (remplace, ne s'additionne pas comme le POST de api_panier)
+    try:
+        qte = int(request.data.get('quantite'))
+        if qte <= 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return Response({"error": "Quantité invalide"}, status=400)
+
+    if qte > item.produit.quantite:
+        return Response({"error": "Stock insuffisant"}, status=400)
+
+    item.quantite = qte
+    item.save()
+    return Response(CommandeClientSerializer(item.commande).data)
+
+
 @api_view(['POST'])
 @authentication_classes([ClientOrStaffJWTAuthentication])
 @permission_classes([IsAuthenticated])
