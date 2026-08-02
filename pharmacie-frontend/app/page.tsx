@@ -1,35 +1,54 @@
 "use client";
 import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { LogIn, UserPlus, ShieldCheck, Pill, Truck, Smartphone, ShoppingCart, ClipboardList } from 'lucide-react';
+import { motion } from 'framer-motion';
+import {
+  LogIn, UserPlus, ShieldCheck, Pill, ShoppingCart, ClipboardList,
+  MapPin, Phone, PackageCheck, Clock, Loader2, ArrowRight,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import apiClient from '../lib/apiClient';
-import { PharmacyIcon } from '../components/PharmacyIcon';
-import { PharmacyBrandName } from '../components/PharmacyBrandName';
-import { PulseLine } from '../components/PulseLine';
+import { useConfigPharmacie } from '../lib/context/ConfigPharmacieContext';
+import Prix from '../lib/components/Prix';
 
-// 🎨 REFONTE (01/08, v2) : la version précédente traitait cet écran comme un mini-dashboard
-// client (cartes de statistiques -- nombre de commandes, montant dépensé). Ce n'est pas ce
-// qu'est cette page : `/` est le PREMIER CONTACT de quiconque arrive sur le sous-domaine
-// d'UNE pharmacie précise (dupont.localhost, martin.localhost...) -- visiteur anonyme ou
-// client déjà connecté. C'est une vitrine d'accueil pour CETTE pharmacie, pas un tableau de
-// bord personnel (ça, c'est le rôle de /profil et /commandes). Reconstruit sur le même
-// langage visuel immersif que le hero du site marketing (pharmacie-marketing/components/Hero.tsx)
-// -- fond bg-brand-deep, halos, tracé ECG, révélation du titre mot par mot -- pour que la
-// transition site vitrine -> app ne se voie pas, plutôt que le fond clair "écran de
-// paramètres" qu'avait la version précédente.
-const messages = [
-  { icon: Pill, texte: "Commandez vos médicaments en ligne, retirez en pharmacie" },
-  { icon: Truck, texte: "Suivez votre commande en temps réel, du panier au retrait" },
-  { icon: Smartphone, texte: "Payez par Orange Money ou MTN MoMo, vérifié par la pharmacie" },
-];
+// 🎨 REFONTE (30/07, v3) : la v2 avait recopié quasi telle quelle le Hero du site
+// marketing (fond bg-brand-deep, halos, tracé ECG, carrousel de slogans génériques) sur
+// l'écran d'accueil RÉEL de l'app. Deux problèmes concrets remontés : (1) rupture visuelle
+// brutale en quittant cet écran sombre pour le catalogue, clair, comme tout le reste de
+// l'app -- exactement le problème qu'on avait corrigé partout ailleurs ; (2) aucune
+// information réellement propre au sous-domaine visité : les 3 slogans tournants
+// ("Suivez votre commande en temps réel"...) sont identiques pour dupont.localhost et
+// martin.localhost, donc ne montrent rien de spécifique à CETTE pharmacie.
+//
+// v3 : thème clair (cohérent avec catalogue/panier/produit), et deux informations
+// réellement propres au tenant, déjà chargées sans appel réseau supplémentaire :
+// - adresse + téléphone (PharmacieConfig, déjà en cache Redis 1h via ConfigPharmacieContext)
+// - pour un client connecté, sa VRAIE dernière commande (statut réel), pas un texte générique
+
+const STATUT_INFO: Record<string, { label: string; couleur: string }> = {
+  en_cours: { label: 'Panier en cours', couleur: 'text-blue-600 dark:text-blue-400' },
+  attente_validation: { label: 'Ordonnance en vérification', couleur: 'text-amber-600 dark:text-amber-400' },
+  paiement_a_verifier: { label: 'Paiement en cours de vérification', couleur: 'text-amber-600 dark:text-amber-400' },
+  payee_a_retirer: { label: 'Prête à retirer au guichet', couleur: 'text-emerald-600 dark:text-emerald-400' },
+  retiree: { label: 'Retirée', couleur: 'text-slate-500' },
+  payee: { label: 'Payée', couleur: 'text-emerald-600 dark:text-emerald-400' },
+  annulee: { label: 'Annulée', couleur: 'text-red-500' },
+};
+
+interface DerniereCommande {
+  id: number;
+  statut: string;
+  total_general: number;
+  items: { id: number }[];
+}
 
 export default function HomePage() {
   const router = useRouter();
+  const { config } = useConfigPharmacie();
   const [statutSession, setStatutSession] = useState<'verification' | 'visiteur' | 'client'>('verification');
   const [prenomClient, setPrenomClient] = useState<string | null>(null);
-  const [messageIndex, setMessageIndex] = useState(0);
+  const [derniereCommande, setDerniereCommande] = useState<DerniereCommande | null>(null);
+  const [chargementCommande, setChargementCommande] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -45,125 +64,118 @@ export default function HomePage() {
     apiClient.get('/api/v1/client/me/')
       .then((res) => setPrenomClient(res.data?.nom?.split(' ')[0] || null))
       .catch(() => {});
-  }, [router]);
 
-  useEffect(() => {
-    const timer = setInterval(() => setMessageIndex((i) => (i + 1) % messages.length), 3800);
-    return () => clearInterval(timer);
-  }, []);
+    // 📦 Une seule requête, réutilise /api/commandes/ (déjà consommé par /commandes,
+    // aucune nouvelle route) -- la première entrée est la plus récente (order by -date
+    // côté backend), qu'elle soit encore un panier en cours ou déjà traitée.
+    setChargementCommande(true);
+    apiClient.get('/api/commandes/')
+      .then((res) => {
+        const liste: DerniereCommande[] = res.data || [];
+        const derniere = liste.find((c) => c.items && c.items.length > 0);
+        setDerniereCommande(derniere || null);
+      })
+      .catch(() => {})
+      .finally(() => setChargementCommande(false));
+  }, [router]);
 
   // Rien à afficher pendant la vérification de session -- évite un flash de l'accueil avant
   // la redirection pour un membre du personnel déjà connecté.
   if (statutSession === 'verification') {
-    return <div className="min-h-screen bg-brand-deep" />;
+    return <div className="min-h-screen bg-slate-50 dark:bg-[#050e0c]" />;
   }
 
-  const MessageIcon = messages[messageIndex].icon;
   const estClient = statutSession === 'client';
+  const statutInfo = derniereCommande ? STATUT_INFO[derniereCommande.statut] : null;
 
   return (
-    <div className="relative min-h-screen w-full bg-brand-deep overflow-hidden flex flex-col">
-      {/* 🌿 Même langage visuel que le hero du site marketing : halos flous + tracé ECG
-          discret en fond -- une pharmacie n'est pas une app générique, ce motif le rappelle
-          sans être appuyé. */}
-      <motion.div
-        aria-hidden
-        animate={{ opacity: [0.5, 0.75, 0.5] }}
-        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-        className="pointer-events-none absolute -top-32 left-1/2 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-emerald-500/25 blur-[100px]"
-      />
-      <div className="pointer-events-none absolute top-1/3 -right-24 h-[340px] w-[340px] rounded-full bg-blue-500/15 blur-[100px]" />
-      <div className="pointer-events-none absolute left-0 right-0 top-[22%] opacity-40">
-        <PulseLine className="w-full h-16" stroke="#67d29e" width={480} height={80} />
-      </div>
+    <div className="min-h-screen w-full bg-slate-50 dark:bg-[#050e0c] flex flex-col">
+      <div className="flex-grow flex flex-col items-center px-6 pt-6 pb-12">
+        <div className="w-full max-w-md">
 
-      <div className="relative z-10 flex-grow flex flex-col items-center justify-center px-6 py-16">
-        <div className="w-full max-w-md text-center">
-
-          {/* 🟢 Badge de confiance discret -- vrai (l'app tourne bel et bien), pas un chiffre
-              inventé. Reprend le motif du site marketing (point qui pulse + libellé). */}
-          <motion.span
-            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-[11px] font-mono uppercase tracking-[0.15em] text-emerald-300 mb-8"
-          >
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-            </span>
-            Pharmacie en ligne
-          </motion.span>
-
-          <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <div className="relative inline-block mb-6">
-              <motion.div
-                animate={{ scale: [1, 1.1, 1], opacity: [0.35, 0.55, 0.35] }}
-                transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
-                className="absolute inset-0 bg-emerald-400/40 rounded-[2rem] blur-xl"
-              />
-              <div className="relative h-24 w-24 bg-white rounded-[2rem] flex items-center justify-center shadow-2xl shadow-black/20 mx-auto p-4">
-                <PharmacyIcon className="w-full h-full object-cover" alt="Pharmacie+" />
-              </div>
-            </div>
-
-            {/* 👋 Pour un client connu : accueil personnel en guise de titre. Pour un
-                visiteur : la promesse de l'app, pas juste le nom déjà lisible sur le logo
-                juste au-dessus -- éviter la répétition inutile. */}
-            <h1 className="font-display text-3xl font-bold text-white tracking-tight leading-tight">
+          {/* 👋 Salutation -- le logo/nom/tagline sont déjà dans le bandeau partagé
+              au-dessus (désormais visible sur cette page, cf. isSpecialRoute), pas besoin
+              de les répéter ici. */}
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-5">
+            <h1 className="font-display text-2xl font-bold text-slate-800 dark:text-white tracking-tight">
               {estClient
-                ? (prenomClient ? <>Bon retour, {prenomClient}</> : 'Bon retour parmi nous')
-                : <>Vos médicaments,<br />à portée de main</>}
+                ? (prenomClient ? <>Bon retour, {prenomClient} 👋</> : 'Bon retour parmi nous 👋')
+                : 'Bienvenue'}
             </h1>
-            <p className="text-white/50 text-sm mt-2 flex items-center justify-center gap-1.5">
-              <PharmacyBrandName /> · Votre santé, notre priorité
+            <p className="text-slate-400 text-sm mt-1">
+              {estClient ? 'Voici ce qui vous attend aujourd\u2019hui.' : 'Découvrez ce que propose cette pharmacie en ligne.'}
             </p>
           </motion.div>
 
-          {/* 💬 Message tournant -- 3 capacités réelles de l'app, pas des slogans creux */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-            className="bg-white/[0.06] border border-white/10 rounded-[28px] p-6 mt-8 backdrop-blur-sm min-h-[104px] flex items-center"
-          >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={messageIndex}
-                initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
-                transition={{ duration: 0.35 }}
-                className="flex items-center gap-4 text-left"
-              >
-                <div className="h-11 w-11 shrink-0 rounded-2xl bg-emerald-400/15 flex items-center justify-center text-emerald-300">
-                  <MessageIcon size={20} />
+          {/* 📍 Carte pharmacie -- adresse + téléphone RÉELS de ce tenant précis, jamais
+              montrés nulle part ailleurs dans l'app jusqu'ici. Numéro directement appelable
+              (tel:), pas juste un texte affiché. */}
+          {(config?.adresse || config?.telephone) && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+              className="bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-[24px] p-5 mb-4 space-y-2.5"
+            >
+              {config?.adresse && (
+                <div className="flex items-start gap-2.5">
+                  <MapPin size={16} className="text-emerald-500 mt-0.5 shrink-0" />
+                  <p className="text-[13px] text-slate-600 dark:text-slate-300 leading-snug">{config.adresse}</p>
                 </div>
-                <p className="text-sm font-medium text-white/80 leading-snug">
-                  {messages[messageIndex].texte}
-                </p>
-              </motion.div>
-            </AnimatePresence>
-          </motion.div>
+              )}
+              {config?.telephone && (
+                <a href={`tel:${config.telephone}`} className="flex items-center gap-2.5 no-underline">
+                  <Phone size={16} className="text-emerald-500 shrink-0" />
+                  <span className="text-[13px] font-semibold text-emerald-600 dark:text-emerald-400">{config.telephone}</span>
+                </a>
+              )}
+            </motion.div>
+          )}
 
-          <div className="flex justify-center gap-1.5 mt-4">
-            {messages.map((_, i) => (
-              <span key={i} className={`h-1.5 rounded-full transition-all ${i === messageIndex ? 'w-5 bg-emerald-400' : 'w-1.5 bg-white/20'}`} />
-            ))}
-          </div>
+          {/* 🧾 Statut RÉEL de la dernière commande du client -- pas un carrousel de slogans.
+              N'apparaît que s'il y a réellement quelque chose à montrer. */}
+          {estClient && chargementCommande && (
+            <div className="flex justify-center py-6">
+              <Loader2 size={20} className="animate-spin text-emerald-500" />
+            </div>
+          )}
+          {estClient && !chargementCommande && derniereCommande && statutInfo && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+            >
+              <Link
+                href={derniereCommande.statut === 'en_cours' ? '/panier' : '/commandes'}
+                className="flex items-center gap-3.5 bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-[24px] p-5 mb-6 no-underline transition-colors active:scale-[0.99]"
+              >
+                <div className="h-11 w-11 shrink-0 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
+                  <PackageCheck size={20} className="text-emerald-500" />
+                </div>
+                <div className="min-w-0 flex-grow">
+                  <p className={`text-[12px] font-semibold ${statutInfo.couleur}`}>{statutInfo.label}</p>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">
+                    Commande #{derniereCommande.id} · <Prix montant={derniereCommande.total_general} />
+                  </p>
+                </div>
+                <ArrowRight size={16} className="text-slate-300 shrink-0" />
+              </Link>
+            </motion.div>
+          )}
 
-          {/* 🎯 ACTIONS -- cibles tactiles 44px+, retour au toucher, pas de survol requis.
-              Le catalogue est accessible SANS connexion (core/api.py::api_catalogue,
-              AllowAny) : c'est donc l'action principale pour tout le monde, visiteur ou
-              client -- la vraie porte d'entrée, pas la connexion. */}
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mt-8 space-y-3">
+          {/* 🎯 ACTIONS -- cibles tactiles 44px+, retour au toucher. Le catalogue est
+              accessible SANS connexion (core/api.py::api_catalogue, AllowAny) : c'est donc
+              la vraie porte d'entrée pour tout le monde, visiteur ou client. */}
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className={`space-y-3 ${(config?.adresse || config?.telephone) ? '' : 'mt-2'}`}>
             <Link
               href="/catalogue"
-              className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-[0_0_30px_-6px_rgba(16,185,129,0.5)]"
+              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-colors active:scale-[0.98] shadow-lg shadow-emerald-500/20"
             >
               <Pill size={18} /> Parcourir le catalogue
             </Link>
 
             {estClient ? (
               <div className="grid grid-cols-2 gap-3">
-                <Link href="/panier" className="no-underline bg-white/[0.06] border border-white/10 rounded-2xl py-4 flex items-center justify-center gap-2 text-white/80 font-semibold text-sm active:scale-[0.98] transition-all">
+                <Link href="/panier" className="no-underline bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-2xl py-4 flex items-center justify-center gap-2 text-slate-700 dark:text-slate-200 font-semibold text-sm active:scale-[0.98] transition-transform">
                   <ShoppingCart size={17} /> Mon panier
                 </Link>
-                <Link href="/commandes" className="no-underline bg-white/[0.06] border border-white/10 rounded-2xl py-4 flex items-center justify-center gap-2 text-white/80 font-semibold text-sm active:scale-[0.98] transition-all">
+                <Link href="/commandes" className="no-underline bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-2xl py-4 flex items-center justify-center gap-2 text-slate-700 dark:text-slate-200 font-semibold text-sm active:scale-[0.98] transition-transform">
                   <ClipboardList size={17} /> Commandes
                 </Link>
               </div>
@@ -171,13 +183,13 @@ export default function HomePage() {
               <div className="grid grid-cols-2 gap-3">
                 <Link
                   href="/login"
-                  className="w-full bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                  className="w-full bg-white dark:bg-white/[0.04] hover:bg-slate-50 text-slate-700 dark:text-slate-200 border border-slate-100 dark:border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
                 >
                   <LogIn size={17} /> Connexion
                 </Link>
                 <Link
                   href="/register"
-                  className="w-full bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                  className="w-full bg-white dark:bg-white/[0.04] hover:bg-slate-50 text-slate-700 dark:text-slate-200 border border-slate-100 dark:border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
                 >
                   <UserPlus size={17} /> Créer un compte
                 </Link>
@@ -186,10 +198,10 @@ export default function HomePage() {
           </motion.div>
 
           <motion.p
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }}
-            className="flex items-center justify-center gap-1.5 text-xs font-medium text-white/40 mt-6"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
+            className="flex items-center justify-center gap-1.5 text-xs font-medium text-slate-400 mt-6"
           >
-            <ShieldCheck size={14} className="text-emerald-400" /> Vos données sont sécurisées avec nous
+            <ShieldCheck size={14} className="text-emerald-500" /> Vos données sont sécurisées avec nous
           </motion.p>
         </div>
       </div>

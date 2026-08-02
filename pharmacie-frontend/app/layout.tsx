@@ -44,7 +44,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // panier"). Sans cette exclusion, la nav du bas générique du client (elle aussi fixed
   // bottom-0) se serait superposée exactement à cet endroit -- collision visuelle directe,
   // deux barres au même endroit à l'écran.
-  const isSpecialRoute = pathname.startsWith('/admin') || pathname.startsWith('/caisse') || pathname.startsWith('/produit') || pathname === '/login' || pathname === '/register' || pathname === '/';
+  // 🔧 (30/07, v3) : '/' retiré de cette liste -- l'ancien accueil (plein-écran immersif,
+  // façon Hero du site marketing) justifiait de masquer le bandeau/la nav du bas. Le nouvel
+  // accueil (fidèle à la maquette du 25/07) les garde au contraire : hamburger, logo, panier
+  // en haut ; Accueil/Catalogue/Panier/Commandes/Profil en bas pour un client connecté.
+  const isSpecialRoute = pathname.startsWith('/admin') || pathname.startsWith('/caisse') || pathname.startsWith('/produit') || pathname === '/login' || pathname === '/register';
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
