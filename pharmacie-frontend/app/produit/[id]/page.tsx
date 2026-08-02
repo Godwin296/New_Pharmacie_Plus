@@ -1,10 +1,10 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, Pill, ShoppingCart, Plus, Minus, Loader2,
-  ShieldAlert, Package, Tag, Layers, Wallet, Boxes,
+  ShieldAlert, Package, Tag, Wallet, Boxes, ArrowDownCircle, ArrowUpCircle,
 } from "lucide-react";
 
 import apiClient from "../../../lib/apiClient";
@@ -53,6 +53,7 @@ export default function ProduitDetailPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [quantite, setQuantite] = useState(1);
   const [ajoutEnCours, setAjoutEnCours] = useState(false);
+  const [onglet, setOnglet] = useState<"informations" | "details" | "historique">("informations");
 
   useEffect(() => {
     setIsAdmin(typeof window !== "undefined" && localStorage.getItem("user_role") === "admin");
@@ -214,58 +215,65 @@ export default function ProduitDetailPage() {
 
         <Prix montant={produit.prix} className="font-display text-2xl font-bold text-emerald-600 dark:text-emerald-400 block mb-5" />
 
-        {/* 📄 Description */}
-        {produit.description && (
-          <div className="mb-5">
-            <h3 className="font-display text-sm font-bold text-slate-800 dark:text-white mb-2">Description</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{produit.description}</p>
-          </div>
-        )}
+        {/* 📊 GRILLE DE STATS -- fidèle à la maquette (Stock actuel / Prix d'achat /
+            Prix de vente / Catégorie). Pour un client, "Prix d'achat" n'existe pas dans la
+            réponse (retiré côté serializer, cf. `prix_achat?`) donc la grille passe
+            naturellement à 2 cellules au lieu de forcer un "--" vide -- et "Prix de vente"
+            n'a pas d'intérêt à être répété ici pour un client puisqu'il est déjà affiché en
+            grand juste au-dessus ; pour un admin en revanche, l'avoir côte à côte avec le
+            prix d'achat permet de visualiser la marge d'un coup d'œil, d'où sa présence
+            uniquement dans ce cas. */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <StatCell icon={Boxes} label="Stock actuel" value={`${produit.quantite} unités`} />
+          {isAdmin && produit.prix_achat != null && (
+            <StatCell icon={Wallet} label="Prix d'achat" value={<Prix montant={produit.prix_achat} />} />
+          )}
+          {isAdmin && (
+            <StatCell icon={Tag} label="Prix de vente" value={<Prix montant={produit.prix} />} />
+          )}
+          <StatCell icon={Package} label="Catégorie" value={produit.categorie_display || "—"} />
+        </div>
 
-        {/* 🔐 Bloc réservé à l'admin -- prix d'achat (marge), stock exact, péremption.
-            `produit.prix_achat` n'existe dans la réponse QUE si le serializer a jugé
-            l'appelant admin (voir core/serializers.py) ; `isAdmin` (déclaratif, basé sur
-            le rôle stocké en local) sert seulement à décider d'afficher ce bloc, la vraie
-            barrière de sécurité reste côté backend. */}
-        {isAdmin && (
-          <div className="mb-6 p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-100 dark:border-white/10">
-            <h3 className="font-display text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-              Informations de gestion
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-start gap-2">
-                <Boxes size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-[10px] text-slate-400">Stock actuel</p>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{produit.quantite} unités</p>
-                </div>
-              </div>
-              {produit.prix_achat != null && (
-                <div className="flex items-start gap-2">
-                  <Wallet size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-400">Prix d'achat</p>
-                    <Prix montant={produit.prix_achat} className="text-sm font-semibold text-slate-700 dark:text-slate-200" />
-                  </div>
-                </div>
+        {/* 📑 ONGLETS -- Informations / Détails / (Historique, admin uniquement) */}
+        <div className="flex gap-5 border-b border-slate-100 dark:border-white/10 mb-4">
+          {(["informations", "details", ...(isAdmin ? ["historique"] as const : [])] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setOnglet(tab)}
+              className={`relative pb-3 text-[13px] font-semibold border-none bg-transparent cursor-pointer transition-colors ${
+                onglet === tab ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"
+              }`}
+            >
+              {tab === "informations" ? "Informations" : tab === "details" ? "Détails" : "Historique"}
+              {onglet === tab && (
+                <motion.div layoutId="onglet-actif" className="absolute -bottom-px left-0 right-0 h-[2px] bg-emerald-500 rounded-full" />
               )}
-              <div className="flex items-start gap-2">
-                <Tag size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-[10px] text-slate-400">Référence</p>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{produit.identifiant}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Layers size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-[10px] text-slate-400">Seuil d'alerte</p>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{produit.seuil_alerte} unités</p>
-                </div>
-              </div>
+            </button>
+          ))}
+        </div>
+
+        <div className="mb-8 min-h-[80px]">
+          {onglet === "informations" && (
+            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+              {produit.description || "Aucune information complémentaire renseignée pour ce produit."}
+            </p>
+          )}
+
+          {onglet === "details" && (
+            <div className="space-y-3">
+              <DetailRow label="Laboratoire" value={produit.laboratoire || "Générique"} />
+              <DetailRow label="Référence" value={produit.identifiant} />
+              {isAdmin && <DetailRow label="Seuil d'alerte" value={`${produit.seuil_alerte} unités`} />}
+              {isAdmin && produit.date_expiration && (
+                <DetailRow label="Péremption" value={new Date(produit.date_expiration).toLocaleDateString("fr-FR")} />
+              )}
             </div>
-          </div>
-        )}
+          )}
+
+          {onglet === "historique" && isAdmin && (
+            <HistoriqueMouvements produitId={produit.id} />
+          )}
+        </div>
       </div>
 
       {/* 🧾 Barre d'action fixe en bas -- zone accessible au pouce, cohérent avec la
@@ -313,6 +321,92 @@ export default function ProduitDetailPage() {
       </div>
 
       <ToastContainer toasts={toasts} />
+    </div>
+  );
+}
+
+// 🧩 Cellule de la grille de stats (Stock actuel / Prix d'achat / Prix de vente / Catégorie)
+function StatCell({ icon: Icon, label, value }: { icon: any; label: string; value: ReactNode }) {
+  return (
+    <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-100 dark:border-white/10">
+      <Icon size={16} className="text-emerald-500 mt-0.5 shrink-0" />
+      <div className="min-w-0">
+        <p className="text-[10px] text-slate-400">{label}</p>
+        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+// 🧩 Ligne simple de l'onglet "Détails"
+function DetailRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-slate-50 dark:border-white/[0.06] last:border-none">
+      <span className="text-[13px] text-slate-400">{label}</span>
+      <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">{value}</span>
+    </div>
+  );
+}
+
+interface Mouvement {
+  id: number;
+  type: "entree" | "sortie";
+  quantite: number;
+  date: string;
+  auteur_nom: string;
+  note: string | null;
+}
+
+// 🆕 (30/07) Onglet "Historique" -- fetch PARESSEUX : n'appelle le backend que si l'admin
+// ouvre réellement cet onglet (pas au chargement de la page), cohérent avec l'objectif de
+// ne pas taper la base pour rien à chaque action. Résultat déjà mis en cache 30s côté
+// backend (voir api_produit_historique) en plus de ça.
+function HistoriqueMouvements({ produitId }: { produitId: number }) {
+  const [mouvements, setMouvements] = useState<Mouvement[] | null>(null);
+  const [erreur, setErreur] = useState(false);
+
+  useEffect(() => {
+    let annule = false;
+    apiClient
+      .get(`/api/produits/${produitId}/historique/`)
+      .then((res) => { if (!annule) setMouvements(res.data); })
+      .catch(() => { if (!annule) setErreur(true); });
+    return () => { annule = true; };
+  }, [produitId]);
+
+  if (erreur) {
+    return <p className="text-sm text-slate-400 text-center py-6">Historique indisponible pour le moment.</p>;
+  }
+  if (mouvements === null) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 size={20} className="animate-spin text-emerald-500" />
+      </div>
+    );
+  }
+  if (mouvements.length === 0) {
+    return <p className="text-sm text-slate-400 text-center py-6">Aucun mouvement enregistré pour ce produit.</p>;
+  }
+
+  return (
+    <div className="space-y-1">
+      {mouvements.map((m) => {
+        const Icon = m.type === "entree" ? ArrowDownCircle : ArrowUpCircle;
+        return (
+          <div key={m.id} className="flex items-center gap-3 py-2.5 border-b border-slate-50 dark:border-white/[0.06] last:border-none">
+            <Icon size={18} className={m.type === "entree" ? "text-emerald-500 shrink-0" : "text-amber-500 shrink-0"} />
+            <div className="min-w-0 flex-grow">
+              <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
+                {m.type === "entree" ? "Entrée" : "Sortie"} de {m.quantite} unité{m.quantite > 1 ? "s" : ""}
+              </p>
+              <p className="text-[11px] text-slate-400 truncate">
+                {new Date(m.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })} · {m.auteur_nom}
+                {m.note ? ` · ${m.note}` : ""}
+              </p>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

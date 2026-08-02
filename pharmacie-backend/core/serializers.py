@@ -135,6 +135,22 @@ class CommandeClientSerializer(CommandeSerializer):
         fields = [f for f in CommandeSerializer.Meta.fields if f != 'agent_validateur_nom']
 
 
+# 🆕 (30/07) Historique des mouvements de stock d'un produit -- le modèle Mouvement_stock
+# existait déjà et est alimenté automatiquement (voir Produit.save()/LotProduit dans
+# models.py, et core/services_prediction.py qui s'en sert déjà pour les prédictions),
+# mais rien ne l'exposait encore au frontend. Réservé à l'admin (vue api_produit_historique),
+# comme prix_achat -- ce ne sont pas des informations à montrer à un client.
+class MouvementStockSerializer(serializers.ModelSerializer):
+    auteur_nom = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Mouvement_stock
+        fields = ['id', 'type', 'quantite', 'date', 'auteur_nom', 'note']
+
+    def get_auteur_nom(self, obj):
+        return obj.auteur.username if obj.auteur else "Système"
+
+
 class ProduitSerializer(serializers.ModelSerializer):
     statut_stock_label = serializers.SerializerMethodField()
     jours_restants = serializers.ReadOnlyField()

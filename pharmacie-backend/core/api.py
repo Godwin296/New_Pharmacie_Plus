@@ -23,7 +23,8 @@ from django.utils import timezone
 from .models import Produit, Commande, ItemCommande, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog, LotProduit
 from .serializers import (
     ProduitSerializer, CommandeSerializer, CommandeClientSerializer,
-    PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer
+    PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer,
+    MouvementStockSerializer
 )
 from .validators import valider_et_desinfecter_ordonnance, valider_et_desinfecter_photo_produit
 from .chiffrement import chiffrer_contenu, dechiffrer_si_necessaire
@@ -552,6 +553,35 @@ def api_produit_detail(request, produit_id):
     serializer = ProduitSerializer(produit, context={'request': request})
     cache_set(cache_key_base, serializer.data, timeout=60)
     return Response(serializer.data)
+
+
+@api_view(['GET'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_produit_historique(request, produit_id):
+    """
+    🆕 (30/07) Historique des mouvements de stock (entrées/sorties) d'un produit --
+    Mouvement_stock existe et est alimenté depuis longtemps (cf. services_prediction.py),
+    mais rien ne l'exposait au frontend jusqu'ici. Réservé à l'admin, comme prix_achat :
+    ce n'est pas une information à montrer à un client (qui a fait quelle vente/réception,
+    à quelle date). Mis en cache 30s -- courte durée volontaire, un historique de stock a
+    plus de valeur à jour qu'une fiche produit qui change rarement.
+    """
+    est_admin_tenant = bool(
+        request.user and request.user.is_authenticated and getattr(request.user, 'is_superuser', False)
+    )
+    if not est_admin_tenant:
+        return Response({"error": "Réservé aux administrateurs"}, status=403)
+
+    cache_key = f"produit_historique_{produit_id}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return Response(cached)
+
+    mouvements = Mouvement_stock.objects.filter(produit_id=produit_id).select_related('auteur').order_by('-date')[:20]
+    data = MouvementStockSerializer(mouvements, many=True).data
+    cache_set(cache_key, data, timeout=30)
+    return Response(data)
 
 
 # --- 🚀 MODE OFFLINE (session 12/07, brique 2/4) : SYNCHRO DELTA DU CATALOGUE ---

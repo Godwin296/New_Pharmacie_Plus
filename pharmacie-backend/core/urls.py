@@ -18,6 +18,7 @@ urlpatterns = [
     path("catalogue/", api.api_catalogue, name="api_catalogue"), # Résolu : Plus de doublon
     path("catalogue/sync/", api.api_catalogue_sync, name="api_catalogue_sync"), # 🚀 Mode offline (brique 2/4)
     path("produits/<int:produit_id>/", api.api_produit_detail, name="api_produit_detail"), # 🆕 Écran détail produit (refonte UI/UX)
+    path("produits/<int:produit_id>/historique/", api.api_produit_historique, name="api_produit_historique"),
     path("panier/", api.api_panier, name="api_panier"),
     path("panier/item/<int:item_id>/", api.api_panier_item, name="api_panier_item"),
     path("commandes/", api.api_mes_commandes, name="api_mes_commandes"),
