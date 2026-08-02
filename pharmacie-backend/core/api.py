@@ -23,7 +23,8 @@ from django.utils import timezone
 from .models import Produit, Commande, ItemCommande, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog, LotProduit
 from .serializers import (
     ProduitSerializer, CommandeSerializer, CommandeClientSerializer,
-    PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer
+    PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer,
+    MouvementStockSerializer
 )
 from .validators import valider_et_desinfecter_ordonnance, valider_et_desinfecter_photo_produit
 from .chiffrement import chiffrer_contenu, dechiffrer_si_necessaire
@@ -554,6 +555,35 @@ def api_produit_detail(request, produit_id):
     return Response(serializer.data)
 
 
+@api_view(['GET'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_produit_historique(request, produit_id):
+    """
+    🆕 (30/07) Historique des mouvements de stock (entrées/sorties) d'un produit --
+    Mouvement_stock existe et est alimenté depuis longtemps (cf. services_prediction.py),
+    mais rien ne l'exposait au frontend jusqu'ici. Réservé à l'admin, comme prix_achat :
+    ce n'est pas une information à montrer à un client (qui a fait quelle vente/réception,
+    à quelle date). Mis en cache 30s -- courte durée volontaire, un historique de stock a
+    plus de valeur à jour qu'une fiche produit qui change rarement.
+    """
+    est_admin_tenant = bool(
+        request.user and request.user.is_authenticated and getattr(request.user, 'is_superuser', False)
+    )
+    if not est_admin_tenant:
+        return Response({"error": "Réservé aux administrateurs"}, status=403)
+
+    cache_key = f"produit_historique_{produit_id}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return Response(cached)
+
+    mouvements = Mouvement_stock.objects.filter(produit_id=produit_id).select_related('auteur').order_by('-date')[:20]
+    data = MouvementStockSerializer(mouvements, many=True).data
+    cache_set(cache_key, data, timeout=30)
+    return Response(data)
+
+
 # --- 🚀 MODE OFFLINE (session 12/07, brique 2/4) : SYNCHRO DELTA DU CATALOGUE ---
 DATE_MODIFICATION_MIN = "1970-01-01T00:00:00+00:00"  # sentinelle "depuis toujours" (1er sync)
 CATALOGUE_SYNC_BATCH_SIZE = 300  # cf. docstring api_catalogue_sync : compromis payload/round-trips
@@ -749,6 +779,49 @@ def api_panier(request):
     # Renvoie le panier courant mis à jour si aucun paramètre ?id n'a été fourni
     # 🔐 On arrive ici uniquement côté client (le staff est bloqué en ligne 177) -> serializer public
     return Response(CommandeClientSerializer(commande).data)
+
+
+@api_view(['PATCH', 'DELETE'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_panier_item(request, item_id):
+    """
+    🆕 (30/07) Modifier la quantité d'un article du panier (PATCH) ou le retirer entièrement
+    (DELETE) -- fonctionnalité absente jusqu'ici : seul un ajout/incrément existait
+    (api_panier POST), impossible de corriger une quantité ou annuler un article sans
+    vider tout le panier. Même garde-fous que api_panier : uniquement le propriétaire du
+    panier, uniquement tant que la commande n'est pas déjà soumise en paiement.
+    """
+    client_instance, client_field = resoudre_identite_client(request.user)
+    if client_instance is None:
+        return Response({"error": "Réservé aux comptes clients"}, status=403)
+
+    STATUTS_PANIER_MODIFIABLE = ("en_cours", "attente_validation")
+    item = get_object_or_404(
+        ItemCommande,
+        id=item_id,
+        commande__statut__in=STATUTS_PANIER_MODIFIABLE,
+        **{f"commande__{client_field}": client_instance},
+    )
+
+    if request.method == 'DELETE':
+        item.delete()
+        return Response(CommandeClientSerializer(item.commande).data)
+
+    # PATCH : ajuste la quantité (remplace, ne s'additionne pas comme le POST de api_panier)
+    try:
+        qte = int(request.data.get('quantite'))
+        if qte <= 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return Response({"error": "Quantité invalide"}, status=400)
+
+    if qte > item.produit.quantite:
+        return Response({"error": "Stock insuffisant"}, status=400)
+
+    item.quantite = qte
+    item.save()
+    return Response(CommandeClientSerializer(item.commande).data)
 
 
 @api_view(['POST'])
