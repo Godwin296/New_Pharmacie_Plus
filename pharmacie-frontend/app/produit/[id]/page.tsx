@@ -19,6 +19,7 @@ interface ProduitDetail {
   prix: number;
   prix_achat?: number | null; // 🔐 présent seulement si l'appelant est admin (voir serializers.py)
   categorie: string;
+  categorie_display?: string;
   quantite: number;
   seuil_alerte: number;
   laboratoire: string;
@@ -149,16 +150,16 @@ export default function ProduitDetailPage() {
       {/* 🔝 En-tête : flèche retour seule -- pas de bouton favori/partage qui ne ferait
           rien (aucun backend derrière), cf. règle "aucun bouton qui a l'air interactif
           mais ne fait rien". */}
-      <div className="sticky top-0 z-30 flex items-center px-4 py-3 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md">
+      <div className="sticky top-0 z-30 flex items-center px-4 py-3 bg-white/80 dark:bg-[#050e0c]/80 backdrop-blur-md">
         <button
           onClick={() => router.back()}
           aria-label="Retour"
-          className="h-11 w-11 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-none cursor-pointer active:scale-90 transition-transform"
+          className="h-11 w-11 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-200 border-none cursor-pointer active:scale-90 transition-transform"
         >
           <ArrowLeft size={20} />
         </button>
         <h1 className="flex-grow text-center font-display text-sm font-bold text-slate-800 dark:text-white truncate px-3">
-          Détail du produit
+          {produit.nom}
         </h1>
         <div className="h-11 w-11" /> {/* espaceur : garde le titre centré */}
       </div>
@@ -167,7 +168,7 @@ export default function ProduitDetailPage() {
         {/* 🖼️ Image produit */}
         <motion.div
           initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-          className="w-full aspect-square bg-emerald-50 dark:bg-slate-900 rounded-[28px] flex items-center justify-center overflow-hidden mb-5"
+          className="w-full aspect-square bg-emerald-50 dark:bg-emerald-500/10 rounded-[28px] flex items-center justify-center overflow-hidden mb-5"
         >
           {produit.image ? (
             <img src={produit.image} alt={produit.nom} className="w-full h-full object-cover" />
@@ -175,6 +176,15 @@ export default function ProduitDetailPage() {
             <Pill size={64} className="text-emerald-300 dark:text-emerald-700" />
           )}
         </motion.div>
+
+        {/* 🏷️ Catégorie -- jamais affichée à l'utilisateur jusqu'ici (seul le laboratoire
+            l'était), alors que c'est l'information la plus rapide pour confirmer qu'on
+            regarde le bon type de produit avant même de lire le nom. */}
+        {produit.categorie_display && (
+          <span className="inline-block mb-2.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400">
+            {produit.categorie_display}
+          </span>
+        )}
 
         {/* 🏷️ Nom, laboratoire, badge stock */}
         <div className="flex items-start justify-between gap-3 mb-1">
@@ -191,9 +201,9 @@ export default function ProduitDetailPage() {
             {enRupture ? "Rupture" : stockFaible ? "Stock faible" : "En stock"}
           </span>
         </div>
-        <p className="text-sm text-slate-400 mb-3">
-          {produit.laboratoire || "Générique"}
-        </p>
+        {produit.laboratoire && (
+          <p className="text-sm text-slate-400 mb-3">{produit.laboratoire}</p>
+        )}
 
         {produit.ordonnance_obligatoire && (
           <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-2xl bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400">
@@ -207,7 +217,7 @@ export default function ProduitDetailPage() {
         {/* 📄 Description */}
         {produit.description && (
           <div className="mb-5">
-            <h3 className="font-display text-sm font-bold text-slate-800 dark:text-white mb-2">Informations</h3>
+            <h3 className="font-display text-sm font-bold text-slate-800 dark:text-white mb-2">Description</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{produit.description}</p>
           </div>
         )}
@@ -218,7 +228,7 @@ export default function ProduitDetailPage() {
             le rôle stocké en local) sert seulement à décider d'afficher ce bloc, la vraie
             barrière de sécurité reste côté backend. */}
         {isAdmin && (
-          <div className="mb-6 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+          <div className="mb-6 p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-100 dark:border-white/10">
             <h3 className="font-display text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
               Informations de gestion
             </h3>
@@ -261,16 +271,16 @@ export default function ProduitDetailPage() {
       {/* 🧾 Barre d'action fixe en bas -- zone accessible au pouce, cohérent avec la
           bottom nav déjà en place ailleurs dans l'app. */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 px-4 pt-3"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#050e0c]/95 backdrop-blur-md border-t border-slate-100 dark:border-white/10 px-4 pt-3"
         style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
       >
         <div className="max-w-md md:max-w-2xl mx-auto flex items-center gap-3">
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-2xl p-1">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/[0.06] rounded-2xl p-1">
             <button
               onClick={() => modifierQuantite(-1)}
               disabled={quantite <= 1}
               aria-label="Diminuer la quantité"
-              className="h-11 w-11 flex items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-none cursor-pointer active:scale-90 transition-transform disabled:opacity-30"
+              className="h-11 w-11 flex items-center justify-center rounded-xl bg-white dark:bg-white/[0.08] text-slate-600 dark:text-slate-300 border-none cursor-pointer active:scale-90 transition-transform disabled:opacity-30"
             >
               <Minus size={16} />
             </button>
@@ -279,7 +289,7 @@ export default function ProduitDetailPage() {
               onClick={() => modifierQuantite(1)}
               disabled={quantite >= produit.quantite}
               aria-label="Augmenter la quantité"
-              className="h-11 w-11 flex items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-none cursor-pointer active:scale-90 transition-transform disabled:opacity-30"
+              className="h-11 w-11 flex items-center justify-center rounded-xl bg-white dark:bg-white/[0.08] text-slate-600 dark:text-slate-300 border-none cursor-pointer active:scale-90 transition-transform disabled:opacity-30"
             >
               <Plus size={16} />
             </button>

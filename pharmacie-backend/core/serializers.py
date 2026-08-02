@@ -139,6 +139,13 @@ class ProduitSerializer(serializers.ModelSerializer):
     statut_stock_label = serializers.SerializerMethodField()
     jours_restants = serializers.ReadOnlyField()
     image = serializers.SerializerMethodField()
+    # 🆕 (30/07) categorie_display : libellé humain ('Antibiotiques') plutôt que le code brut
+    # stocké en base ('antibiotique') -- jusqu'ici seul /api/catalogue/ renvoyait la table de
+    # correspondance séparément (categories: {code: libellé}), ce qui obligeait tout écran
+    # consommant ProduitSerializer isolément (ex. page détail produit) à soit refaire un
+    # fetch juste pour ça, soit afficher le code brut. get_categorie_display() est la méthode
+    # native que Django génère automatiquement pour tout champ à choix (CATEGORIES).
+    categorie_display = serializers.CharField(source='get_categorie_display', read_only=True)
 
     class Meta:
         model = Produit
