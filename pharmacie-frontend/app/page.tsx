@@ -1,40 +1,60 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogIn, UserPlus, ShieldCheck, Pill, Truck, Smartphone, ShoppingCart, ClipboardList } from 'lucide-react';
+import { LogIn, UserPlus, ShieldCheck, Pill, Truck, Smartphone, ShoppingCart, ClipboardList, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import apiClient from '../lib/apiClient';
 import { PharmacyIcon } from '../components/PharmacyIcon';
 import { PharmacyBrandName } from '../components/PharmacyBrandName';
-import { PulseLine } from '../components/PulseLine';
 
-// 🎨 REFONTE (01/08, v2) : la version précédente traitait cet écran comme un mini-dashboard
-// client (cartes de statistiques -- nombre de commandes, montant dépensé). Ce n'est pas ce
-// qu'est cette page : `/` est le PREMIER CONTACT de quiconque arrive sur le sous-domaine
-// d'UNE pharmacie précise (dupont.localhost, martin.localhost...) -- visiteur anonyme ou
-// client déjà connecté. C'est une vitrine d'accueil pour CETTE pharmacie, pas un tableau de
-// bord personnel (ça, c'est le rôle de /profil et /commandes). Reconstruit sur le même
-// langage visuel immersif que le hero du site marketing (pharmacie-marketing/components/Hero.tsx)
-// -- fond bg-brand-deep, halos, tracé ECG, révélation du titre mot par mot -- pour que la
-// transition site vitrine -> app ne se voie pas, plutôt que le fond clair "écran de
-// paramètres" qu'avait la version précédente.
-const messages = [
-  { icon: Pill, texte: "Commandez vos médicaments en ligne, retirez en pharmacie" },
-  { icon: Truck, texte: "Suivez votre commande en temps réel, du panier au retrait" },
-  { icon: Smartphone, texte: "Payez par Orange Money ou MTN MoMo, vérifié par la pharmacie" },
+// 🎨 REFONTE (01/08, v3 -- retour en arrière assumé sur le v2) : le fond bg-brand-deep
+// permanent (v2) créait un déphasage avec le reste de l'app (catalogue, panier... tous en
+// thème clair/sombre normal) -- corrigé ici en reprenant le MÊME fond que le reste de
+// l'app (var(--color-mist), identique à /login). Les halos "pulsants" (scale+opacity en
+// boucle) ont aussi été retirés : la douceur recherchée vient du RYTHME et de l'espace,
+// pas d'un effet de respiration animé répété sur chaque écran.
+//
+// Nouveau : un vrai onboarding en 3 étapes (Suivant/Passer, points de progression) pour un
+// VISITEUR qui n'a jamais ouvert l'app -- prépare concrètement à ce qu'il va trouver sur
+// CETTE pharmacie, plutôt qu'un simple carrousel de petites phrases qui défilent. Affiché
+// une seule fois (mémorisé en local) ; un client déjà connu ou un visiteur qui l'a déjà vu
+// passe directement à l'accueil.
+const ETAPES_ONBOARDING = [
+  {
+    icon: Pill,
+    titre: "Le catalogue de votre pharmacie",
+    texte: "Tous les médicaments disponibles ici, avec leur prix et leur stock à jour en temps réel.",
+  },
+  {
+    icon: Truck,
+    titre: "Une commande, suivie de bout en bout",
+    texte: "Du panier jusqu'au retrait en pharmacie, sachez toujours où en est votre commande.",
+  },
+  {
+    icon: Smartphone,
+    titre: "Un paiement simple et vérifié",
+    texte: "Orange Money ou MTN MoMo -- chaque paiement est confirmé directement par l'équipe de la pharmacie.",
+  },
 ];
+
+const CLE_ONBOARDING_VU = 'pharmacie_onboarding_vu';
 
 export default function HomePage() {
   const router = useRouter();
   const [statutSession, setStatutSession] = useState<'verification' | 'visiteur' | 'client'>('verification');
   const [prenomClient, setPrenomClient] = useState<string | null>(null);
-  const [messageIndex, setMessageIndex] = useState(0);
+  const [onboardingTermine, setOnboardingTermine] = useState(true); // true tant qu'on n'a pas vérifié, pour ne jamais flasher l'onboarding à tort
+  const [etape, setEtape] = useState(0);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     const role = localStorage.getItem('user_role');
-    if (!token || !role) { setStatutSession('visiteur'); return; }
+    if (!token || !role) {
+      setStatutSession('visiteur');
+      setOnboardingTermine(!!localStorage.getItem(CLE_ONBOARDING_VU));
+      return;
+    }
 
     // Seul le personnel (admin/caissière, qui n'a pas besoin d'un écran d'accueil, juste de
     // son outil de travail) est redirigé automatiquement -- un client a un vrai accueil ici.
@@ -47,123 +67,118 @@ export default function HomePage() {
       .catch(() => {});
   }, [router]);
 
-  useEffect(() => {
-    const timer = setInterval(() => setMessageIndex((i) => (i + 1) % messages.length), 3800);
-    return () => clearInterval(timer);
-  }, []);
+  const terminerOnboarding = () => {
+    localStorage.setItem(CLE_ONBOARDING_VU, '1');
+    setOnboardingTermine(true);
+  };
 
   // Rien à afficher pendant la vérification de session -- évite un flash de l'accueil avant
   // la redirection pour un membre du personnel déjà connecté.
   if (statutSession === 'verification') {
-    return <div className="min-h-screen bg-brand-deep" />;
+    return <div className="min-h-screen bg-[var(--color-mist)] dark:bg-[#050e0c]" />;
   }
 
-  const MessageIcon = messages[messageIndex].icon;
   const estClient = statutSession === 'client';
 
-  return (
-    <div className="relative min-h-screen w-full bg-brand-deep overflow-hidden flex flex-col">
-      {/* 🌿 Même langage visuel que le hero du site marketing : halos flous + tracé ECG
-          discret en fond -- une pharmacie n'est pas une app générique, ce motif le rappelle
-          sans être appuyé. */}
-      <motion.div
-        aria-hidden
-        animate={{ opacity: [0.5, 0.75, 0.5] }}
-        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-        className="pointer-events-none absolute -top-32 left-1/2 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-emerald-500/25 blur-[100px]"
-      />
-      <div className="pointer-events-none absolute top-1/3 -right-24 h-[340px] w-[340px] rounded-full bg-blue-500/15 blur-[100px]" />
-      <div className="pointer-events-none absolute left-0 right-0 top-[22%] opacity-40">
-        <PulseLine className="w-full h-16" stroke="#67d29e" width={480} height={80} />
+  // 📖 ONBOARDING -- uniquement pour un visiteur qui ne l'a encore jamais vu.
+  if (!estClient && !onboardingTermine) {
+    const { icon: Icon, titre, texte } = ETAPES_ONBOARDING[etape];
+    const derniereEtape = etape === ETAPES_ONBOARDING.length - 1;
+
+    return (
+      <div className="relative min-h-screen w-full bg-[var(--color-mist)] dark:bg-[#050e0c] flex flex-col">
+        <div className="flex justify-end px-6 pt-6">
+          <button
+            onClick={terminerOnboarding}
+            className="min-h-11 px-4 text-sm font-semibold text-slate-400 dark:text-slate-500 bg-transparent border-none cursor-pointer active:opacity-60 transition-opacity"
+          >
+            Passer
+          </button>
+        </div>
+
+        <div className="flex-grow flex flex-col items-center justify-center px-8 text-center">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={etape}
+              initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="w-full max-w-sm"
+            >
+              <div className="h-24 w-24 mx-auto rounded-[2rem] bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mb-8">
+                <Icon size={40} className="text-emerald-500" strokeWidth={1.6} />
+              </div>
+              <h1 className="font-display text-2xl font-bold text-[var(--color-ink,#0b1220)] dark:text-white tracking-tight leading-snug">
+                {titre}
+              </h1>
+              <p className="text-slate-500 dark:text-slate-400 text-[15px] leading-relaxed mt-3">
+                {texte}
+              </p>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        <div className="px-8 pb-10">
+          <div className="flex justify-center gap-1.5 mb-6">
+            {ETAPES_ONBOARDING.map((_, i) => (
+              <span key={i} className={`h-1.5 rounded-full transition-all ${i === etape ? 'w-6 bg-emerald-500' : 'w-1.5 bg-slate-200 dark:bg-white/10'}`} />
+            ))}
+          </div>
+          <button
+            onClick={() => (derniereEtape ? terminerOnboarding() : setEtape((e) => e + 1))}
+            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm py-4 rounded-2xl border-none cursor-pointer flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+          >
+            {derniereEtape ? 'Découvrir la pharmacie' : 'Suivant'} <ArrowRight size={17} />
+          </button>
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="relative min-h-screen w-full bg-[var(--color-mist)] dark:bg-[#050e0c] overflow-hidden flex flex-col">
+      {/* Décor discret et STATIQUE (pas de respiration animée en boucle) -- même halos que
+          /login, simplement pour ne pas laisser l'écran totalement plat. */}
+      <div className="absolute -top-24 -left-16 w-72 h-72 rounded-full bg-emerald-300/15 dark:bg-emerald-500/10 blur-[90px] pointer-events-none" />
+      <div className="absolute top-1/3 -right-20 w-72 h-72 rounded-full bg-blue-300/10 dark:bg-blue-500/10 blur-[90px] pointer-events-none" />
 
       <div className="relative z-10 flex-grow flex flex-col items-center justify-center px-6 py-16">
         <div className="w-full max-w-md text-center">
 
-          {/* 🟢 Badge de confiance discret -- vrai (l'app tourne bel et bien), pas un chiffre
-              inventé. Reprend le motif du site marketing (point qui pulse + libellé). */}
-          <motion.span
-            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-[11px] font-mono uppercase tracking-[0.15em] text-emerald-300 mb-8"
-          >
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-            </span>
-            Pharmacie en ligne
-          </motion.span>
-
-          <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <div className="relative inline-block mb-6">
-              <motion.div
-                animate={{ scale: [1, 1.1, 1], opacity: [0.35, 0.55, 0.35] }}
-                transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
-                className="absolute inset-0 bg-emerald-400/40 rounded-[2rem] blur-xl"
-              />
-              <div className="relative h-24 w-24 bg-white rounded-[2rem] flex items-center justify-center shadow-2xl shadow-black/20 mx-auto p-4">
-                <PharmacyIcon className="w-full h-full object-cover" alt="Pharmacie+" />
-              </div>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <div className="h-24 w-24 bg-white dark:bg-white/5 rounded-[2rem] flex items-center justify-center shadow-lg shadow-emerald-950/5 dark:shadow-none mx-auto p-4 mb-6">
+              <PharmacyIcon className="w-full h-full object-cover" alt="Pharmacie+" />
             </div>
 
-            {/* 👋 Pour un client connu : accueil personnel en guise de titre. Pour un
-                visiteur : la promesse de l'app, pas juste le nom déjà lisible sur le logo
-                juste au-dessus -- éviter la répétition inutile. */}
-            <h1 className="font-display text-3xl font-bold text-white tracking-tight leading-tight">
+            {/* 👋 Accueil personnel pour un client connu ; promesse de l'app pour un visiteur
+                qui a déjà vu l'onboarding -- pas la peine de répéter le nom de la pharmacie,
+                déjà lisible juste au-dessus. */}
+            <h1 className="font-display text-2xl font-bold text-[var(--color-ink,#0b1220)] dark:text-white tracking-tight">
               {estClient
                 ? (prenomClient ? <>Bon retour, {prenomClient}</> : 'Bon retour parmi nous')
-                : <>Vos médicaments,<br />à portée de main</>}
+                : <>Bienvenue chez <PharmacyBrandName /></>}
             </h1>
-            <p className="text-white/50 text-sm mt-2 flex items-center justify-center gap-1.5">
-              <PharmacyBrandName /> · Votre santé, notre priorité
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
+              {estClient ? 'Heureux de vous revoir.' : 'Votre santé, notre priorité'}
             </p>
           </motion.div>
 
-          {/* 💬 Message tournant -- 3 capacités réelles de l'app, pas des slogans creux */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-            className="bg-white/[0.06] border border-white/10 rounded-[28px] p-6 mt-8 backdrop-blur-sm min-h-[104px] flex items-center"
-          >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={messageIndex}
-                initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
-                transition={{ duration: 0.35 }}
-                className="flex items-center gap-4 text-left"
-              >
-                <div className="h-11 w-11 shrink-0 rounded-2xl bg-emerald-400/15 flex items-center justify-center text-emerald-300">
-                  <MessageIcon size={20} />
-                </div>
-                <p className="text-sm font-medium text-white/80 leading-snug">
-                  {messages[messageIndex].texte}
-                </p>
-              </motion.div>
-            </AnimatePresence>
-          </motion.div>
-
-          <div className="flex justify-center gap-1.5 mt-4">
-            {messages.map((_, i) => (
-              <span key={i} className={`h-1.5 rounded-full transition-all ${i === messageIndex ? 'w-5 bg-emerald-400' : 'w-1.5 bg-white/20'}`} />
-            ))}
-          </div>
-
           {/* 🎯 ACTIONS -- cibles tactiles 44px+, retour au toucher, pas de survol requis.
               Le catalogue est accessible SANS connexion (core/api.py::api_catalogue,
-              AllowAny) : c'est donc l'action principale pour tout le monde, visiteur ou
-              client -- la vraie porte d'entrée, pas la connexion. */}
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mt-8 space-y-3">
+              AllowAny) : c'est donc l'action principale pour tout le monde. */}
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.5 }} className="mt-10 space-y-3">
             <Link
               href="/catalogue"
-              className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-[0_0_30px_-6px_rgba(16,185,129,0.5)]"
+              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
             >
               <Pill size={18} /> Parcourir le catalogue
             </Link>
 
             {estClient ? (
               <div className="grid grid-cols-2 gap-3">
-                <Link href="/panier" className="no-underline bg-white/[0.06] border border-white/10 rounded-2xl py-4 flex items-center justify-center gap-2 text-white/80 font-semibold text-sm active:scale-[0.98] transition-all">
+                <Link href="/panier" className="no-underline bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-2xl py-4 flex items-center justify-center gap-2 text-slate-600 dark:text-slate-300 font-semibold text-sm active:scale-[0.98] transition-all">
                   <ShoppingCart size={17} /> Mon panier
                 </Link>
-                <Link href="/commandes" className="no-underline bg-white/[0.06] border border-white/10 rounded-2xl py-4 flex items-center justify-center gap-2 text-white/80 font-semibold text-sm active:scale-[0.98] transition-all">
+                <Link href="/commandes" className="no-underline bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-2xl py-4 flex items-center justify-center gap-2 text-slate-600 dark:text-slate-300 font-semibold text-sm active:scale-[0.98] transition-all">
                   <ClipboardList size={17} /> Commandes
                 </Link>
               </div>
@@ -171,13 +186,13 @@ export default function HomePage() {
               <div className="grid grid-cols-2 gap-3">
                 <Link
                   href="/login"
-                  className="w-full bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                  className="w-full bg-white dark:bg-white/[0.04] hover:bg-slate-50 dark:hover:bg-white/[0.08] text-slate-700 dark:text-white border border-slate-200 dark:border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                 >
                   <LogIn size={17} /> Connexion
                 </Link>
                 <Link
                   href="/register"
-                  className="w-full bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                  className="w-full bg-white dark:bg-white/[0.04] hover:bg-slate-50 dark:hover:bg-white/[0.08] text-slate-700 dark:text-white border border-slate-200 dark:border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                 >
                   <UserPlus size={17} /> Créer un compte
                 </Link>
@@ -186,10 +201,10 @@ export default function HomePage() {
           </motion.div>
 
           <motion.p
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }}
-            className="flex items-center justify-center gap-1.5 text-xs font-medium text-white/40 mt-6"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}
+            className="flex items-center justify-center gap-1.5 text-xs font-medium text-slate-400 dark:text-slate-500 mt-6"
           >
-            <ShieldCheck size={14} className="text-emerald-400" /> Vos données sont sécurisées avec nous
+            <ShieldCheck size={14} className="text-emerald-500" /> Vos données sont sécurisées avec nous
           </motion.p>
         </div>
       </div>
