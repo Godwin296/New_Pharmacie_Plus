@@ -86,3 +86,13 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Masque la scrollbar sur les carrousels horizontaux (catégories, favoris, populaires...)
+   tout en gardant le défilement fonctionnel -- utilisé par plusieurs pages, jamais défini. */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

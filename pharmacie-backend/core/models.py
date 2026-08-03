@@ -288,6 +288,30 @@ class ProduitSupprimeLog(models.Model):
         return f"Produit #{self.produit_id} supprimé le {self.date_suppression:%d/%m/%Y %H:%M}"
 
 
+class Favori(models.Model):
+    """
+    ❤️ (30/07) Médicaments favoris d'un client -- absent jusqu'ici. Suit le même schéma
+    cross-tenant que Commande.compte_client : le compte client vit dans le schéma public
+    (clients_publics.CompteClient, marketplace globale) mais Favori vit dans le schéma de
+    CHAQUE pharmacie, au même titre que Produit -- un "favori" n'a de sens que pour le
+    catalogue précis d'une officine donnée, pas globalement sur toute la plateforme.
+    """
+    compte_client = models.ForeignKey(
+        "clients_publics.CompteClient", on_delete=models.CASCADE, related_name="favoris"
+    )
+    produit = models.ForeignKey(Produit, on_delete=models.CASCADE, related_name="favorise_par")
+    date_ajout = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Un même produit ne peut être ajouté deux fois par le même client -- le endpoint
+        # POST est donc idempotent (toggle), pas besoin de vérifier l'existence en amont.
+        unique_together = ("compte_client", "produit")
+        indexes = [models.Index(fields=["compte_client"])]
+
+    def __str__(self):
+        return f"{self.compte_client} ♥ {self.produit.nom}"
+
+
 class LotProduit(models.Model):
     """
     📦 Un lot = une réception physique distincte d'un même Produit (livraison fournisseur),

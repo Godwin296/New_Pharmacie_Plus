@@ -20,11 +20,11 @@ from django.contrib.auth.models import User
 from datetime import timedelta
 from django.utils import timezone
 
-from .models import Produit, Commande, ItemCommande, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog, LotProduit
+from .models import Produit, Commande, ItemCommande, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog, LotProduit, Favori
 from .serializers import (
     ProduitSerializer, CommandeSerializer, CommandeClientSerializer,
     PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer,
-    MouvementStockSerializer
+    MouvementStockSerializer, FavoriSerializer
 )
 from .validators import valider_et_desinfecter_ordonnance, valider_et_desinfecter_photo_produit
 from .chiffrement import chiffrer_contenu, dechiffrer_si_necessaire
@@ -582,6 +582,35 @@ def api_produit_historique(request, produit_id):
     data = MouvementStockSerializer(mouvements, many=True).data
     cache_set(cache_key, data, timeout=30)
     return Response(data)
+
+
+# --- ❤️ FAVORIS (30/07) -- absent jusqu'ici, aucun endpoint ni modèle n'existait ---
+@api_view(['GET'])
+@authentication_classes([ClientJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_favoris(request):
+    """Liste les produits favoris du client connecté, les plus récents d'abord."""
+    favoris = Favori.objects.filter(compte_client=request.user).select_related('produit').order_by('-date_ajout')
+    return Response(FavoriSerializer(favoris, many=True, context={'request': request}).data)
+
+
+@api_view(['POST'])
+@authentication_classes([ClientJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_favoris_toggle(request, produit_id):
+    """
+    Bascule un produit en/hors des favoris (un seul endpoint, pas de POST + DELETE séparés)
+    -- plus simple côté frontend : le bouton cœur appelle toujours la même route et se fie
+    à `favori` dans la réponse pour savoir dans quel état il vient de passer, sans avoir à
+    suivre lui-même l'état précédent.
+    """
+    produit = get_object_or_404(Produit, id=produit_id)
+    existant = Favori.objects.filter(compte_client=request.user, produit=produit).first()
+    if existant:
+        existant.delete()
+        return Response({"favori": False})
+    Favori.objects.create(compte_client=request.user, produit=produit)
+    return Response({"favori": True})
 
 
 # --- 🚀 MODE OFFLINE (session 12/07, brique 2/4) : SYNCHRO DELTA DU CATALOGUE ---
