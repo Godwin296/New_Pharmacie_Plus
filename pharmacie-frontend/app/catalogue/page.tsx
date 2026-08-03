@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Pill, ShoppingCart, Loader2, Filter, Plus, Minus, X, Check, Camera, WifiOff, ScanLine } from 'lucide-react';
 
@@ -9,7 +9,7 @@ import Prix from '../../lib/components/Prix';
 import { ajouterAuPanierHorsLigne } from '../../lib/offline/panierQueue';
 import { chargerCatalogueLocal, catalogueLocalDisponible } from '../../lib/offline/syncCatalogue';
 import { useToast, ToastContainer } from '../../lib/hooks/useToast';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 interface Produit {
   id: number;
@@ -23,13 +23,20 @@ interface Produit {
   image?: string;
 }
 
-export default function CataloguePage() {
+// 🆕 (30/07) useSearchParams() exige une frontière Suspense au moment du build (sinon
+// Next.js refuse de pré-rendre la page) -- le composant réel est renommé et enveloppé
+// ci-dessous plutôt que d'être exporté directement.
+function CataloguePageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toasts, showToast } = useToast();
   const [produits, setProduits] = useState<Produit[]>([]);
   const [categories, setCategories] = useState<Record<string, string>>({});
-  const [search, setSearch] = useState("");
-  const [activeCat, setActiveCat] = useState("all");
+  const [search, setSearch] = useState(() => searchParams.get('q') || "");
+  // 🆕 (30/07) Initialisé depuis ?cat=CODE si présent dans l'URL -- permet à l'accueil (et
+  // à tout autre écran) de lier directement vers une catégorie déjà filtrée, plutôt que
+  // d'atterrir sur "Tous les produits" et obliger l'utilisateur à re-sélectionner.
+  const [activeCat, setActiveCat] = useState(() => searchParams.get('cat') || "all");
   // 🔐 (19/07) : l'overlay "changer la photo au survol" plus bas s'affichait pour TOUT
   // visiteur du catalogue (client, caissière) alors que seul l'admin du tenant peut
   // réellement réussir cette action -- api_modifier_photo_produit vérifie déjà
@@ -105,7 +112,7 @@ export default function CataloguePage() {
   // (ça spammerait l'API). On attend 400ms d'inactivité avant d'appliquer la recherche
   // tapée par l'utilisateur. searchInput = ce que l'utilisateur tape en direct (instantané
   // à l'écran), search = la valeur "validée" après le délai, qui déclenche le vrai appel API.
-  const [searchInput, setSearchInput] = useState("");
+  const [searchInput, setSearchInput] = useState(() => searchParams.get('q') || "");
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearch(searchInput);
@@ -577,5 +584,13 @@ export default function CataloguePage() {
           app/produit/[id]/page.tsx. Remplace les alert()/confirm() natifs. */}
       <ToastContainer toasts={toasts} />
     </div>
+  );
+}
+
+export default function CataloguePage() {
+  return (
+    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-emerald-500" size={40} /></div>}>
+      <CataloguePageInner />
+    </Suspense>
   );
 }

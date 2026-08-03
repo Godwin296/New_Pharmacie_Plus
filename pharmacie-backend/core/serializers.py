@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Produit, Mouvement_stock, Commande, ItemCommande, Fournisseur, PharmacieConfig, LotProduit
+from .models import Produit, Mouvement_stock, Commande, ItemCommande, Fournisseur, PharmacieConfig, LotProduit, Favori
 from .utils import generate_qr_base64, construire_contenu_qr_facture
 
 class PharmacieConfigSerializer(serializers.ModelSerializer):
@@ -202,6 +202,18 @@ class ProduitSerializer(serializers.ModelSerializer):
         if not est_admin_tenant:
             data.pop('prix_achat', None)
         return data
+
+
+# 🆕 (30/07) Favoris -- placé APRÈS ProduitSerializer (dont il dépend) volontairement,
+# l'ordre des classes compte ici : `produit = ProduitSerializer(...)` est évalué au chargement
+# du module, une classe non encore définie plus haut ferait planter l'import.
+class FavoriSerializer(serializers.ModelSerializer):
+    produit = ProduitSerializer(read_only=True)
+
+    class Meta:
+        model = Favori
+        fields = ['id', 'produit', 'date_ajout']
+
 
 class FournisseurSerializer(serializers.ModelSerializer):
     class Meta:
