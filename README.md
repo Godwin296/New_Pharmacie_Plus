@@ -215,14 +215,18 @@ New_Pharmacie_Plus/
 - [x] Versionnement de l'API — `/api/v1/` canonique (`/api/` conservé pour compatibilité)
 - [x] Backups PostgreSQL — `manage.py backup_db` / `restore_db` (pg_dump/pg_restore)
 - [x] Cache Redis multi-tenant (infos pharmacie, catalogue, prédictions) + `/healthz/`
-- [x] Suivi d'erreurs Sentry (backend) — frontend en attente du support Next.js 16 par `@sentry/nextjs`
+- [x] Suivi d'erreurs Sentry (backend) — frontend pas encore branché, mais `@sentry/nextjs` supporte désormais Next.js 16 (vérifié 02/08), donc plus bloqué techniquement
 - [x] Mode offline — indexation BDD + synchro delta catalogue + cache catalogue local (IndexedDB) + file d'attente panier (4/4 briques)
-- [ ] Gestion des lots (`LotProduit`) avec décrémentation FEFO
+- [x] Gestion des lots (`LotProduit`) avec décrémentation FEFO
+- [x] Chiffrement au repos des ordonnances (Fernet, clé dédiée optionnelle)
+- [x] Détection d'interactions médicamenteuses (règles statiques sourcées ANSM, pas d'IA)
+- [x] Docker + Docker Compose (écrit, prêt à tester — voir docs/INFRASTRUCTURE_ROADMAP.md)
 - [ ] Page marketplace (client global multi-pharmacies)
-- [ ] Dashboard analytics avancé
-- [ ] Refonte UI/UX mobile-first
+- [ ] Dashboard analytics avancé (marge réelle, comparaison période/période)
+- [ ] Refonte UI/UX mobile-first (en cours)
 - [ ] Notifications SMS (Africa's Talking)
 - [ ] Internationalisation (next-intl)
+- [ ] Admin plateforme "Pharmacie Plus" (n'existe pas du tout aujourd'hui)
 
 ---
 
