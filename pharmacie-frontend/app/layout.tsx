@@ -89,7 +89,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   useOfflineCatalogue();
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 3500);
+    // ⏱️ Durée allongée (retour utilisateur 01/08) : 3.5s ne laissait pas le temps de lire
+    // l'étiquette + le nom + la salutation avant la disparition. 6s reste largement sous la
+    // limite de tolérance signalée (10s max) tout en laissant une vraie marge de lecture.
+    const timer = setTimeout(() => setShowSplash(false), 6000);
     const savedRole = localStorage.getItem('user_role');
     const savedName = localStorage.getItem('display_name') || localStorage.getItem('username');
     
@@ -210,25 +213,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <motion.span
                   initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.15, duration: 0.4 }}
-                  className="text-[12px] font-mono uppercase tracking-[0.25em] text-emerald-300 mb-6"
+                  className="text-[12px] font-mono uppercase tracking-[0.25em] text-emerald-300 mb-9"
                 >
                   {getRoleCopy().eyebrow}
                 </motion.span>
 
-                {/* Halo doux et respirant derrière le logo -- remplace les anneaux
-                    de pouls concentriques par quelque chose de plus feutré. */}
-                <motion.div
-                  animate={{ scale: [1, 1.12, 1], opacity: [0.35, 0.55, 0.35] }}
-                  transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
-                  className="absolute top-0 h-28 w-28 rounded-[2rem] bg-emerald-300/40 blur-2xl"
-                />
+                {/* 🔧 Halo derrière le logo (retour utilisateur 01/08) : plus de pulsation en
+                    boucle (scale+opacity qui "respire") -- jugée trop vive/répétitive à
+                    l'usage. Remplacé par une lueur STATIQUE et discrète : la douceur vient
+                    de sa présence, pas d'un mouvement qu'on regarde tourner en boucle. */}
+                <div className="absolute top-2 h-32 w-32 rounded-[2rem] bg-emerald-300/25 blur-2xl" />
 
-                {/* Logo -- entrée avec ressort (pas un simple fade), léger settle de rotation */}
+                {/* Logo -- entrée avec ressort (pas un simple fade), léger settle de rotation.
+                    Agrandi (28 -> 32) et plus d'air autour pour une présence plus généreuse
+                    à l'écran, comme demandé. */}
                 <motion.div
                   initial={{ opacity: 0, scale: 0.4, rotate: -12 }}
                   animate={{ opacity: 1, scale: 1, rotate: 0 }}
                   transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.05 }}
-                  className="relative h-24 w-24 bg-white rounded-[1.75rem] flex items-center justify-center shadow-2xl shadow-black/20 p-4"
+                  className="relative h-32 w-32 bg-white rounded-[1.75rem] flex items-center justify-center shadow-2xl shadow-black/20 p-5"
                 >
                   <PharmacyIcon className="w-full h-full object-cover" alt="Pharmacie+" />
                 </motion.div>
@@ -236,7 +239,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <motion.h1
                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.45, duration: 0.4 }}
-                  className="font-display text-2xl font-bold text-white tracking-tight mt-5"
+                  className="font-display text-[26px] font-bold text-white tracking-tight mt-8"
                 >
                   <PharmacyBrandName />
                 </motion.h1>
@@ -247,7 +250,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     variable dans une phrase figée. */}
                 <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}
-                  className="text-emerald-50/90 text-sm font-medium mt-2.5 flex items-center gap-1.5"
+                  className="text-emerald-50/90 text-[15px] font-medium mt-3.5 flex items-center gap-1.5"
                 >
                   {user.loggedIn ? (
                     <>
@@ -463,17 +466,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               ))}
             </div>
           </nav>
-        )}
-
-        {!isSpecialRoute && (
-          <footer className="bg-slate-950 text-white p-10 border-t-[5px] border-emerald-600 mt-20">
-            <div className="container mx-auto text-center">
-              <PharmacyBrandName className="text-xl font-black uppercase tracking-tighter italic text-emerald-500" />
-              <p className="text-slate-500 text-[10px] mt-2 font-bold tracking-widest uppercase italic opacity-60">
-                &copy; {new Date().getFullYear()} <PharmacyBrandName /> . Tous droits réservés.
-              </p>
-            </div>
-          </footer>
         )}
         </ConfigPharmacieProvider>
         </SerwistProvider>

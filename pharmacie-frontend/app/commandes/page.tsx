@@ -1,167 +1,189 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  History, Eye, Download, Globe, Building2, 
-  ChevronDown, CheckCircle2, ArrowLeft, Loader2 
+import {
+  History, X, CheckCircle2, Clock, XCircle, ArrowLeft, Loader2, Package, Store, Hash,
 } from 'lucide-react';
 import Link from 'next/link';
-
-// 🌟 ÉTAPE 1 : Importation de l'apiClient
 import apiClient from '../../lib/apiClient';
 import Prix from '../../lib/components/Prix';
+import { useConfigPharmacie } from '../../lib/context/ConfigPharmacieContext';
+import { useToast, ToastContainer } from '../../lib/hooks/useToast';
+
+// 📱 REFONTE MOBILE (01/08) : l'ancienne page utilisait de grosses cartes "SaaS desktop"
+// (grille multi-colonnes, accordéon interne) et un bouton de téléchargement de facture
+// cassé (window.open() sur une route protégée par JWT -- l'en-tête Authorization ne part
+// jamais avec window.open(), d'où l'échec systématique constaté). Décision : retirer ce
+// bouton (et toute la logique backend dédiée côté client, voir core/views.py::
+// export_facture_pdf) plutôt que le réparer, et reconstruire la page entière sur le même
+// pattern que le catalogue -- lignes compactes tapables, détails dans une feuille modale
+// mobile (pas un accordéon qui pousse le contenu).
+type ItemCommande = { id: number; produit_nom: string; quantite: number; prix_unitaire: number; total_item: number };
+type Commande = {
+  id: number; statut: string; date: string; payee: boolean;
+  total_general: number; items: ItemCommande[];
+};
+
+const STATUT_STYLES: Record<string, { label: string; icon: typeof CheckCircle2; classe: string }> = {
+  payee: { label: 'Payée', icon: CheckCircle2, classe: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30' },
+  payee_a_retirer: { label: 'Prête à retirer', icon: CheckCircle2, classe: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30' },
+  retiree: { label: 'Retirée', icon: CheckCircle2, classe: 'text-slate-500 bg-slate-100 dark:bg-white/[0.06]' },
+  attente_validation: { label: "En attente de validation", icon: Clock, classe: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' },
+  paiement_a_verifier: { label: 'Paiement à vérifier', icon: Clock, classe: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' },
+  en_cours: { label: 'En cours', icon: Clock, classe: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' },
+  annulee: { label: 'Annulée', icon: XCircle, classe: 'text-red-500 bg-red-50 dark:bg-red-900/20' },
+  refusee: { label: 'Refusée', icon: XCircle, classe: 'text-red-500 bg-red-50 dark:bg-red-900/20' },
+};
+const styleStatut = (s: string) => STATUT_STYLES[s] || { label: s, icon: Clock, classe: 'text-slate-500 bg-slate-100 dark:bg-white/[0.06]' };
 
 export default function MesCommandes() {
-  const [commandes, setCommandes] = useState<any[]>([]);
-  const [openOrder, setOpenOrder] = useState<string | null>(null);
+  const [commandes, setCommandes] = useState<Commande[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // 🌟 ÉTAPE 2 : Récupération de l'historique sur la bonne URL Django
-  const fetchHistorique = async () => {
-    try {
-      // apiClient ajoute l'URL du tunnel, injecte le Token JWT Bearer et cible /api/commandes/ avec son slash final
-      const res = await apiClient.get('/api/commandes/');
-      setCommandes(res.data);
-    } catch (err) {
-      console.error("Erreur historique:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [commandeOuverte, setCommandeOuverte] = useState<Commande | null>(null);
+  const { config } = useConfigPharmacie();
+  const { toasts, showToast } = useToast();
 
   useEffect(() => {
-    fetchHistorique();
+    apiClient.get('/api/commandes/')
+      .then((res) => setCommandes(res.data))
+      .catch(() => showToast("Impossible de charger vos commandes.", "error"))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-emerald-500">
-      <Loader2 className="animate-spin" size={48} />
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-[var(--color-mist)] dark:bg-[#050e0c] text-emerald-500">
+        <Loader2 className="animate-spin" size={40} />
+      </div>
+    );
+  }
 
-      return (
-    <div className="max-w-250 mx-auto px-6 py-12">
-      
-      {/* 🔝 HEADER SAAS */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6">
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-          <div className="inline-block bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] mb-3 italic">
-            Transactions Stratégiques
-          </div>
-          <h2 className="text-5xl font-black text-slate-800 dark:text-white tracking-tighter">
-            Mon <span className="text-emerald-500">Historique</span>
-          </h2>
-          <p className="text-slate-400 font-medium mt-2">Suivi de vos achats et factures certifiées 2026.</p>
-        </motion.div>
-        
-        <Link href="/catalogue" className="no-underline bg-slate-950 dark:bg-white text-white dark:text-slate-950 px-8 py-4 rounded-4xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl flex items-center gap-2">
-          <ArrowLeft size={16} /> Boutique
+  return (
+    <div className="max-w-md mx-auto px-4 py-6 min-h-screen">
+      <div className="flex items-center gap-3 mb-6">
+        <Link href="/" className="min-h-11 min-w-11 flex items-center justify-center rounded-xl bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 text-slate-500 no-underline active:scale-90 transition-transform">
+          <ArrowLeft size={18} />
         </Link>
+        <div>
+          <h1 className="font-display text-lg font-bold text-slate-900 dark:text-white">Mes commandes</h1>
+          <p className="text-xs text-slate-400">{commandes.length} commande{commandes.length > 1 ? 's' : ''}</p>
+        </div>
       </div>
 
-      {/* 📑 LISTE DES COMMANDES DYNAMIQUE */}
-      <div className="space-y-6">
-        <AnimatePresence>
-          {commandes.length > 0 ? (
-            commandes.map((cmd, i) => (
+      {commandes.length === 0 ? (
+        <div className="flex flex-col items-center justify-center text-slate-300 dark:text-slate-700 gap-3 py-24">
+          <History size={32} className="opacity-40" />
+          <p className="text-xs font-semibold uppercase tracking-wide">Aucune commande pour l'instant</p>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {commandes.map((cmd) => {
+            const { label, icon: Icon, classe } = styleStatut(cmd.statut);
+            return (
               <motion.div
-                key={cmd.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
-                className="relative bg-white dark:bg-slate-900/60 backdrop-blur-xl rounded-4xl border border-slate-100 dark:border-slate-800 overflow-hidden group hover:border-emerald-500/50 transition-all shadow-sm hover:shadow-2xl"
+                key={cmd.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                onClick={() => setCommandeOuverte(cmd)}
+                className="bg-white dark:bg-white/[0.04] rounded-[20px] p-3 border border-slate-100 dark:border-white/10 flex items-center gap-3 active:scale-[0.99] transition-transform cursor-pointer"
               >
-                <div className="absolute left-0 top-0 bottom-0 w-2 bg-emerald-500" />
-                
-                <div className="p-8">
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                    
-                    <div className="md:col-span-4">
-                      <div className="flex items-center gap-4 mb-3">
-                        {/* 🌟 STABLE : Utilisation sécurisée du champ 'date' renvoyé par votre CommandeSerializer */}
-                        <span className="text-xl font-black text-slate-800 dark:text-white tracking-tighter italic">
-                          {cmd.date ? new Date(cmd.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
-                        </span>
-                        {cmd.ordonnance ? (
-                          <span className="flex items-center gap-1 bg-blue-50 dark:bg-blue-500/10 text-blue-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter border border-blue-100">
-                            <Globe size={10} /> Médicalisé
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 bg-amber-50 dark:bg-amber-500/10 text-amber-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter border border-amber-100">
-                            <Building2 size={10} /> Libre
-                          </span>
-                        )}
-                      </div>
-                      <code className="text-[10px] text-slate-400 bg-slate-50 dark:bg-slate-950 px-3 py-1 rounded-lg font-mono">REF: #{cmd.id}</code>
-                    </div>
-
-                    <div className="md:col-span-3">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 italic opacity-60">Articles</p>
-                      <button 
-                        onClick={() => setOpenOrder(openOrder === cmd.id ? null : cmd.id)}
-                        className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2 hover:text-emerald-500 transition-colors border-none bg-transparent cursor-pointer"
-                      >
-                        {cmd.items?.length || 0} produit(s) <ChevronDown size={14} className={`transition-transform ${openOrder === cmd.id ? 'rotate-180' : ''}`} />
-                      </button>
-                    </div>
-
-                    <div className="md:col-span-3">
-                      <div className="text-2xl font-black text-emerald-600 tracking-tighter mb-1">
-                        <Prix montant={cmd.total_general} className="text-[10px]" />
-                      </div>
-                      <div className="flex items-center gap-2 text-[9px] font-black text-emerald-500/60 uppercase">
-                        <CheckCircle2 size={12} strokeWidth={3} /> {cmd.payee ? "Facture Payée" : "En attente"}
-                      </div>
-                    </div>
-
-                    <div className="md:col-span-2 flex justify-end gap-3">
-                      {/* 🌟 STABLE : Le bouton d'œil ouvre et ferme nativement l'accordéon au lieu de tenter d'aller dans l'admin Django */}
-                      <button 
-                        onClick={() => setOpenOrder(openOrder === cmd.id ? null : cmd.id)}
-                        className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all border-none cursor-pointer
-                          ${openOrder === cmd.id ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 hover:bg-emerald-500 hover:text-white'}`}
-                        title="Détails de la commande"
-                      >
-                        <Eye size={20} />
-                      </button>
-                      
-                      {/* 🌟 STABLE : L'URL pointe maintenant vers le préfixe /api/ obligatoire de votre config/urls.py */}
-                      <button 
-                        onClick={() => window.open(`${apiClient.defaults.baseURL}/api/facture-pdf/${cmd.id}/`, '_blank')}
-                        className="w-12 h-12 rounded-2xl bg-red-50 dark:bg-red-900/30 text-red-500 flex items-center justify-center hover:bg-red-600 hover:text-white transition-all border-none cursor-pointer"
-                        title="Télécharger la facture PDF"
-                      >
-                        <Download size={20} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 📂 ACCORDION DYNAMIQUE */}
-                  <AnimatePresence>
-                    {openOrder === cmd.id && (
-                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                        <div className="mt-8 pt-6 border-t border-slate-50 dark:border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {cmd.items?.map((it: any, index: number) => (
-                            <div key={index} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl">
-                              <div className="w-8 h-8 bg-white dark:bg-slate-900 rounded-lg flex items-center justify-center text-emerald-500 font-black text-[10px] shadow-sm">💊</div>
-                              <span className="font-bold text-xs text-slate-600 dark:text-slate-300 uppercase italic">
-                                {it.produit_nom} (x{it.quantite})
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                <div className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center ${classe}`}>
+                  <Icon size={20} />
+                </div>
+                <div className="min-w-0 flex-grow">
+                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Commande #{cmd.id}</h3>
+                  <p className="text-[11px] text-slate-400 truncate">
+                    {cmd.items?.length || 0} article{(cmd.items?.length || 0) > 1 ? 's' : ''} · {new Date(cmd.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                  </p>
+                  <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 ${classe}`}>{label}</span>
+                </div>
+                <div className="text-right shrink-0">
+                  <Prix montant={cmd.total_general} className="text-sm font-bold text-emerald-600" />
                 </div>
               </motion.div>
-            ))
-          ) : (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-32 bg-white dark:bg-slate-900 rounded-[4rem] border-4 border-dashed border-slate-100 dark:border-slate-800">
-              <div className="text-8xl mb-8 animate-bounce">📂</div>
-              <h4 className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter uppercase mb-2 italic">Aucune commande</h4>
-              <p className="text-slate-400 font-bold uppercase tracking-widest text-xs italic">Votre historique apparaîtra ici après votre premier achat.</p>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 📄 Feuille modale mobile (bottom sheet), pas une popup centrée façon desktop --
+          mêmes conventions que le menu (app/layout.tsx) : glisse depuis le bas, poignée de
+          glissement, fermeture au swipe. */}
+      <AnimatePresence>
+        {commandeOuverte && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setCommandeOuverte(null)}
+              className="fixed inset-0 z-[60] bg-slate-950/50 backdrop-blur-sm"
+            />
+            <motion.div
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.5 }}
+              onDragEnd={(_e, info) => { if (info.offset.y > 100 || info.velocity.y > 500) setCommandeOuverte(null); }}
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 32, stiffness: 320 }}
+              className="fixed bottom-0 left-0 right-0 z-[70] max-h-[85vh] bg-white dark:bg-[#0b1a16] rounded-t-[2rem] shadow-2xl flex flex-col"
+            >
+              <div className="flex justify-center pt-3 pb-1 shrink-0">
+                <div className="w-10 h-1.5 rounded-full bg-slate-200 dark:bg-white/15" />
+              </div>
+
+              <div className="px-6 pb-4 pt-2 flex justify-between items-center border-b dark:border-white/10 shrink-0">
+                <div>
+                  <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white">Commande #{commandeOuverte.id}</h3>
+                  <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+                    <Store size={12} /> {config?.nom || 'Pharmacie'}
+                  </p>
+                </div>
+                <button onClick={() => setCommandeOuverte(null)} className="min-h-11 min-w-11 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-white/[0.06] border-none text-slate-500 active:scale-90 cursor-pointer transition-all">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex-grow overflow-y-auto p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+                {(() => {
+                  const { label, icon: Icon, classe } = styleStatut(commandeOuverte.statut);
+                  return (
+                    <div className={`flex items-center gap-2 text-sm font-semibold px-4 py-3 rounded-2xl mb-5 ${classe}`}>
+                      <Icon size={18} /> {label}
+                    </div>
+                  );
+                })()}
+
+                <div className="flex items-center gap-2 text-xs text-slate-400 mb-4">
+                  <Hash size={13} /> Référence interne #{commandeOuverte.id}
+                  <span className="opacity-40">·</span>
+                  {new Date(commandeOuverte.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Articles</p>
+                <div className="space-y-2 mb-5">
+                  {commandeOuverte.items?.map((it) => (
+                    <div key={it.id} className="flex items-center gap-3 bg-slate-50 dark:bg-white/[0.03] rounded-2xl p-3">
+                      <div className="w-9 h-9 shrink-0 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                        <Package size={16} />
+                      </div>
+                      <div className="min-w-0 flex-grow">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{it.produit_nom}</p>
+                        <p className="text-[11px] text-slate-400">{it.quantite} × <Prix montant={it.prix_unitaire} className="text-[11px]" /></p>
+                      </div>
+                      <Prix montant={it.total_item} className="text-sm font-semibold text-slate-700 dark:text-slate-200 shrink-0" />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between pt-4 border-t dark:border-white/10">
+                  <span className="font-display text-base font-bold text-slate-900 dark:text-white">Total</span>
+                  <Prix montant={commandeOuverte.total_general} className="text-xl font-bold text-emerald-600" />
+                </div>
+              </div>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }
