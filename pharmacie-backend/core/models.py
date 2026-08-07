@@ -502,6 +502,16 @@ class Commande(models.Model):
         # unique de Commande, est possible et largement préférable à un TTL approximatif.
         cache_delete_exact(f"facture_pdf:{self.pk}")
 
+        # 📋 CACHE HISTORIQUE CLIENT (01/08) : même principe qu'au-dessus, mais keyé par
+        # client plutôt que par commande (l'historique liste TOUTES les commandes d'un
+        # client, pas une seule) -- invalidé aux DEUX identités possibles (guichet ou
+        # compte global), l'une des deux est vide selon le type de vente, `cache_delete_exact`
+        # sur une clé jamais posée ne fait simplement rien (pas d'erreur).
+        if self.compte_client_id:
+            cache_delete_exact(f"historique_client:compte_client:{self.compte_client_id}")
+        if self.client_guichet_id:
+            cache_delete_exact(f"historique_client:client_guichet:{self.client_guichet_id}")
+
     def _generer_reference(self):
         """
         Génère une référence lisible unique : PHC-2026-00042.

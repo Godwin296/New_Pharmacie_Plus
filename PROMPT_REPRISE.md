@@ -8,9 +8,9 @@ Je reprends le développement de mon SaaS de gestion de pharmacie multi-tenant p
 
 > ⚠️ Mon dépôt est **privé par défaut**. Je l'ouvre uniquement quand j'ai besoin que tu pousses du travail. Si tu n'arrives pas à cloner, dis-le-moi clairement et j'ouvrirai l'accès.
 
-**Ce que ce document contient :** uniquement ce qu'il **reste à faire**, priorisé. Pour ce qui est déjà fait, regarde le [README.md](README.md) (feuille de route à jour), le dossier [docs/](docs/) (versionnement API, backups) et l'historique `git log` — un travail déjà poussé sur `main` a déjà été testé avant d'être commité (voir [CONTRIBUTING.md](CONTRIBUTING.md), règle "tester réellement").
+**Ce que ce document contient :** uniquement ce qu'il **reste à faire**, priorisé. Pour ce qui est déjà fait, regarde le [README.md](README.md) (feuille de route à jour, tenue synchrone avec ce document), le dossier [docs/](docs/) (versionnement API, backups, infrastructure) et l'historique `git log` — un travail déjà poussé sur `main` a déjà été testé avant d'être commité (voir [CONTRIBUTING.md](CONTRIBUTING.md), règle "tester réellement").
 
-> ⚠️ **Ce dépôt évolue en parallèle par plusieurs sessions/agents.** Avant de supposer qu'une fonctionnalité n'existe pas, vérifie toujours dans le code actuel (`grep`, lecture directe) plutôt que de te fier à un TODO potentiellement déjà obsolète — y compris celui-ci. Un `git pull`/`fetch` avant de commencer, et une revue rapide des derniers commits, évite de refaire un travail déjà fait ailleurs (vécu le 12/07 : suppression du modèle `Client` faite deux fois en parallèle, en pure perte de temps sur l'une des deux).
+> ⚠️ **Ce dépôt évolue en parallèle par plusieurs sessions/agents.** Avant de supposer qu'une fonctionnalité n'existe pas, vérifie toujours dans le code actuel (`grep`, lecture directe) plutôt que de te fier à un TODO potentiellement déjà obsolète — y compris celui-ci. Un `git pull`/`fetch` avant de commencer, et une revue rapide des derniers commits, évite de refaire un travail déjà fait ailleurs.
 
 **Mon objectif :** vendre ce SaaS à des pharmacies clientes en zone CEMAC. Je suis étudiant en informatique à l'Université de Dschang, je communique en français, et je préfère un guidage pas à pas avec des tests réels.
 
@@ -28,7 +28,7 @@ Voir [CONTRIBUTING.md](CONTRIBUTING.md) pour la procédure complète d'installat
 git fetch origin && git log --oneline main..origin/main   # voir ce qui a changé côté distant avant de commencer
 git remote set-url origin https://Godwin296:LE_TOKEN@github.com/Godwin296/New_Pharmacie_Plus.git
 git add -A && git commit -m "message clair"
-git push origin main   # si rejeté (non-fast-forward) : git rebase origin/main, résoudre les conflits réels, puis repush
+git push origin main   # si rejeté (non-fast-forward) : git pull --no-rebase, résoudre les conflits réels, puis repush
 git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  # retirer le token
 ```
 
@@ -39,73 +39,57 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 | Décision | Statut |
 |---|---|
 | Isolation multi-tenant PAR SCHÉMA (pas `tenant_id`) | ✅ Implémenté |
-| Compte client global (`CompteClient`, schéma public) remplace l'ancien `Client` par-tenant | ✅ Implémenté — `Client` entièrement retiré du code (16/07) |
+| Compte client global (`CompteClient`, schéma public) remplace l'ancien `Client` par-tenant | ✅ Implémenté |
 | Versionnement API par préfixe d'URL (`/api/v1/`, jamais casser une version en place) | ✅ Implémenté — voir [docs/API_VERSIONING.md](docs/API_VERSIONING.md) |
 | Paiement manuel (mobile money vérifié par la caisse) comme fallback permanent | ✅ Implémenté |
 | OCR uniquement aide visuelle, jamais automatisé | Décision ferme |
 | Africa's Talking pour SMS (pas Twilio) | Décision ferme, pas encore implémenté |
 | Prédiction stock = statistiques classiques, PAS LLM | ✅ Implémenté (`core/services_prediction.py`) |
-| Cache Redis : TTL courts plutôt qu'invalidation manuelle par motif | ✅ Implémenté (`core/cache_utils.py`) — `django-redis` (avec `delete_pattern`) volontairement pas ajouté, voir le docstring du fichier |
-| Gestion du stock par lots datés (`LotProduit`) + décrémentation FEFO | ✅ Implémenté (19/07) — `Produit.quantite`/`date_expiration` restent des champs cache dénormalisés (recalculés depuis les lots), pour ne rien casser de ce qui les lit déjà |
-| `Produit.ordonnance_obligatoire` reste configurable PAR PRODUIT (pas de politique globale imposée par la plateforme) | Décision ferme (18/07/2026) — malgré l'évolution réglementaire camerounaise de juillet 2024 (voir [docs/RECHERCHE_FONCTIONNALITES_PHARMACIE.md](docs/RECHERCHE_FONCTIONNALITES_PHARMACIE.md#-1-trouvaille-réglementaire-majeure--à-traiter-en-priorité)), le choix revient à chaque Tenant. Clause de limitation de responsabilité ajoutée en conséquence dans `pharmacie-marketing/app/mentions-legales/page.tsx` (brouillon, à faire relire par un juriste avant de la considérer opposable) |
+| Détection d'interactions médicamenteuses = table de règles statiques sourcées, PAS d'IA | ✅ Implémenté (`pharmacovigilance/`) |
+| Cache Redis : TTL courts plutôt qu'invalidation manuelle par motif (sauf clés à invalidation ciblée déjà en place : facture PDF, infos pharmacie, historique client) | ✅ Implémenté (`core/cache_utils.py`) |
+| Gestion du stock par lots datés (`LotProduit`) + décrémentation FEFO | ✅ Implémenté — `Produit.quantite`/`date_expiration` restent des champs cache dénormalisés (recalculés depuis les lots) |
+| `Produit.ordonnance_obligatoire` reste configurable PAR PRODUIT (pas de politique globale imposée par la plateforme) | Décision ferme (18/07) — malgré l'évolution réglementaire camerounaise de juillet 2024 (voir [docs/RECHERCHE_FONCTIONNALITES_PHARMACIE.md](docs/RECHERCHE_FONCTIONNALITES_PHARMACIE.md#-1-trouvaille-réglementaire-majeure--à-traiter-en-priorité)), le choix revient à chaque tenant. Clause de limitation de responsabilité correspondante dans `pharmacie-marketing/app/mentions-legales/page.tsx` (brouillon, à faire relire par un juriste) |
+| Facture PDF téléchargeable uniquement par le personnel (pas par le client) | Décision ferme (01/08) — le bouton client causait un échec systématique (`window.open()` n'envoie pas le header JWT) ; retiré plutôt que réparé, logique backend dédiée au client supprimée |
 
 ---
 
 ## 📋 CE QUI RESTE À FAIRE — priorisé
 
-### 🔴 Urgent (bug bloquant en production)
-- [x] **POS : la finalisation d'une vente au guichet échouait.** ✅ Corrigé (19/07, cette session) — `Commande.objects.create(client=None, ...)` référençait encore le champ `client` supprimé de `Commande`. La ligne a été retirée (`client_guichet` juste en dessous suffit). ⚠️ **Deux autres régressions du même retrait de `Client` ont été trouvées et corrigées au passage, ailleurs dans le code** (pas seulement le POS) : `core/emails.py` référençait encore `commande.client` à deux endroits, ce qui faisait planter TOUT email de confirmation de commande et l'email d'ordonnance refusée, pour absolument toutes les commandes. Si une autre session a corrigé le même bug POS en parallèle sur une autre branche, le conflit de fusion devrait être trivial (même ligne supprimée), mais vérifier qu'aucune correction concurrente n'a réintroduit `client=None` ou une variante.
+### 🔴 Effort élevé / risque architectural
+- [ ] **Refonte UI/UX mobile-first** — en cours (plusieurs sessions en parallèle). Déjà fait : splashscreen, catalogue, panier, écran produit, accueil, historique commandes, menu (bottom sheet). Guide fonctionnel détaillé : [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md) (pages manquantes par rôle, gaps identifiés côté caisse/dashboard admin).
+- [ ] **Page marketplace** (sélection de pharmacie par le client global `CompteClient`) — le modèle `CompteClient` existe déjà (schéma public), mais aucune page de sélection/découverte de pharmacie n'existe côté frontend.
+- [ ] **Admin plateforme "Pharmacie Plus"** — n'existe pas du tout aujourd'hui (seulement le Django admin brut sur le schéma public) ; nécessite sa propre authentification (comptes staff plateforme, séparés des comptes par-tenant) ; détail complet dans [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md#5-admin-plateforme-pharmacie-plus--confirmé--ça-nexiste-pas-du-tout)
+- [ ] **Notifications SMS (Africa's Talking)** — pas commencé
 
-### 🟡 Effort moyen (bugs découverts / chantiers en cours, sans rapport avec ce qui précède)
-- [x] **Migrations `core.0006` et `clients_publics.0002` (index GIN trigram) ✅ Corrigé (19/07)** — ces deux migrations créent des index avec `opclasses=['gin_trgm_ops']` sans dépendance Django EXPLICITE vers `tenants.0002_enable_pg_trgm` (qui active l'extension). Sur une base entièrement neuve, `migrate_schemas --shared` échouait avec `operator class "gin_trgm_ops" does not exist` environ 1 fois sur 2 (l'ordre entre ces branches indépendantes du graphe de migrations n'était pas garanti, dépendait de l'ordre d'itération interne du process Python). Dépendances explicites ajoutées, stable sur 4 essais consécutifs après correctif.
-- [x] **Mode offline — brique 4/4 : cache catalogue dans le Service Worker.** ✅ Terminé (18/07) — le vrai chantier manquant n'était pas d'adapter `app/sw.ts` (l'endpoint de sync répond par delta, un cache HTTP par URL n'aurait jamais reconstitué le catalogue complet) mais de consommer `/api/v1/catalogue/sync/` côté frontend et d'accumuler le résultat en IndexedDB. Voir `lib/offline/syncCatalogue.ts` + `lib/hooks/useOfflineCatalogue.ts`.
-- [x] ~~**Toggle vérification ordonnance par tenant**~~ — tranché le 18/07/2026 : `Produit.ordonnance_obligatoire` reste tel quel (configurable par produit, pas de politique globale imposée par la plateforme). Voir la ligne dédiée dans le tableau des décisions d'architecture ci-dessus.
-- [ ] **Dashboard analytics avancé** — comparaison période/période, calcul et affichage de la marge réelle (le champ `Produit.prix_achat` existe désormais, ajouté le 18/07 — reste le calcul/l'UI côté dashboard) ; détail complet dans [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md#4-côté-admin-par-pharmacie--réponse-à-ta-question--dashboard-réellement-basique-tu-as-raison)
-- [x] **Chiffrement au repos des ordonnances** ✅ Terminé (25/07) — Fernet, clé dédiée optionnelle (`ORDONNANCE_ENCRYPTION_KEY`, dégradation gracieuse si absente), rétrocompatible avec les fichiers déjà en clair. Nouveau point de déchiffrement staff-only `api_voir_ordonnance`. Voir `core/chiffrement.py`.
-- [ ] **Internationalisation (next-intl)**
-- [ ] **Détection d'interactions médicamenteuses** — table de règles statiques, pas d'IA
-- [ ] **Sentry frontend** — bloqué tant que `@sentry/nextjs` ne supporte pas Next.js 16 ; réévaluer périodiquement (une v10.x avec support officiel via `instrumentation.ts` était annoncée — vérifier son état actuel avant de re-tenter, ne pas supposer)
+### 🟡 Effort moyen
+- [ ] **Dashboard analytics avancé** — comparaison période/période, calcul et affichage de la marge réelle (le champ `Produit.prix_achat` existe déjà ; reste le calcul/l'UI côté dashboard) ; détail dans [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md#4-côté-admin-par-pharmacie--réponse-à-ta-question--dashboard-réellement-basique-tu-as-raison)
+- [ ] **Internationalisation (next-intl)** — pas commencé
+- [ ] **Sentry frontend** — `@sentry/nextjs` supporte désormais officiellement Next.js 16 (vérifié 02/08, versions 10.6x/10.69 déclarent `next: "^16.0.0-0"` dans leur peerDependencies) : n'est donc PLUS bloqué techniquement, contrairement à la note précédente de ce document. Reste à l'installer/configurer réellement côté `pharmacie-frontend`.
 
 ### 🔵 Documenté, implémentation volontairement différée (voir [docs/INFRASTRUCTURE_ROADMAP.md](docs/INFRASTRUCTURE_ROADMAP.md) pour le détail et le déclencheur de chaque point)
 - [ ] Index PostgreSQL sur `Commande.statut`/`payee`/`date` — attendre que le modèle de données soit stable (fin de refonte)
 - [ ] HTTPS/HSTS (`SECURE_SSL_REDIRECT` etc.) — attendre le choix de l'hébergement de production
-- [x] **Docker + Docker Compose** ✅ Fichiers écrits (25/07) — `docker-compose.yml`, `pharmacie-backend/Dockerfile`, `pharmacie-frontend/Dockerfile`, `docker/postgres-init/01-pg_trgm.sql`. **Statut réel : "prêt à tester", pas "testé"** — Docker indisponible dans l'environnement où ces fichiers ont été rédigés (voir avertissement en tête de `docker-compose.yml`). **Pas nécessaire tant que tu es en dev** : ton venv + `npm run dev` actuels n'ont aucun rapport avec Docker, ça reste ton workflow normal. Utile seulement pour (1) onboarding d'un futur collaborateur, (2) reproductibilité, (3) tremplin vers un hébergement qui accepte les images Docker — à reprendre le jour où l'un de ces trois besoins se présente vraiment, en lançant `docker compose up --build` à la racine du dépôt (pas dans un venv, Docker est indépendant de Python).
 - [ ] CDN pour les images produits — pas urgent tant que le trafic reste local/faible
 
-### 🔴 Effort élevé / risque architectural
-- [x] **Gestion des lots (`LotProduit`) + FEFO** — ✅ Implémenté (19/07, cette session). Nouveau modèle `LotProduit` (numéro de lot, quantité initiale/restante, péremption, réception). Migration de données non-destructive (chaque produit ayant déjà du stock devient un lot initial). `Produit.decrementer_stock_fefo()` centralise la consommation (toujours le lot périmant le plus tôt en premier), utilisée par `Commande.valider()` ET `api_vente_directe`, en conservant le `select_for_update()` déjà en place. Nouveaux endpoints `GET/POST /api/produits/<id>/lots/`. `api/boss/update-stock/<id>/` garde son contrat exact (ajustement du total) mais devient lot-aware en interne. Reste à faire : vraie UI Next.js de réception de lot daté (le formulaire admin/stocks actuel n'a qu'un champ quantité ; en attendant, `LotProduit` est gérable directement via `/admin/`, inline sur la fiche produit).
-- [ ] **Page marketplace** (sélection de pharmacie par le client global `CompteClient`)
-- [ ] **Refonte UI/UX mobile-first complète** — voir maquettes ci-dessous ET le guide fonctionnel détaillé [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md) (pages manquantes par rôle, gaps identifiés côté caisse/dashboard admin). À attaquer une fois le bug POS réglé (priorité à la stabilité avant l'esthétique)
-- [ ] **Admin plateforme "Pharmacie Plus"** — n'existe pas du tout aujourd'hui (seulement le Django admin brut sur le schéma public) ; nécessite sa propre authentification (comptes staff plateforme, séparés des comptes par-tenant) ; détail complet dans [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md#5-admin-plateforme-pharmacie-plus--confirmé--ça-nexiste-pas-du-tout)
-- [ ] **Notifications SMS (Africa's Talking)**
-
 ---
 
-## 💬 Mon avis sur l'ordre à suivre (à discuter)
+## 🎨 DIRECTION STYLISTIQUE (refonte UI/UX en cours)
 
-1. **Le bug POS d'abord, sans discussion** — une caisse qui ne peut plus encaisser une vente est un incident de production, pas une tâche de roadmap.
-2. **Finir le mode offline (brique 4/4)** — puisque 3 briques sur 4 sont déjà faites et testées, terminer maintenant coûte moins cher que d'y revenir plus tard après avoir perdu le contexte.
-3. Le reste (lots/FEFO, marketplace, refonte UI/UX, SMS, i18n) peut attendre — ce sont des fonctionnalités d'expansion, pas des risques. Les vrais risques identifiés au départ (pas de backup, pas de versioning API) sont déjà réglés.
-
-Je n'ai pas d'avis tranché sur l'ordre entre lots/FEFO et marketplace — ça dépend surtout de ce qui te rapproche le plus vite d'un premier client payant, ce que je ne peux pas juger à ta place.
-
----
-
-## 🎨 DIRECTION STYLISTIQUE (maquettes reçues, pour la refonte UI/UX)
-
-- Vert émeraude dominant (`emerald-500/600`), fond blanc/gris-vert très pâle
-- Cartes très arrondies (`rounded-2xl`/`3xl`), ombres douces, beaucoup d'espace blanc
-- Bannières dégradées vert foncé→clair avec icônes flottantes décoratives
+- Vert émeraude dominant (`emerald-500/600`), fond blanc/gris-vert très pâle en clair, quasi-noir en sombre (`var(--color-mist)` / `#050e0c`) — cohérent sur TOUTES les pages, pas de fond sombre "hero" isolé qui détonnerait avec le reste de l'app
+- `font-display` (Poppins) sur tous les titres
+- Cartes très arrondies (`rounded-2xl`/`3xl`), ombres douces
+- Feuilles mobiles (bottom sheets) glissant depuis le bas pour toute modale/menu — jamais de popup centrée façon desktop ; fermeture au swipe
+- Cibles tactiles 44px minimum, retour tactile (`active:scale-*`) sur tout élément cliquable, aucune interaction qui ne fonctionne qu'au survol souris
+- Animations douces et volontairement SANS pulsation/respiration en boucle répétée sur chaque écran (halos statiques ou dérive lente, pas d'effet "vulgaire" qui se remarque à l'usage)
+- Toasts système partout, jamais d'`alert()`/`confirm()` navigateur (hook partagé `lib/hooks/useToast`)
 - Bottom nav mobile avec bouton central flottant rond (panier/+) qui dépasse de la barre
 - Écran connexion avec sélection de rôle par cartes (Client/Caisse/Admin) avant le formulaire
-- Splash screen avec halo radial + icônes flottantes en orbite
-- Dashboard admin : sidebar sombre verte sur desktop, clair sur mobile
 
 ---
 
 ## ⚙️ COMMENT JE PRÉFÈRE TRAVAILLER
 
-- Toujours tester réellement (PostgreSQL/Redis/Daphne réels, pas de simulation)
+- Toujours tester réellement (PostgreSQL/Redis/Daphne réels, pas de simulation) — sauf demande explicite ponctuelle de ma part de pousser sans ce cycle complet, auquel cas je remonte les erreurs moi-même
 - Expliquer les concepts techniques que je ne connais pas (j'apprends en construisant)
 - Ne jamais me restituer le code dans le chat — travailler dans l'environnement de fichiers
 - Me prévenir clairement quand il est temps de pousser vers GitHub

@@ -1020,13 +1020,25 @@ def api_mes_commandes(request):
     🔧 CORRECTIF JONCTION COMPTECLIENT : authentification par défaut remplacée (sans quoi un
     jeton client marketplace était rejeté d'office) + résolution via CompteClient. Le personnel
     n'a par définition aucun "historique client" -> 403 explicite plutôt qu'un 404 accidentel.
+
+    📋 CACHE (01/08, refonte mobile) : mis en cache par client, invalidé précisément à chaque
+    Commande.save() de ce client (voir ce hook dans core/models.py) -- même logique de
+    fraîcheur garantie que facture_pdf, pas un TTL approximatif : cette liste ne peut jamais
+    afficher une commande dans un statut périmé.
     """
     client_instance, client_field = resoudre_identite_client(request.user)
     if client_instance is None:
         return Response({"error": "Action réservée aux clients"}, status=403)
+
+    cache_key = f"historique_client:{client_field}:{client_instance.id}"
+    cache = cache_get(cache_key)
+    if cache is not None:
+        return Response(cache)
+
     commandes = Commande.objects.filter(**{client_field: client_instance}).order_by('-date')
     # 🔐 Le client ne doit jamais voir quel agent a validé/refusé ses ordonnances
     serializer = CommandeClientSerializer(commandes, many=True)
+    cache_set(cache_key, serializer.data, timeout=3600)
     return Response(serializer.data)
 
 # --- 📋 GESTION DES ORDONNANCES SÉCURISÉE ---

@@ -7,7 +7,7 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from .authentication import StaffJWTAuthentication, ClientOrStaffJWTAuthentication, resoudre_identite_client
+from .authentication import StaffJWTAuthentication
 from weasyprint import HTML
 import qrcode
 import base64
@@ -44,47 +44,27 @@ def _recuperer_utilisateur_jwt(request):
         return None
 
 
-def _recuperer_utilisateur_jwt_client_ou_staff(request):
-    """
-    Variante de _recuperer_utilisateur_jwt() ci-dessus qui accepte AUSSI les jetons
-    "type": "client" (marketplace globale, CompteClient) en plus des jetons du personnel --
-    réservée à export_facture_pdf, seul export PDF qu'un client doit pouvoir télécharger
-    (sa propre facture). Les 3 autres exports (financier, stock, alertes) restent strictement
-    personnel et continuent d'utiliser _recuperer_utilisateur_jwt() : CompteClient n'a
-    volontairement pas d'attribut is_superuser (pas de PermissionsMixin), donc les mélanger
-    là ferait planter les contrôles de rôle (AttributeError) au lieu de les bloquer proprement.
-    """
-    try:
-        header = ClientOrStaffJWTAuthentication().get_header(request)
-        if header is None:
-            return None
-        raw_token = ClientOrStaffJWTAuthentication().get_raw_token(header)
-        validated_token = ClientOrStaffJWTAuthentication().get_validated_token(raw_token)
-        return ClientOrStaffJWTAuthentication().get_user(validated_token)
-    except Exception:
-        return None
-
-
 # 🔐 FONCTION PRIVÉE DE VÉRIFICATION DU TOKEN JWT POUR LES TÉLÉCHARGEMENTS
 @csrf_exempt
 def export_facture_pdf(request, commande_id):
     """Génération de PDF hautement sécurisée (Anti-IDOR) compatible Next.js 📄"""
     
     # 1. Authentification stricte via le Jetons JWT envoyé par le Frontend
-    # 🔧 CORRECTIF JONCTION COMPTECLIENT : _recuperer_utilisateur_jwt() (staff uniquement)
-    # remplacée ici par la variante qui reconnaît aussi les jetons CompteClient -- sans ça,
-    # un client marketplace ne pouvait jamais télécharger sa propre facture.
-    user = _recuperer_utilisateur_jwt_client_ou_staff(request)
+    # 🔧 CORRECTIF (retour arrière, 01/08) : le téléchargement de facture côté CLIENT (bouton
+    # sur commandes/page.tsx) a été retiré -- window.open(url) n'envoie jamais le header
+    # Authorization, donc ce bouton échouait systématiquement avec un 401 ("faute
+    # d'authentification" côté utilisateur), quelle que soit la logique d'accès ici. Plutôt
+    # que de brancher le correctif déjà prêt côté frontend (lib/voirFacture.ts, requête
+    # authentifiée en blob, déjà utilisé ailleurs), décision produit : simplifier en
+    # supprimant complètement l'accès client à cet export -- reste strictement personnel,
+    # même mécanisme que les 3 autres exports PDF (financier, stock, alertes).
+    user = _recuperer_utilisateur_jwt(request)
     if not user or not user.is_authenticated:
         return HttpResponse("Authentification requise pour télécharger ce PDF.", status=401)
+    if not user.is_staff:
+        return HttpResponse("Accès réservé au personnel de la pharmacie.", status=403)
 
-    # 2. 🕵️ CONTRÔLE D'ACCÈS : Le personnel voit tout, le client ne voit QUE son profil
-    if user.is_staff:
-        commande = get_object_or_404(Commande, id=commande_id)
-    else:
-        client_instance, client_field = resoudre_identite_client(user)
-        # L'ID de la commande doit impérativement correspondre au profil du client connecté
-        commande = get_object_or_404(Commande, id=commande_id, **{client_field: client_instance})
+    commande = get_object_or_404(Commande, id=commande_id)
 
     config = PharmacieConfig.objects.first()
 
