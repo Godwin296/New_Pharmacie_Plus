@@ -89,7 +89,7 @@ function CataloguePageInner() {
   // seul le contenu de la grille affiche un indicateur "Recherche..." le temps du fetch,
   // exactement comme /caisse/pos (voir son commentaire "searching").
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(() => searchParams.get('filtres') === '1');
   const [quantites, setQuantites] = useState<Record<number, number>>({});
   // 🚀 MODE OFFLINE (brique 4/4) : true quand les données affichées viennent de la copie
   // locale IndexedDB (réseau indisponible) plutôt que du serveur -- pilote le bandeau

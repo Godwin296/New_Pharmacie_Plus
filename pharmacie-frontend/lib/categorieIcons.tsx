@@ -44,6 +44,12 @@ export function iconePourCategorie(code: string): LucideIcon {
   return CATEGORIE_ICONS[code] || Pill;
 }
 
-// Sous-ensemble mis en avant sur l'accueil (grille rapide) -- les plus courantes en usage
-// officinal quotidien plutôt que les 30 d'un coup, qui noieraient l'écran.
-export const CATEGORIES_ACCUEIL = ["antalgique", "antibiotique", "vitamine", "antihistaminique"];
+// Sous-ensemble mis en avant sur l'accueil (grille rapide), chacune avec sa propre teinte --
+// fidèle à la grille colorée de la référence fournie (bleu/vert/rose/jaune), pas des tuiles
+// toutes identiques comme dans la première tentative.
+export const CATEGORIES_ACCUEIL: { code: string; label: string; bg: string; fg: string }[] = [
+  { code: "antalgique", label: "Douleur", bg: "bg-blue-50 dark:bg-blue-500/10", fg: "text-blue-500" },
+  { code: "antibiotique", label: "Infections", bg: "bg-emerald-50 dark:bg-emerald-500/10", fg: "text-emerald-500" },
+  { code: "vitamine", label: "Vitamines", bg: "bg-amber-50 dark:bg-amber-500/10", fg: "text-amber-500" },
+  { code: "antihistaminique", label: "Allergies", bg: "bg-rose-50 dark:bg-rose-500/10", fg: "text-rose-500" },
+];
