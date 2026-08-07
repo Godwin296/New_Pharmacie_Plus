@@ -1,278 +1,409 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  ArrowRight, Phone, Mail, LogIn,
-  MessageCircle, Moon, Sun, MapPin, HeartPulse, Clock, ShieldCheck, FileText, Receipt, LayoutDashboard, ShoppingBag
+import {
+  LogIn, UserPlus, Pill, MapPin, Phone, PackageCheck, Loader2, ArrowRight,
+  Search, Mic, ScanLine, Heart, ChevronRight, FileText, Truck, Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import apiClient from '../lib/apiClient';
 import { useConfigPharmacie } from '../lib/context/ConfigPharmacieContext';
+import Prix from '../lib/components/Prix';
+import { useToast, ToastContainer } from '../lib/hooks/useToast';
+import { iconePourCategorie, CATEGORIES_ACCUEIL } from '../lib/categorieIcons';
+
+// 🎨 REFONTE (30/07, v5) : v4 gardait les conventions déjà en place dans le reste de l'app
+// (cartes blanches sobres, icônes toutes de la même teinte) plutôt que de vraiment reprendre
+// la STRUCTURE VISUELLE de la référence fournie (bannière illustrée avec CTA, grille de
+// catégories colorée façon icônes pastel, cartes produit à grande image + cœur superposé).
+// v5 colle beaucoup plus fidèlement à cette structure, avec la palette de la marque à la
+// place du turquoise du modèle -- et corrige deux régressions signalées : la transcription
+// vocale ne s'affichait pas en direct dans la barre, et les liens "Voir tout" n'amenaient
+// nulle part de spécifique (catalogue générique, sans même ouvrir les filtres).
+
+const STATUT_INFO: Record<string, { label: string; couleur: string }> = {
+  en_cours: { label: 'Panier en cours', couleur: 'text-blue-600 dark:text-blue-400' },
+  attente_validation: { label: 'Ordonnance en vérification', couleur: 'text-amber-600 dark:text-amber-400' },
+  paiement_a_verifier: { label: 'Paiement en cours de vérification', couleur: 'text-amber-600 dark:text-amber-400' },
+  payee_a_retirer: { label: 'Prête à retirer au guichet', couleur: 'text-emerald-600 dark:text-emerald-400' },
+  retiree: { label: 'Retirée', couleur: 'text-slate-500' },
+  payee: { label: 'Payée', couleur: 'text-emerald-600 dark:text-emerald-400' },
+  annulee: { label: 'Annulée', couleur: 'text-red-500' },
+};
+
+interface DerniereCommande {
+  id: number;
+  statut: string;
+  total_general: number;
+  items: { id: number }[];
+}
+
+interface ProduitLeger {
+  id: number;
+  nom: string;
+  prix: number;
+  image?: string;
+  categorie: string;
+}
 
 export default function HomePage() {
-  const [isDark, setIsDark] = useState(false);
-  const [user, setUser] = useState<any>(null); 
-  const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
-
-  // Config pharmacie depuis le Context partagé — évite un double appel à /api/infos-pharmacie/
-  // (le layout.tsx l'appelle déjà une fois via ConfigPharmacieProvider)
+  const router = useRouter();
   const { config } = useConfigPharmacie();
+  const { toasts, showToast } = useToast();
+  const [statutSession, setStatutSession] = useState<'verification' | 'visiteur' | 'client'>('verification');
+  const [prenomClient, setPrenomClient] = useState<string | null>(null);
+  const [derniereCommande, setDerniereCommande] = useState<DerniereCommande | null>(null);
+  const [chargementCommande, setChargementCommande] = useState(false);
 
-    useEffect(() => {
-    setMounted(true);
+  const [recherche, setRecherche] = useState('');
+  const [ecouteVocale, setEcouteVocale] = useState(false);
+  const [vocalSupporte, setVocalSupporte] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
-    const checkSessionAndConfig = async () => {
-      const savedUser = localStorage.getItem('user');
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
-      } else {
-        setUser(null);
-      }
+  const [populaires, setPopulaires] = useState<ProduitLeger[]>([]);
+  const [favorisIds, setFavorisIds] = useState<Set<number>>(new Set());
+  const [favorisProduits, setFavorisProduits] = useState<ProduitLeger[]>([]);
+  const [chargementProduits, setChargementProduits] = useState(true);
 
-      const token = localStorage.getItem('access_token');
-
-      if (token) {
-        try {
-          const resAuth = await apiClient.get('/api/current-user/');
-          
-          if (resAuth.data.is_authenticated) {
-            setUser(resAuth.data);
-            localStorage.setItem('user', JSON.stringify(resAuth.data));
-          } else {
-            setUser(null);
-            localStorage.removeItem('user');
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-          }
-        } catch (err) {
-          console.error("Vérification session en attente...");
-        }
-      } else {
-        setUser(null);
-        localStorage.removeItem('user');
-      }
-
-      setLoading(false);
-    };
-
-    checkSessionAndConfig();
+  useEffect(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    setVocalSupporte(!!SR);
   }, []);
 
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    const role = localStorage.getItem('user_role');
+    if (!token || !role) { setStatutSession('visiteur'); return; }
+    if (role === 'admin') { router.replace('/admin/dashboard'); return; }
+    if (role === 'caissiere' || role === 'caissière') { router.replace('/caisse/pos'); return; }
 
-  const toggleDarkMode = () => {
-    document.documentElement.classList.toggle('dark');
-    setIsDark(!isDark);
+    setStatutSession('client');
+    apiClient.get('/api/v1/client/me/')
+      .then((res) => setPrenomClient(res.data?.nom?.split(' ')[0] || null))
+      .catch(() => {});
+
+    setChargementCommande(true);
+    apiClient.get('/api/commandes/')
+      .then((res) => {
+        const liste: DerniereCommande[] = res.data || [];
+        setDerniereCommande(liste.find((c) => c.items && c.items.length > 0) || null);
+      })
+      .catch(() => {})
+      .finally(() => setChargementCommande(false));
+
+    apiClient.get('/api/favoris/')
+      .then((res) => {
+        const liste = res.data || [];
+        setFavorisIds(new Set(liste.map((f: any) => f.produit.id)));
+        setFavorisProduits(liste.slice(0, 6).map((f: any) => f.produit));
+      })
+      .catch(() => {});
+  }, [router]);
+
+  useEffect(() => {
+    apiClient.get('/api/catalogue/?page_size=6')
+      .then((res) => setPopulaires(res.data?.produits || []))
+      .catch(() => {})
+      .finally(() => setChargementProduits(false));
+  }, []);
+
+  // 🎙️ (30/07, corrigé) interimResults=true + mise à jour de `recherche` sur CHAQUE
+  // résultat (intermédiaire ou final) -- avant, seul le résultat final déclenchait une
+  // redirection immédiate, donc rien ne s'affichait dans la barre pendant que la personne
+  // parlait. Désormais le texte se construit en direct sous les yeux, comme sur un vrai
+  // clavier vocal, et la redirection n'a lieu qu'une fois la reconnaissance terminée
+  // (silence détecté -> onend).
+  const lancerRechercheVocale = () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    const recognition = new SR();
+    recognition.lang = 'fr-FR';
+    recognition.interimResults = true;
+    recognition.continuous = true;
+    recognition.onstart = () => { setEcouteVocale(true); setRecherche(''); };
+    recognition.onresult = (e: any) => {
+      let texte = '';
+      for (let i = 0; i < e.results.length; i++) texte += e.results[i][0].transcript;
+      setRecherche(texte);
+    };
+    recognition.onerror = () => { setEcouteVocale(false); showToast("Recherche vocale interrompue, réessayez", "error"); };
+    recognition.onend = () => {
+      setEcouteVocale(false);
+      setRecherche((texteFinal) => {
+        if (texteFinal.trim()) router.push(`/catalogue?q=${encodeURIComponent(texteFinal.trim())}`);
+        return texteFinal;
+      });
+    };
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
-  // --- 🧠 LOGIQUE DU BOUTON DYNAMIQUE SÉCURISÉE ---
-  const renderAuthButton = () => {
-    if (loading) return <div className="w-32 h-10 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-full"></div>;
+  const arreterRechercheVocale = () => recognitionRef.current?.stop();
 
-    if (!user) {
-      return (
-        <Link 
-          href="/login" 
-          title="Accéder au portail de connexion"
-          aria-label="Accéder au portail de connexion"
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-full text-sm font-bold no-underline flex items-center gap-2 transition-all"
-        >
-          <LogIn size={16} /> Espace de connexion
-        </Link>
-      );
-    }
-
-    if (user.role === 'admin' || user.is_superuser) {
-      return (
-        <Link 
-          href="/admin/dashboard" 
-          title="Accéder à la console d'administration"
-          aria-label="Accéder à la console d'administration"
-          className="bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-2.5 rounded-full text-sm font-bold no-underline flex items-center gap-2 transition-all"
-        >
-          <LayoutDashboard size={16} /> Tableau de bord
-        </Link>
-      );
-    }
-
-    if (user.role === 'caissiere' || user.is_staff) {
-      return (
-        <Link 
-          href="/caisse/pos" 
-          title="Accéder au terminal de vente"
-          aria-label="Accéder au terminal de vente"
-          className="bg-blue-600 text-white px-6 py-2.5 rounded-full text-sm font-bold no-underline flex items-center gap-2 transition-all"
-        >
-          <ShoppingBag size={16} /> Espace vente au guichet
-        </Link>
-      );
-    }
-
-    return null;
+  const soumettreRecherche = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (recherche.trim()) router.push(`/catalogue?q=${encodeURIComponent(recherche.trim())}`);
   };
 
-  if (!mounted) return null;
+  const basculerFavori = async (produit: ProduitLeger) => {
+    const etaitFavori = favorisIds.has(produit.id);
+    setFavorisIds((prev) => {
+      const next = new Set(prev);
+      etaitFavori ? next.delete(produit.id) : next.add(produit.id);
+      return next;
+    });
+    try {
+      await apiClient.post(`/api/favoris/${produit.id}/`);
+    } catch {
+      setFavorisIds((prev) => {
+        const next = new Set(prev);
+        etaitFavori ? next.add(produit.id) : next.delete(produit.id);
+        return next;
+      });
+      showToast("Impossible de mettre à jour vos favoris", "error");
+    }
+  };
 
+  if (statutSession === 'verification') {
+    return <div className="min-h-screen bg-slate-50 dark:bg-[#050e0c]" />;
+  }
+
+  const estClient = statutSession === 'client';
+  const statutInfo = derniereCommande ? STATUT_INFO[derniereCommande.statut] : null;
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-500 font-sans">
-      
-      {/* 🧭 NAVIGATION DYNAMIQUE */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            {config?.logo ? (
-              <img src={config.logo} alt="Logo" className="w-10 h-10 object-contain rounded-lg" />
-            ) : (
-              <HeartPulse className="text-emerald-600" size={28} />
-            )}
-            <span className="font-bold text-xl tracking-tight uppercase">
-              {config?.nom || "Pharmacie"}
-            </span>
-          </div>
+    <div className="min-h-screen w-full bg-slate-50 dark:bg-[#050e0c] flex flex-col">
+      <div className="flex-grow flex flex-col items-center px-5 sm:px-6 pt-5 pb-12">
+        <div className="w-full max-w-md">
 
-          <div className="flex items-center gap-6">
-            <button onClick={toggleDarkMode} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 border-none bg-transparent cursor-pointer transition-colors">
-              {isDark ? <Sun className="text-yellow-500" size={20} /> : <Moon className="text-slate-500" size={20} />}
-            </button>
-            <Link href="/catalogue" className="hidden md:block text-sm font-bold text-slate-600 dark:text-slate-300 no-underline hover:text-emerald-600 transition-colors">Catalogue</Link>
-            
-            {/* 🎯 INTEGRATION DU BOUTON JWT */}
-            {renderAuthButton()}
-          </div>
-        </div>
-      </nav>
-
-      {/* 🏥 HERO SECTION */}
-      <section className="pt-40 pb-20 px-6 text-center max-w-4xl mx-auto">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-          <span className="text-emerald-600 dark:text-emerald-400 font-bold text-xs uppercase tracking-[0.2em] bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2 rounded-full">
-            Votre santé, notre engagement quotidien
-          </span>
-          <h1 className="text-5xl md:text-7xl font-bold mt-8 mb-6 leading-tight tracking-tight text-slate-900 dark:text-white">
-            Prendre soin de vous, <br /> <span className="text-emerald-600">en toute simplicité.</span>
-          </h1>
-          <p className="text-lg md:text-xl text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl mx-auto">
-            Accédez à vos médicaments, envoyez vos ordonnances et recevez des conseils d'experts depuis chez vous.
-          </p>
-
-          <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/catalogue" className="w-full sm:w-auto bg-slate-900 dark:bg-emerald-600 text-white px-10 py-4 rounded-xl font-bold no-underline flex items-center justify-center gap-2 hover:shadow-lg transition-all text-sm uppercase tracking-widest">
-              Commander un produit <ArrowRight size={18} />
-            </Link>
-      
-            <a 
-              href={`tel:${config?.telephone || '+237'}`} 
-              className="w-full sm:w-auto relative px-10 py-4 rounded-xl font-bold no-underline flex items-center justify-center gap-2 transition-all text-sm uppercase tracking-widest bg-white dark:bg-slate-800 text-slate-700 dark:text-white border border-slate-200 dark:border-slate-700 hover:border-emerald-500 overflow-hidden group"
+          {/* 📍 Pastille de localisation -- compacte, en haut, comme la référence (au lieu
+              d'une grande carte). Le téléphone reste une action directe (tel:) à côté. */}
+          {(config?.adresse || config?.telephone) && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+              className="flex items-center justify-between gap-3 mb-4"
             >
-              <motion.span
-                animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.3, 0.1] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 bg-emerald-500 pointer-events-none"
-              />
-              <Phone size={18} className="text-emerald-600 group-hover:rotate-12 transition-transform z-10" /> 
-              <span className="z-10">Nous Appeler</span>
-            </a>
-          </div>
-        </motion.div>
-      </section>
-
-      {/* 🌿 NOS AVANTAGES */}
-      <section className="py-24 px-6 max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
-          <div>
-            <h2 className="text-4xl font-bold mb-8 italic tracking-tighter">Pourquoi choisir {config?.nom || "notre officine"} ?</h2>
-            <p className="text-slate-500 dark:text-slate-400 leading-relaxed mb-8 font-medium text-lg">
-              Nous mettons la technologie au service de votre sécurité. Chaque transaction est rigoureusement tracée pour vous offrir une transparence totale sur vos soins.
-            </p>
-            <div className="space-y-6">
-              <div className="flex items-start gap-4">
-                <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-emerald-600"><ShieldCheck size={24} /></div>
-                <div>
-                  <h4 className="font-bold text-slate-900 dark:text-white">Traçabilité Intégrale</h4>
-                  <p className="text-sm text-slate-500">Chaque médicament possède un identifiant unique pour un suivi précis de son origine.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-emerald-600"><Receipt size={24} /></div>
-                <div>
-                  <h4 className="font-bold text-slate-900 dark:text-white">Historique & Factures</h4>
-                  <p className="text-sm text-slate-500">Retrouvez toutes vos factures et votre historique de soins dans votre espace personnel.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-50 dark:bg-slate-900/50 p-12 rounded-[40px] border border-slate-100 dark:border-slate-800">
-            <h4 className="font-black text-emerald-600 text-xs uppercase tracking-[0.2em] mb-8">Services Disponibles</h4>
-            <div className="space-y-10">
-              <div className="flex gap-5">
-                <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center text-emerald-600"><FileText size={24}/></div>
-                <div>
-                  <h5 className="font-bold text-lg">Gestion d'Ordonnances</h5>
-                  <p className="text-sm text-slate-500 leading-relaxed">Téléchargez vos documents en ligne pour une préparation anticipée en officine.</p>
-                </div>
-              </div>
-              <div className="flex gap-5">
-                <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center text-emerald-600"><Clock size={24}/></div>
-                <div>
-                  <h5 className="font-bold text-lg">Disponibilité 24h/24</h5>
-                  <p className="text-sm text-slate-500 leading-relaxed">Accédez à notre catalogue et à vos informations de santé à tout moment.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 🛠️ CONTACTS DIRECTS */}
-      <section className="py-20 px-6 bg-slate-50 dark:bg-slate-900/50">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-          <a href={`https://wa.me/${config?.telephone?.replace(/\s+/g, '')}`} target="_blank" rel="noreferrer" className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-100 dark:border-slate-700 no-underline text-center hover:border-emerald-500 transition-all shadow-sm">
-            <MessageCircle className="text-emerald-600 mx-auto mb-4" size={32} />
-            <h3 className="font-bold text-slate-900 dark:text-white">WhatsApp</h3>
-            <p className="text-xs text-slate-500 mt-2 uppercase font-black tracking-widest">Conseil Direct</p>
-          </a>
-          <a href={`mailto:${config?.email_contact}`} className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-100 dark:border-slate-700 no-underline text-center hover:border-emerald-500 transition-all shadow-sm">
-            <Mail className="text-emerald-600 mx-auto mb-4" size={32} />
-            <h3 className="font-bold text-slate-900 dark:text-white">E-mail</h3>
-            <p className="text-xs text-slate-500 mt-2 uppercase font-black tracking-widest">Demandes & Devis</p>
-          </a>
-          <a href={`tel:${config?.telephone}`} className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-100 dark:border-slate-700 no-underline text-center hover:border-emerald-500 transition-all shadow-sm">
-            <Phone className="text-emerald-600 mx-auto mb-4" size={32} />
-            <h3 className="font-bold text-slate-900 dark:text-white">Appel Direct</h3>
-            <p className="text-xs text-slate-500 mt-2 uppercase font-black tracking-widest">Ligne Officine</p>
-          </a>
-        </div>
-      </section>
-
-      {/* 🌿 FOOTER */}
-      <footer className="py-24 px-6 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-900">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16">
-          <div className="space-y-6">
-            <div className="flex items-center gap-3 text-2xl font-black uppercase tracking-tighter">
-              {config?.logo ? (
-                <img src={config.logo} alt="Logo" className="w-8 h-8 object-contain" />
-              ) : (
-                <HeartPulse className="text-emerald-600" />
+              {config?.adresse && (
+                <span className="inline-flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] font-semibold px-3 py-1.5 rounded-full truncate">
+                  <MapPin size={12} className="shrink-0" /> <span className="truncate">{config.adresse}</span>
+                </span>
               )}
-              {config?.nom || "Pharmacie Plus"}
-            </div>
-            <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400 font-bold text-sm">
-              <MapPin className="text-emerald-600" size={20} />
-              {config?.adresse || "Adresse en attente de configuration"}
-            </div>
-          </div>
+              {config?.telephone && (
+                <a href={`tel:${config.telephone}`} className="shrink-0 h-8 w-8 rounded-full bg-white dark:bg-white/[0.06] border border-slate-100 dark:border-white/10 flex items-center justify-center text-emerald-500 no-underline">
+                  <Phone size={13} />
+                </a>
+              )}
+            </motion.div>
+          )}
 
-          <div className="flex flex-col md:items-end gap-4 text-slate-600 dark:text-slate-300 font-black text-sm uppercase tracking-widest">
-            <div className="flex items-center gap-3"><Clock className="text-emerald-600" size={18} /> Ouvert 24h/24 — 7j/7</div>
-            <div className="flex items-center gap-3"><Phone className="text-emerald-600" size={18} /> {config?.telephone || "+237 ..."}</div>
-          </div>
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.02 }} className="mb-4">
+            <h1 className="font-display text-2xl font-bold text-slate-800 dark:text-white tracking-tight">
+              {estClient
+                ? (prenomClient ? <>Bon retour, {prenomClient} 👋</> : 'Bon retour parmi nous 👋')
+                : 'Bienvenue'}
+            </h1>
+          </motion.div>
+
+          {/* 🔎 Recherche + 🎙️ vocale (transcription en direct) + 📷 scan */}
+          <motion.form
+            onSubmit={soumettreRecherche}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}
+            className="flex gap-2 mb-5"
+          >
+            <div className="relative flex-grow">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                value={recherche}
+                onChange={(e) => setRecherche(e.target.value)}
+                type="text"
+                placeholder={ecouteVocale ? "Je vous écoute…" : "Rechercher un médicament…"}
+                className="w-full pl-11 pr-4 py-3.5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-800 dark:text-white text-sm font-medium focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 outline-none transition-all"
+              />
+            </div>
+            {vocalSupporte && (
+              <button
+                type="button"
+                onClick={ecouteVocale ? arreterRechercheVocale : lancerRechercheVocale}
+                aria-label="Recherche vocale"
+                className={`shrink-0 h-[52px] w-[52px] rounded-2xl flex items-center justify-center border-none cursor-pointer transition-colors ${
+                  ecouteVocale ? "bg-red-500 text-white animate-pulse" : "bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-500"
+                }`}
+              >
+                <Mic size={18} />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => showToast("Scan de code-barres bientôt disponible", "info")}
+              aria-label="Scanner un code-barres (bientôt disponible)"
+              className="shrink-0 h-[52px] w-[52px] rounded-2xl flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 text-white border-none cursor-pointer transition-colors"
+            >
+              <ScanLine size={18} />
+            </button>
+          </motion.form>
+
+          {/* 🧾 Statut RÉEL de la dernière commande -- reste prioritaire s'il y en a une */}
+          {estClient && chargementCommande && (
+            <div className="flex justify-center py-6"><Loader2 size={20} className="animate-spin text-emerald-500" /></div>
+          )}
+          {estClient && !chargementCommande && derniereCommande && statutInfo && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}>
+              <Link
+                href={derniereCommande.statut === 'en_cours' ? '/panier' : '/commandes'}
+                className="flex items-center gap-3.5 bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-[24px] p-4 mb-5 no-underline transition-colors active:scale-[0.99]"
+              >
+                <div className="h-11 w-11 shrink-0 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
+                  <PackageCheck size={20} className="text-emerald-500" />
+                </div>
+                <div className="min-w-0 flex-grow">
+                  <p className={`text-[12px] font-semibold ${statutInfo.couleur}`}>{statutInfo.label}</p>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">
+                    Commande #{derniereCommande.id} · <Prix montant={derniereCommande.total_general} />
+                  </p>
+                </div>
+                <ArrowRight size={16} className="text-slate-300 shrink-0" />
+              </Link>
+            </motion.div>
+          )}
+
+          {/* 🎁 BANNIÈRE -- même rôle structurel que 'Order Medicine' de la référence
+              (illustration + accroche + CTA), mais avec une vraie fonctionnalité du produit
+              (l'upload d'ordonnance) plutôt qu'une promesse de réduction inventée. */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
+            className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-emerald-500 to-emerald-700 p-5 mb-6"
+          >
+            <div className="absolute -right-6 -bottom-8 h-32 w-32 rounded-full bg-white/10" />
+            <div className="absolute right-8 top-4 h-16 w-16 rounded-2xl bg-white/10 flex items-center justify-center rotate-12">
+              <Truck size={28} className="text-white/70" />
+            </div>
+            <div className="relative max-w-[70%]">
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-100 mb-2">
+                <Sparkles size={11} /> Sans vous déplacer
+              </span>
+              <h3 className="font-display text-lg font-bold text-white leading-snug mb-1.5">
+                Envoyez votre ordonnance
+              </h3>
+              <p className="text-emerald-50/80 text-[12px] leading-snug mb-3">
+                Dites-nous ce qu&apos;il vous faut, on prépare votre commande.
+              </p>
+              <Link
+                href="/catalogue"
+                className="inline-flex items-center gap-1.5 bg-white text-emerald-700 text-[12px] font-bold px-4 py-2.5 rounded-xl no-underline"
+              >
+                <FileText size={13} /> Commander
+              </Link>
+            </div>
+          </motion.div>
+
+          {/* 🏷️ Catégories -- grille colorée (une teinte par catégorie), fidèle à la
+              référence. 'Voir tout' ouvre directement les filtres du catalogue au lieu
+              d'atterrir sur une vue générique qu'il faut re-filtrer soi-même. */}
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-display text-sm font-bold text-slate-800 dark:text-white">Catégories</h2>
+              <Link href="/catalogue?filtres=1" className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 no-underline flex items-center gap-0.5">
+                Voir tout <ChevronRight size={13} />
+              </Link>
+            </div>
+            <div className="grid grid-cols-4 gap-2.5">
+              {CATEGORIES_ACCUEIL.map((cat) => {
+                const Icon = iconePourCategorie(cat.code);
+                return (
+                  <Link key={cat.code} href={`/catalogue?cat=${cat.code}`} className="flex flex-col items-center gap-2 no-underline group">
+                    <div className={`h-14 w-14 rounded-2xl ${cat.bg} flex items-center justify-center ${cat.fg} group-active:scale-90 transition-transform`}>
+                      <Icon size={22} />
+                    </div>
+                    <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 text-center leading-tight">{cat.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </motion.div>
+
+          {/* ❤️ Favoris */}
+          {estClient && favorisProduits.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13 }} className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-display text-sm font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                  <Heart size={14} className="fill-red-500 text-red-500" /> Vos favoris
+                </h2>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+                {favorisProduits.map((p) => (
+                  <ProduitCarte key={p.id} produit={p} favori onBascule={basculerFavori} />
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 🛍️ Produits populaires -- 'Voir tout' mène au catalogue complet (déjà la vue
+              'tous les produits' triés), pas de destination plus spécifique à construire ici. */}
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }} className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-display text-sm font-bold text-slate-800 dark:text-white">Produits populaires</h2>
+              <Link href="/catalogue" className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 no-underline flex items-center gap-0.5">
+                Voir tout <ChevronRight size={13} />
+              </Link>
+            </div>
+            {chargementProduits ? (
+              <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-emerald-500" /></div>
+            ) : (
+              <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+                {populaires.map((p) => (
+                  <ProduitCarte
+                    key={p.id}
+                    produit={p}
+                    favori={favorisIds.has(p.id)}
+                    onBascule={estClient ? basculerFavori : () => router.push('/login')}
+                  />
+                ))}
+              </div>
+            )}
+          </motion.div>
+
+          {!estClient && (
+            <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="grid grid-cols-2 gap-3">
+              <Link href="/login" className="w-full bg-white dark:bg-white/[0.04] hover:bg-slate-50 text-slate-700 dark:text-slate-200 border border-slate-100 dark:border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
+                <LogIn size={17} /> Connexion
+              </Link>
+              <Link href="/register" className="w-full bg-white dark:bg-white/[0.04] hover:bg-slate-50 text-slate-700 dark:text-slate-200 border border-slate-100 dark:border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
+                <UserPlus size={17} /> Créer un compte
+              </Link>
+            </motion.div>
+          )}
         </div>
-        <div className="text-center mt-20 pt-10 border-t border-slate-50 dark:border-slate-900 text-[10px] text-slate-400 font-black uppercase tracking-[0.5em] opacity-40">
-          © 2026 {config?.nom || "Pharmacie Plus"} — Éthique & Santé Numérique
-        </div>
-      </footer>
+      </div>
+      <ToastContainer toasts={toasts} />
     </div>
+  );
+}
+
+function ProduitCarte({ produit, favori, onBascule }: { produit: ProduitLeger; favori: boolean; onBascule: (p: ProduitLeger) => void }) {
+  return (
+    <Link
+      href={`/produit/${produit.id}`}
+      className="shrink-0 w-36 bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-2xl p-2.5 no-underline relative"
+    >
+      <button
+        onClick={(e) => { e.preventDefault(); onBascule(produit); }}
+        aria-label={favori ? "Retirer des favoris" : "Ajouter aux favoris"}
+        className="absolute top-4 right-4 z-10 h-7 w-7 rounded-full bg-white/90 dark:bg-slate-900/90 shadow flex items-center justify-center border-none cursor-pointer"
+      >
+        <Heart size={13} className={favori ? "fill-red-500 text-red-500" : "text-slate-300"} />
+      </button>
+      {/* 🖼️ Grande zone image (proportion proche de la référence) -- repli icône Pill tant
+          qu'aucune photo n'est chargée pour ce produit. */}
+      <div className="h-24 w-full rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mb-2 overflow-hidden">
+        {produit.image ? (
+          <img src={produit.image} alt={produit.nom} loading="lazy" className="w-full h-full object-cover" />
+        ) : (
+          <Pill size={26} className="text-emerald-300 dark:text-emerald-700" />
+        )}
+      </div>
+      <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 truncate">{produit.nom}</p>
+      <Prix montant={produit.prix} className="text-[12px] font-bold text-emerald-600 dark:text-emerald-400" />
+    </Link>
   );
 }

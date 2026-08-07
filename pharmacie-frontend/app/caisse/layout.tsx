@@ -50,7 +50,7 @@ export default function CaisseLayout({ children }: { children: React.ReactNode }
                 dans app/layout.tsx) qu'utilise déjà l'en-tête admin, avec repli automatique
                 sur l'icône générique si aucun logo n'a encore été uploadé. */}
             <div className="h-10 w-10 bg-white rounded-lg flex items-center justify-center p-1 shadow-lg">
-              <PharmacyIcon className="w-full h-full object-contain rounded" alt="Pharmacie+" />
+              <PharmacyIcon className="w-full h-full object-cover rounded" alt="Pharmacie+" />
             </div>
             <div className="flex flex-col">
                 <span className="font-black uppercase italic tracking-tighter text-lg leading-none">ESPACE CAISSE</span>

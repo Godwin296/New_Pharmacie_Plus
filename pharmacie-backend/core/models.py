@@ -43,21 +43,21 @@ class ClientGuichet(models.Model):
 
 class Produit(models.Model):
     CATEGORIES = [
-        ('antalgique', 'Antalgiques 💊'), ('anti_inflam', 'Anti-inflammatoires 🔥'),
-        ('antipyrétique', 'Antipyrétiques 🤒'), ('anti_acide', 'Anti-acides 🥛'),
-        ('antispasmodique', 'Antispasmodiques 🌀'), ('antidiarrhéique', 'Antidiarrhéiques 🛑'),
-        ('laxatif', 'Laxatifs 🚽'), ('antidiabétique', 'Antidiabétiques 🩸'),
-        ('antihypertenseur', 'Antihypertenseurs ❤️'), ('anticoagulant', 'Anticoagulants 💉'),
-        ('antiagrégant', 'Antiagrégants plaquettaires 🛡️'), ('hypolipémiant', 'Hypolipémiants 📉'),
-        ('antibiotique', 'Antibiotiques 🧬'), ('antiviral', 'Antiviraux 👾'),
-        ('antifongique', 'Antifongiques 🍄'), ('antihistaminique', 'Antihistaminiques 🤧'),
-        ('bronchodilatateur', 'Bronchodilatateurs 🫁'), ('antitussif', 'Antitussifs 🗣️'),
-        ('expectorant', 'Expectorants 💧'), ('anxiolytique', 'Anxiolytiques 🧘'),
-        ('hypnotique', 'Hypnotiques 😴'), ('antidépresseur', 'Antidépresseurs ☀️'),
-        ('neuroleptique', 'Neuroleptiques 🧠'), ('dermo_corticoide', 'Dermo-corticoïdes 🧴'),
-        ('antiseptique', 'Antiseptiques 🧼'), ('contraceptif', 'Contraceptifs 🛡️'),
-        ('vitamine', 'Vitamines ✨'), ('complement', 'Compléments alimentaires 🥦'),
-        ('homeopathie', 'Homéopathie 🌿'), ('phytotherapie', 'Phytothérapie 🍃'),
+        ('antalgique', 'Antalgiques'), ('anti_inflam', 'Anti-inflammatoires'),
+        ('antipyrétique', 'Antipyrétiques'), ('anti_acide', 'Anti-acides'),
+        ('antispasmodique', 'Antispasmodiques'), ('antidiarrhéique', 'Antidiarrhéiques'),
+        ('laxatif', 'Laxatifs'), ('antidiabétique', 'Antidiabétiques '),
+        ('antihypertenseur', 'Antihypertenseurs'), ('anticoagulant', 'Anticoagulants'),
+        ('antiagrégant', 'Antiagrégants plaquettaires'), ('hypolipémiant', 'Hypolipémiants'),
+        ('antibiotique', 'Antibiotiques'), ('antiviral', 'Antiviraux'),
+        ('antifongique', 'Antifongiques'), ('antihistaminique', 'Antihistaminiques'),
+        ('bronchodilatateur', 'Bronchodilatateurs'), ('antitussif', 'Antitussifs'),
+        ('expectorant', 'Expectorants'), ('anxiolytique', 'Anxiolytiques'),
+        ('hypnotique', 'Hypnotiques'), ('antidépresseur', 'Antidépresseurs'),
+        ('neuroleptique', 'Neuroleptiques'), ('dermo_corticoide', 'Dermo-corticoïdes'),
+        ('antiseptique', 'Antiseptiques'), ('contraceptif', 'Contraceptifs'),
+        ('vitamine', 'Vitamines'), ('complement', 'Compléments alimentaires'),
+        ('homeopathie', 'Homéopathie'), ('phytotherapie', 'Phytothérapie'),
     ]
     
     identifiant = models.CharField(max_length=20, unique=True, blank=True, verbose_name="Code Produit 🏷️")
@@ -288,6 +288,30 @@ class ProduitSupprimeLog(models.Model):
         return f"Produit #{self.produit_id} supprimé le {self.date_suppression:%d/%m/%Y %H:%M}"
 
 
+class Favori(models.Model):
+    """
+    ❤️ (30/07) Médicaments favoris d'un client -- absent jusqu'ici. Suit le même schéma
+    cross-tenant que Commande.compte_client : le compte client vit dans le schéma public
+    (clients_publics.CompteClient, marketplace globale) mais Favori vit dans le schéma de
+    CHAQUE pharmacie, au même titre que Produit -- un "favori" n'a de sens que pour le
+    catalogue précis d'une officine donnée, pas globalement sur toute la plateforme.
+    """
+    compte_client = models.ForeignKey(
+        "clients_publics.CompteClient", on_delete=models.CASCADE, related_name="favoris"
+    )
+    produit = models.ForeignKey(Produit, on_delete=models.CASCADE, related_name="favorise_par")
+    date_ajout = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Un même produit ne peut être ajouté deux fois par le même client -- le endpoint
+        # POST est donc idempotent (toggle), pas besoin de vérifier l'existence en amont.
+        unique_together = ("compte_client", "produit")
+        indexes = [models.Index(fields=["compte_client"])]
+
+    def __str__(self):
+        return f"{self.compte_client} ♥ {self.produit.nom}"
+
+
 class LotProduit(models.Model):
     """
     📦 Un lot = une réception physique distincte d'un même Produit (livraison fournisseur),
@@ -477,6 +501,16 @@ class Commande(models.Model):
         # lu rarement par commande : une invalidation EXACTE, ici au point de sauvegarde
         # unique de Commande, est possible et largement préférable à un TTL approximatif.
         cache_delete_exact(f"facture_pdf:{self.pk}")
+
+        # 📋 CACHE HISTORIQUE CLIENT (01/08) : même principe qu'au-dessus, mais keyé par
+        # client plutôt que par commande (l'historique liste TOUTES les commandes d'un
+        # client, pas une seule) -- invalidé aux DEUX identités possibles (guichet ou
+        # compte global), l'une des deux est vide selon le type de vente, `cache_delete_exact`
+        # sur une clé jamais posée ne fait simplement rien (pas d'erreur).
+        if self.compte_client_id:
+            cache_delete_exact(f"historique_client:compte_client:{self.compte_client_id}")
+        if self.client_guichet_id:
+            cache_delete_exact(f"historique_client:client_guichet:{self.client_guichet_id}")
 
     def _generer_reference(self):
         """

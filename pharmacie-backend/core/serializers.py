@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Produit, Mouvement_stock, Commande, ItemCommande, Fournisseur, PharmacieConfig, LotProduit
+from .models import Produit, Mouvement_stock, Commande, ItemCommande, Fournisseur, PharmacieConfig, LotProduit, Favori
 from .utils import generate_qr_base64, construire_contenu_qr_facture
 
 class PharmacieConfigSerializer(serializers.ModelSerializer):
@@ -135,10 +135,33 @@ class CommandeClientSerializer(CommandeSerializer):
         fields = [f for f in CommandeSerializer.Meta.fields if f != 'agent_validateur_nom']
 
 
+# 🆕 (30/07) Historique des mouvements de stock d'un produit -- le modèle Mouvement_stock
+# existait déjà et est alimenté automatiquement (voir Produit.save()/LotProduit dans
+# models.py, et core/services_prediction.py qui s'en sert déjà pour les prédictions),
+# mais rien ne l'exposait encore au frontend. Réservé à l'admin (vue api_produit_historique),
+# comme prix_achat -- ce ne sont pas des informations à montrer à un client.
+class MouvementStockSerializer(serializers.ModelSerializer):
+    auteur_nom = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Mouvement_stock
+        fields = ['id', 'type', 'quantite', 'date', 'auteur_nom', 'note']
+
+    def get_auteur_nom(self, obj):
+        return obj.auteur.username if obj.auteur else "Système"
+
+
 class ProduitSerializer(serializers.ModelSerializer):
     statut_stock_label = serializers.SerializerMethodField()
     jours_restants = serializers.ReadOnlyField()
     image = serializers.SerializerMethodField()
+    # 🆕 (30/07) categorie_display : libellé humain ('Antibiotiques') plutôt que le code brut
+    # stocké en base ('antibiotique') -- jusqu'ici seul /api/catalogue/ renvoyait la table de
+    # correspondance séparément (categories: {code: libellé}), ce qui obligeait tout écran
+    # consommant ProduitSerializer isolément (ex. page détail produit) à soit refaire un
+    # fetch juste pour ça, soit afficher le code brut. get_categorie_display() est la méthode
+    # native que Django génère automatiquement pour tout champ à choix (CATEGORIES).
+    categorie_display = serializers.CharField(source='get_categorie_display', read_only=True)
 
     class Meta:
         model = Produit
@@ -179,6 +202,18 @@ class ProduitSerializer(serializers.ModelSerializer):
         if not est_admin_tenant:
             data.pop('prix_achat', None)
         return data
+
+
+# 🆕 (30/07) Favoris -- placé APRÈS ProduitSerializer (dont il dépend) volontairement,
+# l'ordre des classes compte ici : `produit = ProduitSerializer(...)` est évalué au chargement
+# du module, une classe non encore définie plus haut ferait planter l'import.
+class FavoriSerializer(serializers.ModelSerializer):
+    produit = ProduitSerializer(read_only=True)
+
+    class Meta:
+        model = Favori
+        fields = ['id', 'produit', 'date_ajout']
+
 
 class FournisseurSerializer(serializers.ModelSerializer):
     class Meta:

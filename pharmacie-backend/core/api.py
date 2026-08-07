@@ -20,13 +20,15 @@ from django.contrib.auth.models import User
 from datetime import timedelta
 from django.utils import timezone
 
-from .models import Produit, Commande, ItemCommande, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog, LotProduit
+from .models import Produit, Commande, ItemCommande, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog, LotProduit, Favori
 from .serializers import (
     ProduitSerializer, CommandeSerializer, CommandeClientSerializer,
-    PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer
+    PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer,
+    MouvementStockSerializer, FavoriSerializer
 )
 from .validators import valider_et_desinfecter_ordonnance, valider_et_desinfecter_photo_produit
 from .chiffrement import chiffrer_contenu, dechiffrer_si_necessaire
+from .utils import obtenir_logo_base64
 from pharmacovigilance.detection import verifier_interactions_produits
 from django.core.files.base import ContentFile
 from .pagination import CataloguePagination
@@ -116,8 +118,23 @@ def infos_pharmacie(request):
     # `config.logo` est bien "truthy" côté React. Avec le contexte, DRF renvoie l'URL
     # absolue correcte (http://dupont.localhost:8000/media/config/logo.png).
     serializer = PharmacieConfigSerializer(config, context={'request': request})
-    cache_set("infos_pharmacie", serializer.data, timeout=3600)  # 1h : invalidé au besoin de toute façon
-    return Response(serializer.data)
+    data = serializer.data
+
+    # 🖼️ CORRECTIF (logo qui retape le disque à chaque appel + flash du logo de secours sur
+    # connexion lente, remonté en test) : le JSON de cette route est bien caché en Redis
+    # ci-dessus, MAIS le logo restait une simple URL -- le NAVIGATEUR devait donc refaire une
+    # requête HTTP séparée, non cachée, pour charger l'image à CHAQUE chargement de page/app
+    # (splashscreen inclus). Sur connexion lente, cette requête séparée arrivait après le
+    # reste de la config, d'où le flash visible de l'icône de secours avant que le vrai logo
+    # n'apparaisse. En intégrant le logo en base64 directement DANS ce JSON (même principe
+    # que obtenir_logo_base64() pour les PDF, voir core/utils.py), il est mis en cache Redis
+    # EN MÊME TEMPS que le reste -- zéro requête réseau séparée, zéro re-lecture disque tant
+    # que le cache est chaud (1h), et plus aucun flash puisque nom/logo arrivent atomiquement
+    # dans la même réponse.
+    data["logo"] = obtenir_logo_base64(config)
+
+    cache_set("infos_pharmacie", data, timeout=3600)  # 1h : invalidé au besoin de toute façon
+    return Response(data)
 
 @api_view(['POST','PUT', 'PATCH'])
 @permission_classes([IsAdminUser])
@@ -505,6 +522,97 @@ def api_catalogue(request):
     return reponse
 
 
+@api_view(['GET'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
+@permission_classes([AllowAny])
+# 🆕 NOUVEL ENDPOINT (refonte UI/UX, 30/07) : jusqu'ici il n'existait aucune route pour
+# récupérer UN SEUL produit -- le catalogue (api_catalogue ci-dessus) ne renvoie que des
+# pages de résultats. Nécessaire pour un vrai écran "Détail du produit" accessible par
+# URL directe (partage de lien, retour arrière, rafraîchissement de page) plutôt que de
+# dépendre des données déjà chargées en mémoire côté catalogue.
+#
+# Mêmes précautions que api_catalogue, réappliquées à l'identique :
+# - `ClientOrStaffJWTAuthentication` + `AllowAny` : accessible aux visiteurs anonymes ET
+#   aux clients connectés, sans jamais lever de 401 (même bug de fond déjà rencontré 3 fois
+#   sur ce projet -- StaffJWTAuthentication par défaut rejette les jetons client).
+# - `ProduitSerializer` masque déjà `prix_achat` sauf pour l'admin (serializers.py) -- mais
+#   la clé de cache DOIT distinguer admin/non-admin, sinon le cache Redis (partagé) pourrait
+#   servir la réponse contenant le prix d'achat à un client qui tombe sur la même clé dans
+#   la fenêtre de 60s.
+def api_produit_detail(request, produit_id):
+    est_admin_tenant = bool(
+        request.user and request.user.is_authenticated and getattr(request.user, 'is_superuser', False)
+    )
+    cache_key_base = f"produit_detail_admin_{produit_id}" if est_admin_tenant else f"produit_detail_{produit_id}"
+
+    cached = cache_get(cache_key_base)
+    if cached is not None:
+        return Response(cached)
+
+    produit = get_object_or_404(Produit, id=produit_id)
+    serializer = ProduitSerializer(produit, context={'request': request})
+    cache_set(cache_key_base, serializer.data, timeout=60)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_produit_historique(request, produit_id):
+    """
+    🆕 (30/07) Historique des mouvements de stock (entrées/sorties) d'un produit --
+    Mouvement_stock existe et est alimenté depuis longtemps (cf. services_prediction.py),
+    mais rien ne l'exposait au frontend jusqu'ici. Réservé à l'admin, comme prix_achat :
+    ce n'est pas une information à montrer à un client (qui a fait quelle vente/réception,
+    à quelle date). Mis en cache 30s -- courte durée volontaire, un historique de stock a
+    plus de valeur à jour qu'une fiche produit qui change rarement.
+    """
+    est_admin_tenant = bool(
+        request.user and request.user.is_authenticated and getattr(request.user, 'is_superuser', False)
+    )
+    if not est_admin_tenant:
+        return Response({"error": "Réservé aux administrateurs"}, status=403)
+
+    cache_key = f"produit_historique_{produit_id}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return Response(cached)
+
+    mouvements = Mouvement_stock.objects.filter(produit_id=produit_id).select_related('auteur').order_by('-date')[:20]
+    data = MouvementStockSerializer(mouvements, many=True).data
+    cache_set(cache_key, data, timeout=30)
+    return Response(data)
+
+
+# --- ❤️ FAVORIS (30/07) -- absent jusqu'ici, aucun endpoint ni modèle n'existait ---
+@api_view(['GET'])
+@authentication_classes([ClientJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_favoris(request):
+    """Liste les produits favoris du client connecté, les plus récents d'abord."""
+    favoris = Favori.objects.filter(compte_client=request.user).select_related('produit').order_by('-date_ajout')
+    return Response(FavoriSerializer(favoris, many=True, context={'request': request}).data)
+
+
+@api_view(['POST'])
+@authentication_classes([ClientJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_favoris_toggle(request, produit_id):
+    """
+    Bascule un produit en/hors des favoris (un seul endpoint, pas de POST + DELETE séparés)
+    -- plus simple côté frontend : le bouton cœur appelle toujours la même route et se fie
+    à `favori` dans la réponse pour savoir dans quel état il vient de passer, sans avoir à
+    suivre lui-même l'état précédent.
+    """
+    produit = get_object_or_404(Produit, id=produit_id)
+    existant = Favori.objects.filter(compte_client=request.user, produit=produit).first()
+    if existant:
+        existant.delete()
+        return Response({"favori": False})
+    Favori.objects.create(compte_client=request.user, produit=produit)
+    return Response({"favori": True})
+
+
 # --- 🚀 MODE OFFLINE (session 12/07, brique 2/4) : SYNCHRO DELTA DU CATALOGUE ---
 DATE_MODIFICATION_MIN = "1970-01-01T00:00:00+00:00"  # sentinelle "depuis toujours" (1er sync)
 CATALOGUE_SYNC_BATCH_SIZE = 300  # cf. docstring api_catalogue_sync : compromis payload/round-trips
@@ -702,6 +810,49 @@ def api_panier(request):
     return Response(CommandeClientSerializer(commande).data)
 
 
+@api_view(['PATCH', 'DELETE'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_panier_item(request, item_id):
+    """
+    🆕 (30/07) Modifier la quantité d'un article du panier (PATCH) ou le retirer entièrement
+    (DELETE) -- fonctionnalité absente jusqu'ici : seul un ajout/incrément existait
+    (api_panier POST), impossible de corriger une quantité ou annuler un article sans
+    vider tout le panier. Même garde-fous que api_panier : uniquement le propriétaire du
+    panier, uniquement tant que la commande n'est pas déjà soumise en paiement.
+    """
+    client_instance, client_field = resoudre_identite_client(request.user)
+    if client_instance is None:
+        return Response({"error": "Réservé aux comptes clients"}, status=403)
+
+    STATUTS_PANIER_MODIFIABLE = ("en_cours", "attente_validation")
+    item = get_object_or_404(
+        ItemCommande,
+        id=item_id,
+        commande__statut__in=STATUTS_PANIER_MODIFIABLE,
+        **{f"commande__{client_field}": client_instance},
+    )
+
+    if request.method == 'DELETE':
+        item.delete()
+        return Response(CommandeClientSerializer(item.commande).data)
+
+    # PATCH : ajuste la quantité (remplace, ne s'additionne pas comme le POST de api_panier)
+    try:
+        qte = int(request.data.get('quantite'))
+        if qte <= 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return Response({"error": "Quantité invalide"}, status=400)
+
+    if qte > item.produit.quantite:
+        return Response({"error": "Stock insuffisant"}, status=400)
+
+    item.quantite = qte
+    item.save()
+    return Response(CommandeClientSerializer(item.commande).data)
+
+
 @api_view(['POST'])
 @authentication_classes([ClientOrStaffJWTAuthentication])
 @permission_classes([IsAuthenticated])
@@ -869,13 +1020,25 @@ def api_mes_commandes(request):
     🔧 CORRECTIF JONCTION COMPTECLIENT : authentification par défaut remplacée (sans quoi un
     jeton client marketplace était rejeté d'office) + résolution via CompteClient. Le personnel
     n'a par définition aucun "historique client" -> 403 explicite plutôt qu'un 404 accidentel.
+
+    📋 CACHE (01/08, refonte mobile) : mis en cache par client, invalidé précisément à chaque
+    Commande.save() de ce client (voir ce hook dans core/models.py) -- même logique de
+    fraîcheur garantie que facture_pdf, pas un TTL approximatif : cette liste ne peut jamais
+    afficher une commande dans un statut périmé.
     """
     client_instance, client_field = resoudre_identite_client(request.user)
     if client_instance is None:
         return Response({"error": "Action réservée aux clients"}, status=403)
+
+    cache_key = f"historique_client:{client_field}:{client_instance.id}"
+    cache = cache_get(cache_key)
+    if cache is not None:
+        return Response(cache)
+
     commandes = Commande.objects.filter(**{client_field: client_instance}).order_by('-date')
     # 🔐 Le client ne doit jamais voir quel agent a validé/refusé ses ordonnances
     serializer = CommandeClientSerializer(commandes, many=True)
+    cache_set(cache_key, serializer.data, timeout=3600)
     return Response(serializer.data)
 
 # --- 📋 GESTION DES ORDONNANCES SÉCURISÉE ---

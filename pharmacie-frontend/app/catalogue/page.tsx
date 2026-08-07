@@ -1,13 +1,15 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Pill, ShoppingCart, Info, Loader2, Filter, Plus, Minus, AlertCircle, X, Check, Camera, WifiOff, ScanLine } from 'lucide-react';
+import { Search, Pill, ShoppingCart, Loader2, Filter, Plus, Minus, X, Check, Camera, WifiOff, ScanLine } from 'lucide-react';
 
 // 🌟 CONFIGURATION : Utilisation de l'instance unifiée apiClient (Gère l'URL de base et le JWT)
 import apiClient from '../../lib/apiClient';
 import Prix from '../../lib/components/Prix';
 import { ajouterAuPanierHorsLigne } from '../../lib/offline/panierQueue';
 import { chargerCatalogueLocal, catalogueLocalDisponible } from '../../lib/offline/syncCatalogue';
+import { useToast, ToastContainer } from '../../lib/hooks/useToast';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 interface Produit {
   id: number;
@@ -21,29 +23,20 @@ interface Produit {
   image?: string;
 }
 
-// 🍞 TOAST MAISON -- remplace les alert()/confirm() du navigateur, qui bloquent le fil
-// d'exécution et ont l'air d'une page web, pas d'une app. Volontairement local à ce
-// fichier pour l'instant (pas encore un composant partagé) : à extraire vers
-// components/ si le même besoin apparaît sur d'autres pages lors de la refonte.
-type ToastType = "success" | "error" | "info";
-interface ToastState { id: number; message: string; type: ToastType }
-
-function useToast() {
-  const [toasts, setToasts] = useState<ToastState[]>([]);
-  const showToast = (message: string, type: ToastType = "info") => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3000);
-  };
-  return { toasts, showToast };
-}
-
-export default function CataloguePage() {
+// 🆕 (30/07) useSearchParams() exige une frontière Suspense au moment du build (sinon
+// Next.js refuse de pré-rendre la page) -- le composant réel est renommé et enveloppé
+// ci-dessous plutôt que d'être exporté directement.
+function CataloguePageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { toasts, showToast } = useToast();
   const [produits, setProduits] = useState<Produit[]>([]);
   const [categories, setCategories] = useState<Record<string, string>>({});
-  const [search, setSearch] = useState("");
-  const [activeCat, setActiveCat] = useState("all");
+  const [search, setSearch] = useState(() => searchParams.get('q') || "");
+  // 🆕 (30/07) Initialisé depuis ?cat=CODE si présent dans l'URL -- permet à l'accueil (et
+  // à tout autre écran) de lier directement vers une catégorie déjà filtrée, plutôt que
+  // d'atterrir sur "Tous les produits" et obliger l'utilisateur à re-sélectionner.
+  const [activeCat, setActiveCat] = useState(() => searchParams.get('cat') || "all");
   // 🔐 (19/07) : l'overlay "changer la photo au survol" plus bas s'affichait pour TOUT
   // visiteur du catalogue (client, caissière) alors que seul l'admin du tenant peut
   // réellement réussir cette action -- api_modifier_photo_produit vérifie déjà
@@ -51,6 +44,13 @@ export default function CataloguePage() {
   // n'empêchait un client ou une caissière de VOIR le bouton et de se heurter à un 403.
   // Purement déclaratif : ne remplace pas la vérification backend, l'améliore.
   const [isAdmin, setIsAdmin] = useState(false);
+  const [peutAcheter, setPeutAcheter] = useState(false);
+  // 🛒 (30/07) : bottom sheet de quantité -- avant, taper sur le panier ajoutait toujours 1
+  // unité sans possibilité de choisir (régression remontée par l'utilisateur). Plutôt qu'un
+  // stepper inline dans la ligne (trop étroit), on ouvre une feuille glissée depuis le bas
+  // -- même pattern que la modale catégories plus bas, cohérent avec la consigne "pas de
+  // popup centrée façon desktop sur mobile".
+  const [produitPourQuantite, setProduitPourQuantite] = useState<Produit | null>(null);
   // 🎠 Bannière promo en diaporama (mockup 25/07) -- contenu réel pour l'instant (pas de
   // placeholder vide), mais l'emplacement est prévu pour accueillir de vraies visuels/
   // promotions gérées par la pharmacie plus tard (hors scope aujourd'hui).
@@ -66,6 +66,13 @@ export default function CataloguePage() {
   }, []);
   useEffect(() => {
     setIsAdmin(typeof window !== 'undefined' && localStorage.getItem('user_role') === 'admin');
+    // 🔐 (30/07) : "ajouter au panier" n'a de sens que pour un CLIENT. Vérifié dans
+    // core/api.py::api_panier -- `if request.user.is_staff and not facture_id: return 403`
+    // s'applique à TOUT le personnel (admin ET caissière), pas seulement l'admin : la
+    // caissière ne peut pas non plus avoir de panier client (son flux de vente passe par
+    // /caisse/pos, pas par ce catalogue). Masqué pour is_staff au sens large.
+    const role = typeof window !== 'undefined' ? localStorage.getItem('user_role') : null;
+    setPeutAcheter(role !== 'admin' && role !== 'caissiere' && role !== 'caissière');
   }, []);
   // 🔐 CORRECTIF (bug remonté en test) : le bouton "ajouter au panier" (et le sélecteur de
   // quantité juste en dessous) s'affichait pour TOUT visiteur du catalogue, y compris le
@@ -94,7 +101,7 @@ export default function CataloguePage() {
   // seul le contenu de la grille affiche un indicateur "Recherche..." le temps du fetch,
   // exactement comme /caisse/pos (voir son commentaire "searching").
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(() => searchParams.get('filtres') === '1');
   const [quantites, setQuantites] = useState<Record<number, number>>({});
   // 🚀 MODE OFFLINE (brique 4/4) : true quand les données affichées viennent de la copie
   // locale IndexedDB (réseau indisponible) plutôt que du serveur -- pilote le bandeau
@@ -117,7 +124,7 @@ export default function CataloguePage() {
   // (ça spammerait l'API). On attend 400ms d'inactivité avant d'appliquer la recherche
   // tapée par l'utilisateur. searchInput = ce que l'utilisateur tape en direct (instantané
   // à l'écran), search = la valeur "validée" après le délai, qui déclenche le vrai appel API.
-  const [searchInput, setSearchInput] = useState("");
+  const [searchInput, setSearchInput] = useState(() => searchParams.get('q') || "");
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearch(searchInput);
@@ -287,7 +294,7 @@ export default function CataloguePage() {
           <input 
             type="text" 
             placeholder="Rechercher un produit, médicament..." 
-            className="w-full pl-12 pr-12 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-white text-sm font-medium focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 outline-none transition-all"
+            className="w-full pl-12 pr-12 py-3.5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-800 dark:text-white text-sm font-medium focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 outline-none transition-all"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />
@@ -310,7 +317,7 @@ export default function CataloguePage() {
       <div className="flex gap-2 overflow-x-auto pb-1 mb-6 -mx-1 px-1 scrollbar-none">
         <button
           onClick={() => changerCategorie('all')}
-          className={`shrink-0 px-4 py-2.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${activeCat === 'all' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}
+          className={`shrink-0 px-4 py-2.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${activeCat === 'all' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10'}`}
         >
           Tous
         </button>
@@ -318,14 +325,14 @@ export default function CataloguePage() {
           <button
             key={code}
             onClick={() => changerCategorie(code)}
-            className={`shrink-0 px-4 py-2.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${activeCat === code ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}
+            className={`shrink-0 px-4 py-2.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${activeCat === code ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10'}`}
           >
             {nom}
           </button>
         ))}
         <button
           onClick={() => setIsModalOpen(true)}
-          className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 cursor-pointer"
+          className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 cursor-pointer"
         >
           <Filter size={13} /> Filtres
         </button>
@@ -387,20 +394,31 @@ export default function CataloguePage() {
           {!loading && filteredProduits.map((p) => (
             <motion.div
               key={p.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-slate-900 rounded-[20px] p-3 border border-slate-100 dark:border-slate-800 flex items-center gap-3 group active:scale-[0.99] transition-transform"
+              onClick={() => router.push(`/produit/${p.id}`)}
+              // 🆕 NAVIGATION VERS LA FICHE PRODUIT (refonte UI/UX, 30/07) : `active:scale-[0.99]`
+              // existait déjà ici sans jamais avoir de vrai onClick associé -- la carte
+              // avait donc l'AIR tapable sans jamais rien faire (violation directe de la
+              // règle "aucun bouton qui a l'air interactif mais ne fait rien"). Le bouton
+              // "Ajouter au panier" ci-dessous appelle `e.stopPropagation()` pour rester
+              // une action indépendante (ouvrir la feuille de quantité sans quitter le
+              // catalogue).
+              className="bg-white dark:bg-white/[0.04] rounded-[20px] p-3 border border-slate-100 dark:border-white/10 flex items-center gap-3 group active:scale-[0.99] transition-transform cursor-pointer"
             >
               {/* Vignette produit + zone d'upload (admin uniquement, cf. isAdmin). Le badge
                   d'édition reste légèrement visible en permanence (pas seulement au survol
                   group-hover) : sur mobile/tactile il n'existe pas de "survol", un admin sur
                   téléphone ne découvrirait donc jamais cette fonctionnalité sinon. */}
-              <div className="relative w-16 h-16 shrink-0 bg-emerald-50 dark:bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center">
+              <div className="relative w-16 h-16 shrink-0 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl overflow-hidden flex items-center justify-center">
                 {p.image ? (
                   <img src={p.image} alt={p.nom} loading="lazy" className="w-full h-full object-cover" />
                 ) : (
                   <Pill size={22} className="text-emerald-300 dark:text-emerald-700" />
                 )}
                 {isAdmin && (
-                  <label className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-end justify-end p-1 cursor-pointer transition-colors z-20">
+                  <label
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-end justify-end p-1 cursor-pointer transition-colors z-20"
+                  >
                     <span className="h-6 w-6 rounded-full bg-white/90 dark:bg-slate-900/90 shadow flex items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity">
                       <Camera className="text-slate-700 dark:text-white" size={12} />
                     </span>
@@ -424,57 +442,20 @@ export default function CataloguePage() {
                 </div>
               </div>
 
-              {/* Stock + sélecteur de quantité + bouton panier */}
+              {/* Stock + bouton panier -- réservé au client (cf. peutAcheter) : ni l'admin
+                  ni la caissière n'ont de panier personnel utilisable depuis ce catalogue. */}
               <div className="flex flex-col items-end gap-1.5 shrink-0">
                 <span className="text-[10px] text-slate-400 text-right leading-tight">Stock<br/><span className="font-semibold text-slate-600 dark:text-slate-300">{p.quantite} unités</span></span>
-                {/* 🔐 CORRECTIF (panier visible pour le personnel, qui n'en a pas) : admin et
-                    caissière ne doivent jamais voir cette zone -- seul un client (ou un
-                    visiteur pas encore connecté) peut réellement acheter via le catalogue. */}
-                {!isStaff && (
-                  p.quantite > 0 ? (
-                    <div className="flex items-center gap-1">
-                      {/* 🔧 CORRECTIF (bug remonté en test) : le sélecteur de quantité avait
-                          disparu de la carte produit lors d'une refonte récente -- un clic
-                          sur le panier ajoutait donc toujours 1 seule unité, sans moyen d'en
-                          choisir davantage. updateLocalQte() existait déjà (jamais retiré),
-                          seuls ces boutons +/- manquaient pour l'utiliser réellement.
-                          Cibles tactiles 44px (h-11 w-11) : cohérent avec le reste de la refonte. */}
-                      <button
-                        onClick={() => updateLocalQte(p.id, -1, p.quantite)}
-                        aria-label={`Diminuer la quantité de ${p.nom}`}
-                        className="h-11 w-11 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-none cursor-pointer font-semibold text-base active:scale-90 transition-transform"
-                      >
-                        −
-                      </button>
-                      <span className="w-6 text-center text-sm font-semibold text-slate-800 dark:text-white tabular-nums">
-                        {quantites[p.id] || 1}
-                      </span>
-                      <button
-                        onClick={() => updateLocalQte(p.id, 1, p.quantite)}
-                        aria-label={`Augmenter la quantité de ${p.nom}`}
-                        className="h-11 w-11 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-none cursor-pointer font-semibold text-base active:scale-90 transition-transform"
-                      >
-                        +
-                      </button>
-                      <button
-                        onClick={() => handleAddToCart(p.id)}
-                        title="Ajouter au panier"
-                        aria-label="Ajouter au panier"
-                        className="bg-emerald-500 hover:bg-emerald-600 text-white h-11 w-11 flex items-center justify-center rounded-2xl transition-all active:scale-90 border-none cursor-pointer"
-                      >
-                        <ShoppingCart size={18} strokeWidth={2.5} />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      disabled
-                      title="Ajouter au panier"
-                      aria-label="Ajouter au panier"
-                      className="bg-emerald-500 text-white h-11 w-11 flex items-center justify-center rounded-2xl border-none cursor-pointer opacity-20 grayscale"
-                    >
-                      <ShoppingCart size={18} strokeWidth={2.5} />
-                    </button>
-                  )
+                {peutAcheter && (
+                  <button
+                    disabled={p.quantite <= 0}
+                    onClick={(e) => { e.stopPropagation(); setProduitPourQuantite(p); }}
+                    title="Ajouter au panier"
+                    aria-label="Ajouter au panier"
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white h-11 w-11 flex items-center justify-center rounded-2xl transition-all active:scale-90 border-none cursor-pointer disabled:opacity-20 disabled:grayscale"
+                  >
+                    <ShoppingCart size={18} strokeWidth={2.5} />
+                  </button>
                 )}
               </div>
             </motion.div>
@@ -490,21 +471,21 @@ export default function CataloguePage() {
             <motion.div 
               initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="relative bg-white dark:bg-slate-900 w-full sm:max-w-md sm:mb-4 rounded-t-[28px] sm:rounded-[28px] shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-800 max-h-[85vh] flex flex-col"
+              className="relative bg-white dark:bg-[#0b1a16] w-full sm:max-w-md sm:mb-4 rounded-t-[28px] sm:rounded-[28px] shadow-2xl overflow-hidden border border-slate-100 dark:border-white/10 max-h-[85vh] flex flex-col"
             >
               {/* Poignée façon feuille mobile (bottom sheet), signal visuel de "glisser pour fermer" */}
               <div className="sm:hidden flex justify-center pt-3">
-                <div className="h-1.5 w-10 rounded-full bg-slate-200 dark:bg-slate-700" />
+                <div className="h-1.5 w-10 rounded-full bg-slate-200 dark:bg-white/20" />
               </div>
-              <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+              <div className="px-6 py-5 border-b border-slate-100 dark:border-white/10 flex justify-between items-center">
                 <h3 className="font-display text-lg font-bold text-slate-800 dark:text-white">Catégories</h3>
-                <button onClick={() => setIsModalOpen(false)} title="Fermer" aria-label="Fermer" className="h-9 w-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 border-none cursor-pointer"><X size={18} /></button>
+                <button onClick={() => setIsModalOpen(false)} title="Fermer" aria-label="Fermer" className="h-9 w-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-500 border-none cursor-pointer"><X size={18} /></button>
               </div>
 
               <div className="p-4 overflow-y-auto space-y-2 custom-scrollbar" style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
                 <button 
                   onClick={() => changerCategorie("all")}
-                  className={`w-full p-4 rounded-2xl text-left font-semibold text-sm transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === 'all' ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100'}`}
+                  className={`w-full p-4 rounded-2xl text-left font-semibold text-sm transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === 'all' ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08]'}`}
                 >
                   Toutes les catégories {activeCat === 'all' && <Check size={16}/>}
                 </button>
@@ -512,11 +493,70 @@ export default function CataloguePage() {
                   <button 
                     key={code}
                     onClick={() => changerCategorie(code)}
-                    className={`w-full p-4 rounded-2xl text-left font-semibold text-sm transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === code ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100'}`}
+                    className={`w-full p-4 rounded-2xl text-left font-semibold text-sm transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === code ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08]'}`}
                   >
                     {nom} {activeCat === code && <Check size={16}/>}
                   </button>
                 ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 🛒 FEUILLE DE QUANTITÉ (bottom sheet) -- même pattern que la modale catégories
+          au-dessus : glisse depuis le bas sur mobile, carte centrée à partir de sm:. */}
+      <AnimatePresence>
+        {produitPourQuantite && (
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setProduitPourQuantite(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div
+              initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="relative bg-white dark:bg-[#0b1a16] w-full sm:max-w-sm sm:mb-4 rounded-t-[28px] sm:rounded-[28px] shadow-2xl overflow-hidden border border-slate-100 dark:border-white/10"
+            >
+              <div className="sm:hidden flex justify-center pt-3">
+                <div className="h-1.5 w-10 rounded-full bg-slate-200 dark:bg-white/20" />
+              </div>
+              <div className="px-6 py-5 border-b border-slate-100 dark:border-white/10 flex justify-between items-center">
+                <h3 className="font-display text-lg font-bold text-slate-800 dark:text-white truncate pr-4">{produitPourQuantite.nom}</h3>
+                <button onClick={() => setProduitPourQuantite(null)} title="Fermer" aria-label="Fermer" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-500 border-none cursor-pointer"><X size={18} /></button>
+              </div>
+
+              <div className="p-6" style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom))" }}>
+                <div className="flex items-center justify-between mb-6">
+                  <Prix montant={produitPourQuantite.prix} className="text-xl font-bold text-slate-800 dark:text-white" />
+                  <span className="text-xs font-semibold text-slate-400">{produitPourQuantite.quantite} unités en stock</span>
+                </div>
+
+                <div className="flex items-center justify-center gap-5 mb-6">
+                  <button
+                    onClick={() => updateLocalQte(produitPourQuantite.id, -1, produitPourQuantite.quantite)}
+                    disabled={(quantites[produitPourQuantite.id] || 1) <= 1}
+                    title="Diminuer la quantité" aria-label="Diminuer la quantité"
+                    className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 flex items-center justify-center border-none cursor-pointer active:scale-90 transition-all disabled:opacity-30"
+                  >
+                    <Minus size={18} />
+                  </button>
+                  <span className="text-2xl font-bold text-slate-800 dark:text-white w-10 text-center tabular-nums">
+                    {quantites[produitPourQuantite.id] || 1}
+                  </span>
+                  <button
+                    onClick={() => updateLocalQte(produitPourQuantite.id, 1, produitPourQuantite.quantite)}
+                    disabled={(quantites[produitPourQuantite.id] || 1) >= produitPourQuantite.quantite}
+                    title="Augmenter la quantité" aria-label="Augmenter la quantité"
+                    className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 flex items-center justify-center border-none cursor-pointer active:scale-90 transition-all disabled:opacity-30"
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => { handleAddToCart(produitPourQuantite.id); setProduitPourQuantite(null); }}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm py-4 rounded-2xl transition-all active:scale-[0.98] border-none cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <ShoppingCart size={17} /> Ajouter au panier
+                </button>
               </div>
             </motion.div>
           </div>
@@ -532,7 +572,7 @@ export default function CataloguePage() {
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={!hasPrevious}
             aria-label="Page précédente"
-            className="h-11 w-11 flex items-center justify-center rounded-full border-none cursor-pointer bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all"
+            className="h-11 w-11 flex items-center justify-center rounded-full border-none cursor-pointer bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all"
           >
             ←
           </button>
@@ -545,35 +585,24 @@ export default function CataloguePage() {
             onClick={() => setPage(p => p + 1)}
             disabled={!hasNext}
             aria-label="Page suivante"
-            className="h-11 w-11 flex items-center justify-center rounded-full border-none cursor-pointer bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all"
+            className="h-11 w-11 flex items-center justify-center rounded-full border-none cursor-pointer bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all"
           >
             →
           </button>
         </div>
       )}
 
-      {/* 🍞 TOASTS -- empilés en bas d'écran, au-dessus de la nav du bas (z-[140] < 150 du
-          splash mais > la nav fixe à z-40). Remplacent les alert()/confirm() natifs. */}
-      <div className="fixed bottom-24 left-0 right-0 z-[140] flex flex-col items-center gap-2 px-4 pointer-events-none">
-        <AnimatePresence>
-          {toasts.map((t) => (
-            <motion.div
-              key={t.id}
-              initial={{ opacity: 0, y: 20, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.9 }}
-              transition={{ type: "spring", damping: 22, stiffness: 300 }}
-              className={`pointer-events-auto flex items-center gap-2 max-w-sm px-4 py-3 rounded-2xl shadow-xl text-sm font-medium text-white backdrop-blur-md ${
-                t.type === "success" ? "bg-emerald-600/95" : t.type === "error" ? "bg-red-600/95" : "bg-slate-800/95"
-              }`}
-            >
-              {t.type === "success" && <Check size={16} className="shrink-0" />}
-              {t.type === "error" && <AlertCircle size={16} className="shrink-0" />}
-              {t.message}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+      {/* 🍞 TOASTS -- composant partagé (lib/hooks/useToast.tsx), réutilisé aussi par
+          app/produit/[id]/page.tsx. Remplace les alert()/confirm() natifs. */}
+      <ToastContainer toasts={toasts} />
     </div>
+  );
+}
+
+export default function CataloguePage() {
+  return (
+    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-emerald-500" size={40} /></div>}>
+      <CataloguePageInner />
+    </Suspense>
   );
 }

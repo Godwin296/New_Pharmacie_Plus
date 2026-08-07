@@ -14,6 +14,15 @@ import { useConfigPharmacie } from "../lib/context/ConfigPharmacieContext";
  * Doit être rendu à l'intérieur de <ConfigPharmacieProvider> (voir layout.tsx).
  * Pendant le chargement initial (ou si aucun logo n'a encore été uploadé), on
  * retombe sur l'icône par défaut plutôt que d'afficher une image cassée.
+ *
+ * 🔧 FIX COINS BLANCS EN THÈME SOMBRE (remonté en test) : les appelants passent tous
+ * `object-cover` (pas `object-contain`). Beaucoup de logos uploadés sont un visuel
+ * ARRONDI centré sur un canevas CARRÉ (souvent blanc ou transparent) -- `object-contain`
+ * respecte tout ce canevas, donc ses coins carrés restent visibles autour du rond, ce qui
+ * clashe fortement en thème sombre. `object-cover` zoome légèrement pour remplir
+ * entièrement la boîte carrée prévue, recadrant ces coins hors champ -- aucun réglage
+ * supplémentaire requis côté conteneur (le recadrage se fait dans la boîte de l'<img>
+ * lui-même, indépendamment d'un éventuel `overflow-hidden` du parent).
  */
 export function PharmacyIcon({
   className,
