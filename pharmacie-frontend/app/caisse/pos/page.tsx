@@ -11,7 +11,7 @@ import {
 import apiClient from '../../../lib/apiClient'; // Ajuste le chemin selon l'arborescence (app/caisse/pos)
 import { voirFacturePdf } from '../../../lib/voirFacture';
 
-interface Produit { id: number; nom: string; prix: number; quantite: number; identifiant?: string; ordonnance_obligatoire?: boolean; }
+interface Produit { id: number; nom: string; prix: number; quantite: number; identifiant?: string; code_barre?: string | null; ordonnance_obligatoire?: boolean; }
 interface ItemPanier extends Produit { qte: number; }
 
 export default function POSPage() {
@@ -28,6 +28,16 @@ export default function POSPage() {
   const [loading, setLoading] = useState(true);
   const [finalizing, setFinalizing] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // 📷 (PR scan code-barres) : le rattachement d'un code-barres jamais vu n'est proposé
+  // qu'à un admin (contrôle également imposé côté serveur, cf. api_associer_code_barre).
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    setIsAdmin(typeof window !== "undefined" && localStorage.getItem("user_role") === "admin");
+  }, []);
+  const [codeNonReconnu, setCodeNonReconnu] = useState<string | null>(null);
+  const [produitARattacher, setProduitARattacher] = useState<Produit | null>(null);
+  const [rattachementEnCours, setRattachementEnCours] = useState(false);
 
   // 📄 PAGINATION SERVEUR (session 12/07) : avant, la grille POS demandait toujours
   // ?page_size=30 sans jamais envoyer `page` -- résultat : plafonné en silence aux 30
@@ -109,25 +119,53 @@ export default function POSPage() {
     }
   };
 
-  // 🎯 Un scan doit trouver le produit peu importe ce qui est actuellement affiché à
-  // l'écran (l'ancien code cherchait dans produitsDB, limité aux ~100 premiers produits
-  // chargés en mémoire -- un code scanné hors de cette liste ne matchait jamais).
-  // On interroge donc le serveur en direct avec le code scanné.
+  // 📷 (PR scan code-barres international, 07/08) : /api/scan/<code>/ reconnaît en UNE
+  // requête aussi bien le code interne `identifiant` (étiquette maison) que le vrai
+  // code-barres fabricant EAN-13/UPC-A une fois rattaché (voir api_scan_code_barre côté
+  // backend) -- avant, seul le code interne était reconnu, le scanner ne servait donc à
+  // rien sur un produit non ré-étiqueté à la main.
   const handleScan = async (code: string) => {
     const trimmed = code.trim();
     if (!trimmed) return;
     // Coup d'œil rapide dans la liste déjà affichée (évite un aller-retour réseau si le
-    // produit est déjà visible), sinon on interroge le serveur par code exact.
-    const local = produitsDB.find(prod => prod.identifiant === trimmed || prod.nom.toLowerCase() === trimmed.toLowerCase());
+    // produit est déjà visible).
+    const local = produitsDB.find(prod => prod.identifiant === trimmed || prod.code_barre === trimmed || prod.nom.toLowerCase() === trimmed.toLowerCase());
     if (local) { addToCart(local); return; }
     try {
-      const res = await apiClient.get('/api/catalogue/', { params: { q: trimmed, page_size: 5 } });
-      const resultats: Produit[] = res.data.results.produits;
-      const match = resultats.find(p => p.identifiant === trimmed) || resultats.find(p => p.nom.toLowerCase() === trimmed.toLowerCase());
-      if (match) addToCart(match);
-      else alert(`Aucun produit trouvé pour le code "${trimmed}"`);
-    } catch (err) {
-      console.error("Erreur recherche scan:", err);
+      const res = await apiClient.get(`/api/scan/${encodeURIComponent(trimmed)}/`);
+      addToCart(res.data);
+    } catch (err: any) {
+      if (err.response?.status === 404 && err.response?.data?.peut_etre_rattache) {
+        // Code-barres jamais vu : propose le rattachement si admin, sinon informe
+        // simplement -- une caissière ne doit pas pouvoir lier un code au mauvais produit
+        // (contrôle appliqué aussi côté serveur, celui-ci n'est qu'un confort d'UI).
+        if (isAdmin) {
+          setCodeNonReconnu(trimmed);
+        } else {
+          alert(`Code "${trimmed}" non reconnu. Demandez à un administrateur de l'associer à un produit.`);
+        }
+      } else {
+        alert(`Aucun produit trouvé pour le code "${trimmed}"`);
+      }
+    }
+  };
+
+  // 🔗 Rattache le code non reconnu au produit choisi par l'admin dans la feuille du bas,
+  // puis l'ajoute directement au panier -- pas besoin de rescanner une seconde fois.
+  const handleRattacherCodeBarre = async () => {
+    if (!codeNonReconnu || !produitARattacher) return;
+    setRattachementEnCours(true);
+    try {
+      const res = await apiClient.post(`/api/produits/${produitARattacher.id}/code-barre/`, {
+        code_barre: codeNonReconnu,
+      });
+      addToCart(res.data);
+      setCodeNonReconnu(null);
+      setProduitARattacher(null);
+    } catch (err: any) {
+      alert(err.response?.data?.error || "Erreur lors du rattachement du code-barres.");
+    } finally {
+      setRattachementEnCours(false);
     }
   };
 
@@ -488,6 +526,70 @@ export default function POSPage() {
                 >
                   Nouveau Client
                 </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* 📷 (PR scan code-barres) : feuille glissée depuis le bas -- pas une popup
+              centrée façon desktop, conforme au principe mobile-first de la refonte --
+              proposée à l'admin quand un code scanné n'est encore rattaché à aucun
+              produit (voir handleScan). Recherche + choix du produit, puis rattachement
+              définitif : ce même code sera reconnu directement à chaque scan suivant. */}
+          <AnimatePresence>
+            {codeNonReconnu && (
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-end justify-center"
+                onClick={() => { setCodeNonReconnu(null); setProduitARattacher(null); }}
+              >
+                <motion.div
+                  initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+                  transition={{ type: "spring", damping: 28, stiffness: 300 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-t-[2rem] p-6 pb-8 max-h-[80vh] overflow-y-auto"
+                >
+                  <div className="w-10 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />
+                  <h3 className="font-display text-lg font-bold text-slate-800 dark:text-white mb-1">Code-barres non reconnu</h3>
+                  <p className="text-sm text-slate-400 mb-4">
+                    Le code <span className="font-mono text-slate-600 dark:text-slate-300">{codeNonReconnu}</span> n'est
+                    rattaché à aucun produit. Associez-le à un produit existant pour qu'il soit reconnu à chaque scan suivant.
+                  </p>
+
+                  <input
+                    type="text"
+                    placeholder="Rechercher le produit à associer..."
+                    onChange={(e) => fetchProduits(e.target.value, 1)}
+                    className="w-full h-12 px-4 mb-3 rounded-2xl bg-slate-100 dark:bg-slate-800 border-none outline-none text-sm text-slate-800 dark:text-white"
+                  />
+
+                  <div className="space-y-2 mb-5 max-h-64 overflow-y-auto">
+                    {produitsDB.slice(0, 8).map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => setProduitARattacher(p)}
+                        className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl border text-left cursor-pointer transition-colors ${
+                          produitARattacher?.id === p.id
+                            ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-400"
+                            : "bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700"
+                        }`}
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800 dark:text-white">{p.nom}</p>
+                          <p className="text-[11px] text-slate-400">{p.identifiant}</p>
+                        </div>
+                        {produitARattacher?.id === p.id && <CheckCircle2 size={18} className="text-emerald-500 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={handleRattacherCodeBarre}
+                    disabled={!produitARattacher || rattachementEnCours}
+                    className="w-full h-[52px] rounded-2xl bg-emerald-500 text-white font-display font-semibold text-sm flex items-center justify-center gap-2 border-none cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-30"
+                  >
+                    {rattachementEnCours ? <Loader2 size={18} className="animate-spin" /> : "Associer et ajouter au panier"}
+                  </button>
+                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>
