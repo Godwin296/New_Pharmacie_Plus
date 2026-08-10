@@ -10,7 +10,7 @@
  * UTILISATION dans app/layout.tsx :
  *   Remplacer le return actuel par :
  *     <AppShell>
- *       {/* tout le contenu existant du return */}
+ *       (tout le contenu existant du return)
  *     </AppShell>
  *
  * Aucune autre modification du layout n'est nécessaire.

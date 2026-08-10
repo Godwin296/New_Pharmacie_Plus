@@ -26,6 +26,8 @@
  */
 import { motion } from "framer-motion";
 import { useEffect } from "react";
+import { PharmacyIcon } from "../../components/PharmacyIcon";
+import { PharmacyBrandName } from "../../components/PharmacyBrandName";
 
 interface SplashScreenProps {
   onComplete?: () => void;
@@ -61,21 +63,8 @@ export default function SplashScreen({
         <div className="absolute inset-0 -m-4 rounded-3xl bg-emerald-500/8" />
 
         {/* Logo container — style iOS app icon */}
-        <div className="relative h-20 w-20 bg-white rounded-[1.125rem] flex items-center justify-center shadow-lg shadow-black/15">
-          {/* Ici, remplace par ton vrai logo SVG ou Image */}
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            className="w-10 h-10 text-[#0e9f6e]"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-            <path d="M12 5 9.04 12.5" />
-            <path d="m15 12.5-3-7.5" />
-          </svg>
+        <div className="relative h-20 w-20 bg-white rounded-[1.125rem] flex items-center justify-center shadow-lg shadow-black/15 p-3.5">
+          <PharmacyIcon className="w-full h-full object-contain" alt="Pharmacie+" />
         </div>
       </motion.div>
 
@@ -86,7 +75,7 @@ export default function SplashScreen({
         transition={{ delay: 0.15, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         className="mt-5 font-display text-[15px] font-semibold text-white/90 tracking-tight"
       >
-        Pharmacie+
+        <PharmacyBrandName />
       </motion.span>
 
       {/* Indicateur de chargement minimaliste — 3 dots style iOS */}

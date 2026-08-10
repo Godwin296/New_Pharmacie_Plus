@@ -25,7 +25,8 @@ import { ThemeProvider } from '../lib/context/ThemeProvider';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { PharmacyBrandName } from '../components/PharmacyBrandName';
 import { PharmacyIcon } from '../components/PharmacyIcon';
-import { PulseLine } from '../components/PulseLine';
+import SplashScreen from '@/lib/components/SplashScreen';
+import SkeletonHome from './_components/SkeletonHome';
 import { useOfflinePanier } from '../lib/hooks/useOfflinePanier';
 import apiClient from '../lib/apiClient';
 import { useOfflineCatalogue } from '../lib/hooks/useOfflineCatalogue';
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+  const [splashComplete, setSplashComplete] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   
   const [user, setUser] = useState({ 
@@ -94,10 +96,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   useOfflineCatalogue();
 
   useEffect(() => {
-    // ⏱️ Durée allongée (retour utilisateur 01/08) : 3.5s ne laissait pas le temps de lire
-    // l'étiquette + le nom + la salutation avant la disparition. 6s reste largement sous la
-    // limite de tolérance signalée (10s max) tout en laissant une vraie marge de lecture.
-    const timer = setTimeout(() => setShowSplash(false), 6000);
     const savedRole = localStorage.getItem('user_role');
     const savedName = localStorage.getItem('display_name') || localStorage.getItem('username');
     
@@ -108,7 +106,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         name: savedName
       });
     }
-    return () => clearTimeout(timer);
   }, []);
 
   // 🌗 Le thème clair/sombre est désormais entièrement géré par next-themes
@@ -125,31 +122,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   // 🎨 REFONTE UI/UX (splash screen, 30/07) : plus nuancée qu'un simple avant/après 18h --
   // petite touche pour que l'app donne l'impression de "connaître" la personne plutôt qu'une
-  // salutation générique à toute heure. Toujours utilisée à l'identique dans la modale de
-  // déconnexion plus bas (pas de duplication).
+  // salutation générique à toute heure. Utilisée dans la modale de déconnexion plus bas.
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 5) return 'Bonne nuit';
     if (hour < 12) return 'Bonjour';
     if (hour < 18) return 'Bon après-midi';
     return 'Bonsoir';
-  };
-
-  // 🎨 REFONTE UI/UX (30/07, v2) : le splashscreen parle désormais un langage
-  // spécifique à chaque type de compte plutôt qu'un texte générique -- un
-  // administrateur, une caissière et un patient n'ouvrent pas l'app pour la
-  // même raison, autant que le tout premier écran le reflète.
-  const getRoleCopy = () => {
-    if (!user.loggedIn) {
-      return { eyebrow: 'Bienvenue', message: 'Votre santé, notre priorité' };
-    }
-    if (user.role === 'ADMIN') {
-      return { eyebrow: 'Tableau de bord', message: 'voici votre officine aujourd\u2019hui' };
-    }
-    if (user.role === 'CAISSIERE') {
-      return { eyebrow: 'Session caisse', message: 'votre guichet vous attend' };
-    }
-    return { eyebrow: 'Espace patient', message: 'heureux de vous revoir' };
   };
 
   return (
@@ -172,6 +151,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-slate-50 dark:bg-[#050e0c] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300">
         <ThemeProvider>
+        {/* 🏛️ AppShell (Task 1/20) : doit être À L'INTÉRIEUR de ThemeProvider (ThemeColorMeta,
+            rendu par AppShell, utilise useTheme() de next-themes) et ENGLOBER
+            ConfigPharmacieProvider (le splash screen, qui consomme ce contexte, est rendu
+            dedans). Ne peut pas envelopper <html> lui-même (un <div> ne peut pas contenir
+            <html>, HTML invalide) -- placé ici, juste après l'ouverture de <body>. */}
+        <AppShell>
         <SerwistProvider swUrl="/serwist/sw.js">
 
         {/* 🔧 FIX LOGO : ConfigPharmacieProvider doit englober le splash screen aussi,
@@ -181,112 +166,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             propre JSX ; il doit être un DESCENDANT de ce Provider. D'où le déplacement
             de l'ouverture de <ConfigPharmacieProvider> ici, avant le splash. */}
         <ConfigPharmacieProvider>
-        {/* SPLASH SCREEN -- refonte 30/07 v2 : même dégradé "brand-deep" et mêmes
-            polices que le site marketing, pour qu'il n'y ait plus aucune rupture
-            visuelle en entrant dans l'app depuis le site. Les 3 anneaux de pouls
-            concentriques (jugés too much) ont été retirés au profit d'une lueur
-            douce et d'un tracé ECG (PulseLine, déjà utilisé sur le site) comme
-            indicateur de chargement -- un clin d'œil santé plus subtil. */}
-        <AnimatePresence>
+        {/* SPLASH SCREEN -- refonte radicale (composant SplashScreen dédié) : fond uni,
+            logo centré, 1.5s max, sans dégradé/particules/tracé ECG copiés du site
+            marketing. Cf. lib/components/SplashScreen.tsx pour le détail de la philosophie
+            ("l'app est déjà là, elle charge silencieusement" -- inspiré WhatsApp/Uber). */}
+        <AnimatePresence mode="wait">
           {showSplash && (
-            <motion.div 
-              exit={{ opacity: 0, scale: 1.06 }}
-              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              className="fixed inset-0 z-[150] flex flex-col items-center justify-center bg-brand-deep overflow-hidden"
-            >
-              {/* 🌿 FOND VIVANT : masses lumineuses floutées qui dérivent lentement --
-                  mêmes teintes (émeraude + bleu) que le Hero du site marketing. */}
-              <motion.div
-                animate={{ x: [0, 40, -20, 0], y: [0, -30, 20, 0], scale: [1, 1.15, 0.95, 1] }}
-                transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
-                className="absolute -top-24 -left-16 w-80 h-80 rounded-full bg-emerald-500/20 blur-[100px]"
-              />
-              <motion.div
-                animate={{ x: [0, -30, 25, 0], y: [0, 25, -15, 0], scale: [1, 0.9, 1.1, 1] }}
-                transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
-                className="absolute -bottom-32 -right-20 w-96 h-96 rounded-full bg-blue-500/15 blur-[110px]"
-              />
-              <motion.div
-                animate={{ x: [0, 20, -25, 0], y: [0, -20, 15, 0] }}
-                transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-                className="absolute top-1/3 right-1/4 w-56 h-56 rounded-full bg-emerald-300/10 blur-[90px]"
-              />
-
-              <div className="relative flex flex-col items-center px-6 text-center">
-                {/* Étiquette contextuelle -- change selon le compte (visiteur, patient,
-                    caissière, administrateur), plutôt qu'un texte générique fixe. */}
-                <motion.span
-                  initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.15, duration: 0.4 }}
-                  className="text-[12px] font-mono uppercase tracking-[0.25em] text-emerald-300 mb-9"
-                >
-                  {getRoleCopy().eyebrow}
-                </motion.span>
-
-                {/* 🔧 Halo derrière le logo (retour utilisateur 01/08) : plus de pulsation en
-                    boucle (scale+opacity qui "respire") -- jugée trop vive/répétitive à
-                    l'usage. Remplacé par une lueur STATIQUE et discrète : la douceur vient
-                    de sa présence, pas d'un mouvement qu'on regarde tourner en boucle. */}
-                <div className="absolute top-2 h-32 w-32 rounded-[2rem] bg-emerald-300/25 blur-2xl" />
-
-                {/* Logo -- entrée avec ressort (pas un simple fade), léger settle de rotation.
-                    Agrandi (28 -> 32) et plus d'air autour pour une présence plus généreuse
-                    à l'écran, comme demandé. */}
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.4, rotate: -12 }}
-                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                  transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.05 }}
-                  className="relative h-32 w-32 bg-white rounded-[1.75rem] flex items-center justify-center shadow-2xl shadow-black/20 p-5"
-                >
-                  <PharmacyIcon className="w-full h-full object-cover" alt="Pharmacie+" />
-                </motion.div>
-
-                <motion.h1
-                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.45, duration: 0.4 }}
-                  className="font-display text-[26px] font-bold text-white tracking-tight mt-8"
-                >
-                  <PharmacyBrandName />
-                </motion.h1>
-
-                {/* 👋 Le "moment" personnalisé : la salutation arrive d'abord, puis le prénom
-                    "pop" juste après avec son propre petit ressort -- pour que l'app donne
-                    vraiment l'impression de RECONNAÎTRE la personne, pas juste d'afficher une
-                    variable dans une phrase figée. */}
-                <motion.p
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}
-                  className="text-emerald-50/90 text-[15px] font-medium mt-3.5 flex items-center gap-1.5"
-                >
-                  {user.loggedIn ? (
-                    <>
-                      {getGreeting()},
-                      <motion.span
-                        initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.95, type: 'spring', stiffness: 300, damping: 12 }}
-                        className="font-display font-semibold text-white"
-                      >
-                        {user.name}
-                      </motion.span>
-                      — {getRoleCopy().message} 👋
-                    </>
-                  ) : (
-                    getRoleCopy().message
-                  )}
-                </motion.p>
-              </div>
-
-              {/* Tracé ECG animé -- indicateur de chargement, même motif que celui déjà
-                  utilisé sur le site marketing (composant PulseLine), pour que l'app et
-                  le site parlent visuellement le même langage santé. */}
-              <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3, duration: 0.5 }}
-                className="absolute bottom-16 w-48"
-              >
-                <PulseLine className="w-full h-10" stroke="#67d29e" width={480} height={80} />
-              </motion.div>
-            </motion.div>
+            <SplashScreen
+              key="splash"
+              onComplete={() => { setShowSplash(false); setSplashComplete(true); }}
+              duration={1500}
+            />
           )}
         </AnimatePresence>
+
+        {/* 🦴 SKELETON -- affiché entre le splash et le vrai contenu, le temps que les
+            données (config, catalogue, commandes...) arrivent. Uniquement sur l'accueil :
+            les autres pages ont déjà leurs propres indicateurs de chargement locaux. */}
+        {!showSplash && !splashComplete && pathname === '/' && <SkeletonHome />}
 
         {!isSpecialRoute && (
           <>
@@ -474,6 +371,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         )}
         </ConfigPharmacieProvider>
         </SerwistProvider>
+        </AppShell>
         </ThemeProvider>
       </body>
     </html>
