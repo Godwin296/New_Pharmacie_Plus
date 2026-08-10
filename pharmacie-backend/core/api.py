@@ -9,6 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from django.db.utils import IntegrityError
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime, parse_date
 from django.utils.crypto import get_random_string
@@ -648,6 +649,15 @@ def api_associer_code_barre(request, produit_id):
     if not code_barre:
         return Response({"error": "code_barre requis"}, status=400)
 
+    # 🔐 DURCISSEMENT PRODUCTION : la vérification .exists() ci-dessous seule laisse une
+    # fenêtre de course (TOCTOU) -- si deux admins rattachent LE MÊME code-barres à deux
+    # produits différents en même temps (ex: deux réceptions de stock en parallèle), les
+    # deux requêtes peuvent passer cette vérification avant qu'aucune n'ait encore
+    # sauvegardé. La contrainte unique=True sur Produit.code_barre (base de données)
+    # rattrape ce cas en dernier recours, mais SANS ce bloc try/except, la seconde requête
+    # plantait en 500 brut (IntegrityError non interceptée) au lieu d'un 409 propre. Rare
+    # en pratique, mais un scan de réception peut légitimement arriver en rafale depuis
+    # plusieurs postes de caisse le même jour de livraison -- pas un cas à ignorer.
     if Produit.objects.filter(code_barre__iexact=code_barre).exclude(id=produit_id).exists():
         return Response(
             {"error": "Ce code-barres est déjà rattaché à un autre produit."},
@@ -656,7 +666,14 @@ def api_associer_code_barre(request, produit_id):
 
     produit = get_object_or_404(Produit, id=produit_id)
     produit.code_barre = code_barre
-    produit.save(update_fields=['code_barre'])
+    try:
+        with transaction.atomic():
+            produit.save(update_fields=['code_barre'])
+    except IntegrityError:
+        return Response(
+            {"error": "Ce code-barres vient d'être rattaché à un autre produit entre-temps. Rescannez pour vérifier."},
+            status=409,
+        )
     return Response(ProduitSerializer(produit, context={'request': request}).data)
 
 
