@@ -61,6 +61,22 @@ class Produit(models.Model):
     ]
     
     identifiant = models.CharField(max_length=20, unique=True, blank=True, verbose_name="Code Produit 🏷️")
+    # 📷 SCAN CODE-BARRES FABRICANT (EAN-13/UPC-A/EAN-8) -- distinct de `identifiant`
+    # ci-dessus, qui est un code INTERNE généré automatiquement par l'app (ex: "PRD-xxxx"),
+    # imprimable sur une étiquette maison mais absent de l'emballage d'origine du produit.
+    # Ce nouveau champ stocke le VRAI code-barres du fabricant, déjà présent sur la boîte
+    # telle que livrée par le fournisseur -- c'est CE code que lit une douchette de caisse
+    # sur un produit non ré-étiqueté. Nullable et à remplissage PROGRESSIF (même logique
+    # que `prix_achat`/`principe_actif` plus bas) : rattaché produit par produit au premier
+    # scan réussi (voir api_associer_code_barre), pas de ressaisie en masse exigée.
+    # `unique=True` avec `null=True` : Postgres autorise plusieurs NULL sur une colonne
+    # unique (contrairement à une valeur vide ''), donc les produits pas encore rattachés
+    # ne se bloquent jamais mutuellement.
+    code_barre = models.CharField(
+        max_length=20, unique=True, null=True, blank=True,
+        verbose_name="Code-barres fabricant (EAN-13)",
+        help_text="Code-barres imprimé sur l'emballage d'origine, scanné à la réception du produit.",
+    )
     image = models.ImageField(upload_to='produits/', null=True, blank=True) 
     nom = models.CharField(max_length=100)
     categorie = models.CharField(max_length=50, choices=CATEGORIES, default='antalgique') 
