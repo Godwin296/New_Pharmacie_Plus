@@ -1,7 +1,22 @@
+from django.utils import translation
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import AuthenticationFailed, InvalidToken
 
 from clients_publics.models import CompteClient
+
+
+def _activer_langue_client(client):
+    """
+    🌍 (01/08) Si le client a un choix de langue explicite (pas "Système"), on l'active pour
+    TOUTE la durée du traitement de cette requête -- messages d'erreur DRF traduits (à
+    condition d'être marqués gettext dans le code des vues, chantier progressif, pas encore
+    exhaustif), emails générés dans le bon flux, etc. Si `langue_preferee` est None
+    ("Système"), on ne touche à RIEN : LocaleMiddleware (voir config/settings.py) a déjà
+    activé la langue déduite de l'en-tête Accept-Language du navigateur AVANT que DRF
+    n'atteigne ce point -- l'écraser ici casserait justement le comportement "système" demandé.
+    """
+    if getattr(client, "langue_preferee", None):
+        translation.activate(client.langue_preferee)
 
 
 class StaffJWTAuthentication(JWTAuthentication):
@@ -49,12 +64,14 @@ class ClientJWTAuthentication(JWTAuthentication):
         except KeyError:
             raise InvalidToken("Le jeton ne contient pas d'identifiant utilisateur.")
         try:
-            return CompteClient.objects.get(pk=user_id, is_active=True)
+            client = CompteClient.objects.get(pk=user_id, is_active=True)
         except CompteClient.DoesNotExist:
             raise AuthenticationFailed(
                 "Compte client introuvable ou désactivé.",
                 code="client_not_found",
             )
+        _activer_langue_client(client)
+        return client
 
 
 class ClientOrStaffJWTAuthentication(JWTAuthentication):
@@ -80,12 +97,14 @@ class ClientOrStaffJWTAuthentication(JWTAuthentication):
             except KeyError:
                 raise InvalidToken("Le jeton ne contient pas d'identifiant utilisateur.")
             try:
-                return CompteClient.objects.get(pk=user_id, is_active=True)
+                client = CompteClient.objects.get(pk=user_id, is_active=True)
             except CompteClient.DoesNotExist:
                 raise AuthenticationFailed(
                     "Compte client introuvable ou désactivé.",
                     code="client_not_found",
                 )
+            _activer_langue_client(client)
+            return client
         return super().get_user(validated_token)
 
 

@@ -63,7 +63,7 @@ git remote set-url origin https://github.com/Godwin296/New_Pharmacie_Plus.git  #
 
 ### 🟡 Effort moyen
 - [ ] **Dashboard analytics avancé** — comparaison période/période, calcul et affichage de la marge réelle (le champ `Produit.prix_achat` existe déjà ; reste le calcul/l'UI côté dashboard) ; détail dans [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md#4-côté-admin-par-pharmacie--réponse-à-ta-question--dashboard-réellement-basique-tu-as-raison)
-- [ ] **Internationalisation (next-intl)** — pas commencé
+- [~] **Internationalisation** — infrastructure BACKEND posée (01/08) : `LocaleMiddleware` + `LANGUAGES` (fr/en), `CompteClient.langue_preferee` (null = "Système", détection auto via `Accept-Language`), activée dans `core/authentication.py::_activer_langue_client` au moment de l'authentification JWT client, exposée en GET/PATCH sur `/api/v1/client/me/`. Testé de bout en bout (préférence explicite > Accept-Language > défaut `fr`). **Reste à faire** : traduire le contenu applicatif lui-même (messages d'erreur API, emails Brevo -- aucune chaîne n'est encore marquée `gettext`/`gettext_lazy`, voir `pharmacie-backend/locale/README.md`) + le frontend (next-intl, pas commencé) + un sélecteur de langue dans `/profil`
 - [ ] **Sentry frontend** — `@sentry/nextjs` supporte désormais officiellement Next.js 16 (vérifié 02/08, versions 10.6x/10.69 déclarent `next: "^16.0.0-0"` dans leur peerDependencies) : n'est donc PLUS bloqué techniquement, contrairement à la note précédente de ce document. Reste à l'installer/configurer réellement côté `pharmacie-frontend`.
 
 ### 🔵 Documenté, implémentation volontairement différée (voir [docs/INFRASTRUCTURE_ROADMAP.md](docs/INFRASTRUCTURE_ROADMAP.md) pour le détail et le déclencheur de chaque point)

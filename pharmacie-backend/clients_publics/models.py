@@ -44,6 +44,17 @@ class CompteClient(AbstractBaseUser):
     nom = models.CharField(max_length=150, verbose_name="Nom complet")
     identifiant = models.CharField(max_length=23, blank=True, unique=True, verbose_name="ID Client 🆔")
     telephone = models.CharField(max_length=20, blank=True, null=True)
+    # 🌍 INTERNATIONALISATION (session backend, 01/08) : préférence personnelle du client,
+    # distincte de PharmacieConfig.langue_preferee (qui est un réglage PAR TENANT, choisi par
+    # l'admin, sans effet réel aujourd'hui -- aucun LocaleMiddleware ne le consomme). Celle-ci
+    # est PAR CLIENT, cohérente d'une pharmacie à l'autre puisque CompteClient est global.
+    # `null=True` porte un sens précis : "Système" (pas de préférence explicite) -- dans ce
+    # cas, la langue effective est déterminée automatiquement à partir de l'en-tête HTTP
+    # Accept-Language envoyé par le navigateur (comportement standard de LocaleMiddleware,
+    # voir config/settings.py). Si un choix explicite est enregistré, il prend le dessus
+    # (voir ClientJWTAuthentication.get_user() dans authentication.py).
+    LANGUES = [("fr", "Français 🇫🇷"), ("en", "English 🇺🇸")]
+    langue_preferee = models.CharField(max_length=5, choices=LANGUES, null=True, blank=True, default=None, verbose_name="Langue préférée (vide = système)")
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_creation = models.DateTimeField(default=timezone.now)
