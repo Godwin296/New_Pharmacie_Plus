@@ -36,7 +36,7 @@ export function PharmacyIcon({
     <img
       src={config?.logo || "/branding/icon-mark.png"}
       alt={alt}
-      className={className}
+      className="h-9 w-9 rounded-xl object-contain mix-blend-multiply dark:mix-blend-normal dark:rounded-xl"
     />
   );
 }
