@@ -1,10 +1,11 @@
 "use client";
 import React, { useState, useEffect, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  ArrowLeft, Pill, ShoppingCart, Plus, Minus, Loader2,
-  ShieldAlert, Package, Tag, Wallet, Boxes, ArrowDownCircle, ArrowUpCircle,
+  ArrowLeft, Heart, Share2, Pill, ShoppingCart, Plus, Minus, Loader2,
+  ShieldAlert, Package, ArrowDownCircle, ArrowUpCircle, ChevronRight,
 } from "lucide-react";
 
 import apiClient from "../../../lib/apiClient";
@@ -30,15 +31,30 @@ interface ProduitDetail {
   image?: string | null;
 }
 
+interface ProduitSimilaire {
+  id: number;
+  nom: string;
+  prix: number;
+  laboratoire: string;
+  categorie_display?: string;
+  image?: string | null;
+  quantite: number;
+}
+
 /**
- * 🆕 ÉCRAN DÉTAIL PRODUIT (refonte UI/UX, 30/07) -- n'existait pas du tout jusqu'ici,
- * cf. docs/UIUX_REFONTE_GUIDE.md. Reproduit le niveau de référence établi par
- * app/catalogue/page.tsx : toast partagé, cibles tactiles 44px, retour tactile
- * (active:scale), bottom sheet plutôt que popup centrée, mobile-first strict.
- *
- * Accessible par URL directe (pas seulement depuis le catalogue) -- d'où le fetch
- * autonome via /api/produits/<id>/ (nouvel endpoint, voir core/api.py::api_produit_detail)
- * plutôt que de dépendre de données déjà en mémoire côté catalogue.
+ * 🆕 ÉCRAN DÉTAIL PRODUIT (31/07) -- reconstruit pour suivre fidèlement une référence
+ * e-commerce fournie (photo pleine largeur, nom, marque, badges, prix, sélecteur de
+ * quantité, CTA panier pleine largeur, section "produits similaires"). Deux écarts
+ * assumés par rapport à la référence :
+ * 1. Une seule photo (pas de carrousel) -- Produit.image est un champ unique côté
+ *    modèle, aucune galerie n'existe.
+ * 2. Pas de note en étoiles -- aucun système d'avis/notation n'existe en base (vérifié :
+ *    seul Favori existe, pas de modèle Avis/Note). Afficher des étoiles fixes ou
+ *    inventées aurait été une fausse donnée ; remplacé par le badge de stock réel, au
+ *    même endroit visuel.
+ * Favoris et partage sont RÉELS (pas des boutons qui ont l'air interactifs mais ne font
+ * rien) : favoris via l'API déjà existante (Favori, core/models.py), partage via l'API
+ * native du navigateur (déclenche le vrai partage système sur mobile).
  */
 export default function ProduitDetailPage() {
   const params = useParams();
@@ -51,12 +67,17 @@ export default function ProduitDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isStaff, setIsStaff] = useState(false);
   const [quantite, setQuantite] = useState(1);
   const [ajoutEnCours, setAjoutEnCours] = useState(false);
-  const [onglet, setOnglet] = useState<"informations" | "details" | "historique">("informations");
+  const [estFavori, setEstFavori] = useState(false);
+  const [favoriEnCours, setFavoriEnCours] = useState(false);
+  const [similaires, setSimilaires] = useState<ProduitSimilaire[] | null>(null);
 
   useEffect(() => {
-    setIsAdmin(typeof window !== "undefined" && localStorage.getItem("user_role") === "admin");
+    const role = typeof window !== "undefined" ? localStorage.getItem("user_role") : null;
+    setIsAdmin(role === "admin");
+    setIsStaff(role === "admin" || role === "caissiere");
   }, []);
 
   useEffect(() => {
@@ -83,15 +104,81 @@ export default function ProduitDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [produitId]);
 
+  // 🩷 État "favori" -- réutilise GET /api/favoris/ (liste déjà existante) plutôt que
+  // d'ajouter un champ est_favori à l'endpoint détail : ce dernier est mis en cache
+  // côté backend (cache_set, 60s) et partagé entre TOUS les clients -- y embarquer une
+  // donnée propre à l'utilisateur connecté y aurait mélangé les favoris d'un client avec
+  // ceux d'un autre. Un appel séparé, jamais mis en cache, reste correct.
+  useEffect(() => {
+    if (isStaff || !produitId) return; // le personnel n'a pas de favoris
+    apiClient
+      .get("/api/favoris/")
+      .then((res) => {
+        const favoris = res.data as { produit: { id: number } }[];
+        setEstFavori(favoris.some((f) => f.produit.id === Number(produitId)));
+      })
+      .catch(() => {}); // pas grave si ça échoue (ex: visiteur non connecté) -- reste "non favori"
+  }, [produitId, isStaff]);
+
+  const toggleFavori = async () => {
+    if (!produit || favoriEnCours) return;
+    setFavoriEnCours(true);
+    const etatPrecedent = estFavori;
+    setEstFavori(!etatPrecedent); // optimiste : réactif au doigt, corrigé si l'appel échoue
+    try {
+      const res = await apiClient.post(`/api/favoris/${produit.id}/`);
+      setEstFavori(res.data.favori);
+    } catch (err: any) {
+      setEstFavori(etatPrecedent);
+      if (err.response?.status === 401) {
+        showToast("Connectez-vous pour enregistrer vos favoris.", "info");
+      } else {
+        showToast("Impossible de mettre à jour vos favoris.", "error");
+      }
+    } finally {
+      setFavoriEnCours(false);
+    }
+  };
+
+  // 📤 Partage RÉEL : déclenche la feuille de partage native (mobile), ou copie le lien
+  // en repli (desktop, navigateurs sans navigator.share) -- jamais un bouton qui ne fait
+  // rien au clic.
+  const partager = async () => {
+    if (!produit) return;
+    const url = typeof window !== "undefined" ? window.location.href : "";
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ title: produit.nom, text: `${produit.nom} — ${produit.laboratoire || "Pharmacie+"}`, url });
+      } catch {
+        // AbortError si l'utilisateur ferme la feuille de partage -- pas une vraie erreur
+      }
+    } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+      await navigator.clipboard.writeText(url);
+      showToast("Lien copié dans le presse-papiers", "success");
+    }
+  };
+
+  // Produits similaires -- même catégorie, produit courant exclu. Chargé une fois le
+  // produit connu (a besoin de sa catégorie), silencieusement (section simplement
+  // masquée en cas d'échec, pas de toast pour une info secondaire).
+  useEffect(() => {
+    if (!produit) return;
+    apiClient
+      .get(`/api/catalogue/?cat=${encodeURIComponent(produit.categorie)}&page_size=8`)
+      .then((res) => {
+        const liste: ProduitSimilaire[] = (res.data?.results?.produits || res.data?.produits || [])
+          .filter((p: ProduitSimilaire) => p.id !== produit.id)
+          .slice(0, 6);
+        setSimilaires(liste);
+      })
+      .catch(() => setSimilaires([]));
+  }, [produit?.categorie, produit?.id]);
+
   const modifierQuantite = (delta: number) => {
     if (!produit) return;
     setQuantite((q) => Math.max(1, Math.min(produit.quantite, q + delta)));
   };
 
-  // Même logique que app/catalogue/page.tsx::handleAddToCart (mode hors-ligne inclus) --
-  // dupliquée ici plutôt que partagée pour l'instant, le catalogue ayant sa propre liste
-  // de produits en mémoire alors que cette page part d'un fetch unique. À factoriser si un
-  // 3e écran a besoin de la même logique.
   const handleAddToCart = async () => {
     if (!produit) return;
     setAjoutEnCours(true);
@@ -144,14 +231,11 @@ export default function ProduitDetailPage() {
   }
 
   const enRupture = produit.quantite <= 0;
-  const stockFaible = !enRupture && produit.quantite <= produit.seuil_alerte;
 
   return (
-    <div className="max-w-md md:max-w-2xl mx-auto min-h-screen pb-32">
-      {/* 🔝 En-tête : flèche retour seule -- pas de bouton favori/partage qui ne ferait
-          rien (aucun backend derrière), cf. règle "aucun bouton qui a l'air interactif
-          mais ne fait rien". */}
-      <div className="sticky top-0 z-30 flex items-center px-4 py-3 bg-white/80 dark:bg-[#050e0c]/80 backdrop-blur-md">
+    <div className={`max-w-md md:max-w-2xl mx-auto min-h-screen ${!isStaff ? "pb-32" : "pb-10"}`}>
+      {/* 🔝 En-tête : retour à gauche, favori + partage à droite (RÉELS, cf. docstring) */}
+      <div className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-white/80 dark:bg-[#050e0c]/80 backdrop-blur-md">
         <button
           onClick={() => router.back()}
           aria-label="Retour"
@@ -159,14 +243,29 @@ export default function ProduitDetailPage() {
         >
           <ArrowLeft size={20} />
         </button>
-        <h1 className="flex-grow text-center font-display text-sm font-bold text-slate-800 dark:text-white truncate px-3">
-          {produit.nom}
-        </h1>
-        <div className="h-11 w-11" /> {/* espaceur : garde le titre centré */}
+        <div className="flex items-center gap-2">
+          {!isStaff && (
+            <button
+              onClick={toggleFavori}
+              aria-label={estFavori ? "Retirer des favoris" : "Ajouter aux favoris"}
+              aria-pressed={estFavori}
+              className="h-11 w-11 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/[0.06] border-none cursor-pointer active:scale-90 transition-transform"
+            >
+              <Heart size={19} className={estFavori ? "fill-red-500 text-red-500" : "text-slate-700 dark:text-slate-200"} />
+            </button>
+          )}
+          <button
+            onClick={partager}
+            aria-label="Partager ce produit"
+            className="h-11 w-11 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-200 border-none cursor-pointer active:scale-90 transition-transform"
+          >
+            <Share2 size={18} />
+          </button>
+        </div>
       </div>
 
       <div className="px-4">
-        {/* 🖼️ Image produit */}
+        {/* 🖼️ Photo unique (pas de carrousel, cf. docstring) */}
         <motion.div
           initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
           className="w-full aspect-square bg-emerald-50 dark:bg-emerald-500/10 rounded-[28px] flex items-center justify-center overflow-hidden mb-5"
@@ -178,112 +277,48 @@ export default function ProduitDetailPage() {
           )}
         </motion.div>
 
-        {/* 🏷️ Catégorie -- jamais affichée à l'utilisateur jusqu'ici (seul le laboratoire
-            l'était), alors que c'est l'information la plus rapide pour confirmer qu'on
-            regarde le bon type de produit avant même de lire le nom. */}
-        {produit.categorie_display && (
-          <span className="inline-block mb-2.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400">
-            {produit.categorie_display}
-          </span>
-        )}
+        {/* Nom */}
+        <h1 className="font-display text-xl font-bold text-slate-800 dark:text-white leading-snug">
+          {produit.nom}
+        </h1>
 
-        {/* 🏷️ Nom, laboratoire, badge stock */}
-        <div className="flex items-start justify-between gap-3 mb-1">
-          <h2 className="font-display text-xl font-bold text-slate-800 dark:text-white leading-tight">{produit.nom}</h2>
-          <span
-            className={`shrink-0 text-[10px] font-semibold px-2.5 py-1 rounded-full ${
-              enRupture
-                ? "bg-red-50 text-red-500 dark:bg-red-900/20"
-                : stockFaible
-                ? "bg-amber-50 text-amber-600 dark:bg-amber-900/20"
-                : "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30"
-            }`}
-          >
-            {enRupture ? "Rupture" : stockFaible ? "Stock faible" : "En stock"}
+        {/* Marque (laboratoire) + badge de stock à la place d'une note en étoiles
+            (inexistante, cf. docstring) */}
+        <div className="flex items-center justify-between mt-1.5">
+          <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+            {produit.laboratoire || "Générique"}
+          </span>
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${enRupture ? "bg-red-50 text-red-500 dark:bg-red-900/20" : "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30"}`}>
+            {enRupture ? "Rupture de stock" : `En stock · ${produit.quantite}`}
           </span>
         </div>
-        {produit.laboratoire && (
-          <p className="text-sm text-slate-400 mb-3">{produit.laboratoire}</p>
-        )}
 
         {produit.ordonnance_obligatoire && (
-          <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-2xl bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400">
-            <ShieldAlert size={16} className="shrink-0" />
-            <p className="text-xs font-medium">Ordonnance médicale requise pour ce produit</p>
+          <div className="flex items-center gap-1.5 mt-3 text-xs font-semibold px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 w-fit">
+            <ShieldAlert size={13} /> Ordonnance requise
           </div>
         )}
 
-        <Prix montant={produit.prix} className="font-display text-2xl font-bold text-emerald-600 dark:text-emerald-400 block mb-5" />
-
-        {/* 📊 GRILLE DE STATS -- fidèle à la maquette (Stock actuel / Prix d'achat /
-            Prix de vente / Catégorie). Pour un client, "Prix d'achat" n'existe pas dans la
-            réponse (retiré côté serializer, cf. `prix_achat?`) donc la grille passe
-            naturellement à 2 cellules au lieu de forcer un "--" vide -- et "Prix de vente"
-            n'a pas d'intérêt à être répété ici pour un client puisqu'il est déjà affiché en
-            grand juste au-dessus ; pour un admin en revanche, l'avoir côte à côte avec le
-            prix d'achat permet de visualiser la marge d'un coup d'œil, d'où sa présence
-            uniquement dans ce cas. */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <StatCell icon={Boxes} label="Stock actuel" value={`${produit.quantite} unités`} />
-          {isAdmin && produit.prix_achat != null && (
-            <StatCell icon={Wallet} label="Prix d'achat" value={<Prix montant={produit.prix_achat} />} />
-          )}
-          {isAdmin && (
-            <StatCell icon={Tag} label="Prix de vente" value={<Prix montant={produit.prix} />} />
-          )}
-          <StatCell icon={Package} label="Catégorie" value={produit.categorie_display || "—"} />
+        {/* Prix */}
+        <div className="flex items-baseline gap-1.5 mt-4">
+          <Prix montant={produit.prix} className="font-display text-2xl font-bold text-slate-800 dark:text-white" />
+          <span className="text-sm text-slate-400">/ unité</span>
         </div>
 
-        {/* 📑 ONGLETS -- Informations / Détails / (Historique, admin uniquement) */}
-        <div className="flex gap-5 border-b border-slate-100 dark:border-white/10 mb-4">
-          {(["informations", "details", ...(isAdmin ? ["historique"] as const : [])] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setOnglet(tab)}
-              className={`relative pb-3 text-[13px] font-semibold border-none bg-transparent cursor-pointer transition-colors ${
-                onglet === tab ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"
-              }`}
-            >
-              {tab === "informations" ? "Informations" : tab === "details" ? "Détails" : "Historique"}
-              {onglet === tab && (
-                <motion.div layoutId="onglet-actif" className="absolute -bottom-px left-0 right-0 h-[2px] bg-emerald-500 rounded-full" />
-              )}
-            </button>
-          ))}
-        </div>
+        {/* Catégorie -- lien réel vers le catalogue filtré, pas un texte statique */}
+        {produit.categorie_display && (
+          <Link
+            href={`/catalogue?cat=${encodeURIComponent(produit.categorie)}`}
+            className="inline-flex items-center gap-1 mt-2 text-xs font-medium text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 no-underline transition-colors"
+          >
+            {produit.categorie_display} <ChevronRight size={13} />
+          </Link>
+        )}
 
-        <div className="mb-8 min-h-[80px]">
-          {onglet === "informations" && (
-            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-              {produit.description || "Aucune information complémentaire renseignée pour ce produit."}
-            </p>
-          )}
-
-          {onglet === "details" && (
-            <div className="space-y-3">
-              <DetailRow label="Laboratoire" value={produit.laboratoire || "Générique"} />
-              <DetailRow label="Référence" value={produit.identifiant} />
-              {isAdmin && <DetailRow label="Seuil d'alerte" value={`${produit.seuil_alerte} unités`} />}
-              {isAdmin && produit.date_expiration && (
-                <DetailRow label="Péremption" value={new Date(produit.date_expiration).toLocaleDateString("fr-FR")} />
-              )}
-            </div>
-          )}
-
-          {onglet === "historique" && isAdmin && (
-            <HistoriqueMouvements produitId={produit.id} />
-          )}
-        </div>
-      </div>
-
-      {/* 🧾 Barre d'action fixe en bas -- zone accessible au pouce, cohérent avec la
-          bottom nav déjà en place ailleurs dans l'app. */}
-      <div
-        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#050e0c]/95 backdrop-blur-md border-t border-slate-100 dark:border-white/10 px-4 pt-3"
-        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
-      >
-        <div className="max-w-md md:max-w-2xl mx-auto flex items-center gap-3">
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/[0.06] rounded-2xl p-1">
+        {/* Sélecteur de quantité -- visible seulement pour un client (le personnel n'a pas
+            de panier) */}
+        {!isStaff && (
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/[0.06] rounded-2xl p-1 w-fit mt-5">
             <button
               onClick={() => modifierQuantite(-1)}
               disabled={quantite <= 1}
@@ -292,7 +327,7 @@ export default function ProduitDetailPage() {
             >
               <Minus size={16} />
             </button>
-            <span className="w-9 text-center font-display text-sm font-bold text-slate-800 dark:text-white">{quantite}</span>
+            <span className="w-10 text-center font-display text-sm font-bold text-slate-800 dark:text-white">{quantite}</span>
             <button
               onClick={() => modifierQuantite(1)}
               disabled={quantite >= produit.quantite}
@@ -302,46 +337,114 @@ export default function ProduitDetailPage() {
               <Plus size={16} />
             </button>
           </div>
+        )}
 
-          <button
-            onClick={handleAddToCart}
-            disabled={enRupture || ajoutEnCours}
-            className="flex-grow h-[52px] rounded-2xl bg-emerald-500 text-white font-display font-semibold text-sm flex items-center justify-center gap-2 border-none cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-30 disabled:grayscale"
-          >
-            {ajoutEnCours ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <>
-                <ShoppingCart size={18} />
-                {enRupture ? "Rupture de stock" : "Ajouter au panier"}
-              </>
-            )}
-          </button>
+        {/* Description */}
+        <div className="mt-6">
+          <h2 className="font-display text-sm font-bold text-slate-800 dark:text-white mb-2">Description</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+            {produit.description || "Aucune information complémentaire renseignée pour ce produit."}
+          </p>
         </div>
+
+        {/* Bloc admin -- retiré de l'ancien système d'onglets, condensé ici : reste utile
+            (stock/prix d'achat/référence/historique) sans reproduire la mise en page de la
+            référence e-commerce, pensée pour un client, pas pour la gestion interne. */}
+        {isAdmin && <BlocAdmin produit={produit} />}
+
+        {/* Produits similaires */}
+        {similaires && similaires.length > 0 && (
+          <div className="mt-8">
+            <h2 className="font-display text-sm font-bold text-slate-800 dark:text-white mb-3">Produits similaires</h2>
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide">
+              {similaires.map((p) => (
+                <Link
+                  key={p.id}
+                  href={`/produit/${p.id}`}
+                  className="shrink-0 w-36 snap-start no-underline bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden active:scale-95 transition-transform"
+                >
+                  <div className="w-full aspect-square bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center overflow-hidden">
+                    {p.image ? (
+                      <img src={p.image} alt={p.nom} className="w-full h-full object-cover" />
+                    ) : (
+                      <Pill size={28} className="text-emerald-300 dark:text-emerald-700" />
+                    )}
+                  </div>
+                  <div className="p-2.5">
+                    <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">{p.nom}</p>
+                    <p className="text-[10px] text-slate-400 truncate mb-1">{p.categorie_display || p.laboratoire}</p>
+                    <Prix montant={p.prix} className="text-xs font-bold text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* 🧾 Barre d'action fixe -- masquée pour le personnel (pas de panier) */}
+      {!isStaff && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#050e0c]/95 backdrop-blur-md border-t border-slate-100 dark:border-white/10 px-4 pt-3"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+        >
+          <div className="max-w-md md:max-w-2xl mx-auto">
+            <button
+              onClick={handleAddToCart}
+              disabled={enRupture || ajoutEnCours}
+              className="w-full h-[52px] rounded-2xl bg-emerald-500 text-white font-display font-semibold text-sm flex items-center justify-center gap-2 border-none cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-30 disabled:grayscale"
+            >
+              {ajoutEnCours ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <>
+                  <ShoppingCart size={18} />
+                  {enRupture ? "Rupture de stock" : "Ajouter au panier"}
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
       <ToastContainer toasts={toasts} />
     </div>
   );
 }
 
-// 🧩 Cellule de la grille de stats (Stock actuel / Prix d'achat / Prix de vente / Catégorie)
-function StatCell({ icon: Icon, label, value }: { icon: any; label: string; value: ReactNode }) {
+// 🧩 Bloc d'informations réservé au personnel admin (stock, achat, référence, historique) --
+// remplace l'ancien système d'onglets, condensé pour ne pas alourdir la fiche client.
+function BlocAdmin({ produit }: { produit: ProduitDetail }) {
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
   return (
-    <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-100 dark:border-white/10">
-      <Icon size={16} className="text-emerald-500 mt-0.5 shrink-0" />
-      <div className="min-w-0">
-        <p className="text-[10px] text-slate-400">{label}</p>
-        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{value}</p>
+    <div className="mt-6 p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-100 dark:border-white/10">
+      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-3">Informations internes</p>
+      <div className="space-y-2.5">
+        <DetailRow label="Référence" value={produit.identifiant} />
+        {produit.prix_achat != null && <DetailRow label="Prix d'achat" value={<Prix montant={produit.prix_achat} />} />}
+        <DetailRow label="Seuil d'alerte" value={`${produit.seuil_alerte} unités`} />
+        {produit.date_expiration && (
+          <DetailRow label="Péremption" value={new Date(produit.date_expiration).toLocaleDateString("fr-FR")} />
+        )}
       </div>
+      <button
+        onClick={() => setHistoriqueOuvert((v) => !v)}
+        className="mt-3 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-transparent border-none cursor-pointer p-0"
+      >
+        {historiqueOuvert ? "Masquer l'historique des mouvements" : "Voir l'historique des mouvements"}
+      </button>
+      {historiqueOuvert && (
+        <div className="mt-3">
+          <HistoriqueMouvements produitId={produit.id} />
+        </div>
+      )}
     </div>
   );
 }
 
-// 🧩 Ligne simple de l'onglet "Détails"
 function DetailRow({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-slate-50 dark:border-white/[0.06] last:border-none">
+    <div className="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-white/[0.06] last:border-none">
       <span className="text-[13px] text-slate-400">{label}</span>
       <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">{value}</span>
     </div>
@@ -357,10 +460,9 @@ interface Mouvement {
   note: string | null;
 }
 
-// 🆕 (30/07) Onglet "Historique" -- fetch PARESSEUX : n'appelle le backend que si l'admin
-// ouvre réellement cet onglet (pas au chargement de la page), cohérent avec l'objectif de
-// ne pas taper la base pour rien à chaque action. Résultat déjà mis en cache 30s côté
-// backend (voir api_produit_historique) en plus de ça.
+// 🆕 Onglet "Historique" (désormais repliable, cf. BlocAdmin) -- fetch PARESSEUX : n'appelle
+// le backend que si l'admin ouvre réellement ce panneau, pas au chargement de la page.
+// Résultat déjà mis en cache 30s côté backend (voir api_produit_historique) en plus de ça.
 function HistoriqueMouvements({ produitId }: { produitId: number }) {
   const [mouvements, setMouvements] = useState<Mouvement[] | null>(null);
   const [erreur, setErreur] = useState(false);
