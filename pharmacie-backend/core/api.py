@@ -9,6 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from django.db.utils import IntegrityError
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime, parse_date
 from django.utils.crypto import get_random_string
@@ -506,7 +507,11 @@ def api_catalogue(request):
         produits = produits.filter(
             Q(nom__icontains=search_query) | 
             Q(laboratoire__icontains=search_query) |
-            Q(identifiant__iexact=search_query)
+            Q(identifiant__iexact=search_query) |
+            # 📷 (PR scan code-barres) : un scan douchette sur un produit déjà rattaché à
+            # son vrai code-barres fabricant (EAN-13/UPC-A) doit le trouver via cette même
+            # recherche -- c'est ce chemin qu'utilise handleScan() côté POS.
+            Q(code_barre__iexact=search_query)
         ).distinct()
 
     paginator = CataloguePagination()
@@ -582,6 +587,94 @@ def api_produit_historique(request, produit_id):
     data = MouvementStockSerializer(mouvements, many=True).data
     cache_set(cache_key, data, timeout=30)
     return Response(data)
+
+
+# --- 📷 SCAN CODE-BARRES FABRICANT (EAN-13/UPC-A) -- PR dédiée au branchement du scanner
+# sur le standard international, en plus du code interne `identifiant` déjà supporté ---
+@api_view(['GET'])
+@authentication_classes([ClientOrStaffJWTAuthentication])
+@permission_classes([AllowAny])
+def api_scan_code_barre(request, code):
+    """
+    Point d'entrée UNIQUE pour un scan douchette, quel que soit le type de code lu :
+    - code-barres fabricant (EAN-13/UPC-A/EAN-8) déjà rattaché à un produit -> trouvé ici
+    - code interne `identifiant` (ancien comportement, ex: étiquette maison) -> trouvé ici
+    - code fabricant JAMAIS rattaché à aucun produit -> 404 avec un corps de réponse
+      explicite, pour que le frontend propose le flux de rattachement (voir
+      api_associer_code_barre ci-dessous) plutôt qu'un simple "produit introuvable" muet.
+
+    🔐 AllowAny + ClientOrStaffJWTAuthentication : même précaution que api_catalogue/
+    api_produit_detail -- un scan peut venir d'un client (scanner un produit chez lui pour
+    le retrouver dans l'app) autant que de la caisse.
+    """
+    code = (code or "").strip()
+    if not code:
+        return Response({"error": "Code vide"}, status=400)
+
+    produit = Produit.objects.filter(Q(code_barre__iexact=code) | Q(identifiant__iexact=code)).first()
+    if not produit:
+        return Response(
+            {"error": "Code non reconnu", "code_scanne": code, "peut_etre_rattache": True},
+            status=404,
+        )
+
+    serializer = ProduitSerializer(produit, context={'request': request})
+    return Response(serializer.data)
+
+
+@api_view(['POST'])
+@authentication_classes([StaffJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def api_associer_code_barre(request, produit_id):
+    """
+    🔗 Flux de "première réception" (voir docs/UIUX_REFONTE_GUIDE.md §3) : un code-barres
+    fabricant scanné une première fois et non reconnu (cf. api_scan_code_barre ci-dessus)
+    peut être rattaché ici à un produit existant du catalogue. Une fois enregistré, CE
+    MÊME code sera reconnu directement par api_scan_code_barre à chaque scan suivant --
+    le rattachement se fait UNE fois par référence produit, jamais par unité.
+
+    Réservé au personnel ADMIN (pas une simple caissière) : lier un code-barres au mauvais
+    produit fausserait durablement les ventes de ce produit à la caisse.
+    """
+    # 🔴 CORRECTIF (bug trouvé en testant réellement ce flux) : StaffJWTAuthentication +
+    # IsAuthenticated laissent passer N'IMPORTE QUEL compte staff, caissière incluse --
+    # seul le TYPE de jeton (staff vs client) est vérifié, pas le niveau de droits à
+    # l'intérieur du personnel. Une caissière a pu rattacher un code-barres dans le test
+    # avant ce correctif, alors que le docstring ci-dessus annonçait déjà "réservé à
+    # l'admin". Contrôle explicite ajouté, sur le même modèle que api_produit_historique.
+    if not (request.user and request.user.is_authenticated and getattr(request.user, 'is_superuser', False)):
+        return Response({"error": "Réservé aux administrateurs"}, status=403)
+
+    code_barre = (request.data.get('code_barre') or "").strip()
+    if not code_barre:
+        return Response({"error": "code_barre requis"}, status=400)
+
+    # 🔐 DURCISSEMENT PRODUCTION : la vérification .exists() ci-dessous seule laisse une
+    # fenêtre de course (TOCTOU) -- si deux admins rattachent LE MÊME code-barres à deux
+    # produits différents en même temps (ex: deux réceptions de stock en parallèle), les
+    # deux requêtes peuvent passer cette vérification avant qu'aucune n'ait encore
+    # sauvegardé. La contrainte unique=True sur Produit.code_barre (base de données)
+    # rattrape ce cas en dernier recours, mais SANS ce bloc try/except, la seconde requête
+    # plantait en 500 brut (IntegrityError non interceptée) au lieu d'un 409 propre. Rare
+    # en pratique, mais un scan de réception peut légitimement arriver en rafale depuis
+    # plusieurs postes de caisse le même jour de livraison -- pas un cas à ignorer.
+    if Produit.objects.filter(code_barre__iexact=code_barre).exclude(id=produit_id).exists():
+        return Response(
+            {"error": "Ce code-barres est déjà rattaché à un autre produit."},
+            status=409,
+        )
+
+    produit = get_object_or_404(Produit, id=produit_id)
+    produit.code_barre = code_barre
+    try:
+        with transaction.atomic():
+            produit.save(update_fields=['code_barre'])
+    except IntegrityError:
+        return Response(
+            {"error": "Ce code-barres vient d'être rattaché à un autre produit entre-temps. Rescannez pour vérifier."},
+            status=409,
+        )
+    return Response(ProduitSerializer(produit, context={'request': request}).data)
 
 
 # --- ❤️ FAVORIS (30/07) -- absent jusqu'ici, aucun endpoint ni modèle n'existait ---

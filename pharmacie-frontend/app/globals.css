@@ -96,3 +96,77 @@ body {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+/* ============================================
+   🏛️ APP SHELL NATIF — Task 1/20
+   ============================================ */
+
+/* Supprime le tap highlight bleu sur mobile (feel natif) */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* Désactive la sélection de texte sur les éléments interactifs
+   (comme dans une vraie app native) */
+button, a, [role="button"], .no-select {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Autorise la sélection sur les champs de formulaire et le contenu textuel */
+input, textarea, [contenteditable] {
+  -webkit-user-select: auto;
+  user-select: auto;
+}
+
+/* Momentum scrolling natif sur tous les conteneurs scrollables */
+.overflow-y-auto, .overflow-auto, .scrollable {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Empêche le pull-to-refresh du navigateur sur le body
+   (on implémentera notre propre pull-to-refresh par page en Task 5) */
+body {
+  overscroll-behavior-y: none;
+}
+
+/* Autorise le rebond élastique sur les conteneurs internes */
+.scroll-bounce {
+  overscroll-behavior-y: contain;
+}
+
+/* Cache la scrollbar mais garde le scroll fonctionnel */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ============================================
+   📱 STANDALONE MODE — Détecte PWA installée
+   ============================================ */
+
+/* Quand l'app est installée (standalone), on ajuste les safe areas */
+@media all and (display-mode: standalone) {
+  /* Le header peut être plus compact en standalone car pas de barre d'URL */
+  .standalone-header {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+  }
+}
+
+/* ============================================
+   🖐️ GESTURES — Préparation swipe-back (Task 4)
+   ============================================ */
+
+/* Zone de capture swipe-back à gauche de l'écran */
+.swipe-back-zone {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 100%;
+  z-index: 9999;
+  touch-action: pan-y;
+}
