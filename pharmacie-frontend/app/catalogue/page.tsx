@@ -74,6 +74,18 @@ function CataloguePageInner() {
     const role = typeof window !== 'undefined' ? localStorage.getItem('user_role') : null;
     setPeutAcheter(role !== 'admin' && role !== 'caissiere' && role !== 'caissière');
   }, []);
+  // 🔐 CORRECTIF (bug remonté en test) : le bouton "ajouter au panier" (et le sélecteur de
+  // quantité juste en dessous) s'affichait pour TOUT visiteur du catalogue, y compris le
+  // personnel (admin, caissière) qui n'a pas de panier client -- seul un CompteClient (ou un
+  // visiteur pas encore connecté, invité à se connecter au clic) peut réellement passer un
+  // achat via cette page. isStaff est volontairement séparé de isAdmin ci-dessus (qui ne
+  // contrôle QUE l'upload de photo produit, réservé à l'admin -- la caissière, elle, n'a pas
+  // ce droit mais n'a pas non plus de panier, d'où un état distinct).
+  const [isStaff, setIsStaff] = useState(false);
+  useEffect(() => {
+    const role = typeof window !== 'undefined' ? localStorage.getItem('user_role') : null;
+    setIsStaff(role === 'admin' || role === 'caissiere');
+  }, []);
   const [loading, setLoading] = useState(true);
   // 🔐 CORRECTIF (bug remonté en test, session 12/07) : `loading` était utilisé pour un
   // early-return "plein écran" (voir plus bas) qui démontait TOUT le composant -- y compris

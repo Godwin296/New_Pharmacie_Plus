@@ -3,17 +3,17 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, Box, History, Truck, 
-  BarChart3, Settings, Power, Sun, Moon,
+  BarChart3, Settings, Power,
   House, Pill, ShieldAlert, ArrowLeft, TrendingUp, Users
 } from 'lucide-react'; // 🌟 Ajout de ShieldAlert, ArrowLeft, TrendingUp (prédictions) et Users (clients)
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { PharmacyIcon } from '../../components/PharmacyIcon';
+import { ThemeToggleButton } from '../../components/ThemeToggleButton';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [isDark, setIsDark] = useState(false);
   const [currentTime, setCurrentTime] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [adminName, setAdminName] = useState('Admin');
@@ -35,19 +35,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       const opt: any = { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', second: '2-digit' };
       setCurrentTime(new Date().toLocaleDateString('fr-FR', opt));
     }, 1000);
-    
-    if (localStorage.getItem('color-theme') === 'dark') {
-      setIsDark(true);
-      document.documentElement.classList.add('dark');
-    }
+
     return () => clearInterval(timer);
   }, []);
-
-  const toggleTheme = () => {
-    setIsDark(!isDark);
-    document.documentElement.classList.toggle('dark');
-    localStorage.setItem('color-theme', !isDark ? 'dark' : 'light');
-  };
 
   const confirmLogout = () => {
     localStorage.clear();
@@ -127,15 +117,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         <div className="flex items-center gap-6">
-          {/* 🌟 ACCESSIBILITÉ : Ajout de title et aria-label sur le changement de thème */}
-          <button 
-            onClick={toggleTheme} 
-            title="Basculer le thème de couleur (Clair / Sombre)"
-            aria-label="Basculer le thème de couleur (Clair / Sombre)"
-            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border-none bg-transparent cursor-pointer flex items-center justify-center"
-          >
-            {isDark ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} className="text-slate-600" />}
-          </button>
+          {/* 🔧 CORRECTIF (icône du thème qui disparaît en mode clair, bug remonté en test) :
+              ce bouton réimplémentait SA PROPRE bascule (classList.toggle + clé localStorage
+              "color-theme"), en parallèle du système next-themes (lib/context/ThemeProvider.tsx,
+              clé "theme") qui gère la <html class="dark"> RÉELLEMENT utilisée par les styles
+              dark: partout dans l'app -- app/layout.tsx documentait déjà cette migration vers
+              next-themes, mais cet en-tête admin n'avait jamais été mis à jour pour l'utiliser.
+              Les deux systèmes se disputaient la même classe sur <html>, désynchronisant
+              l'icône affichée (isDark local) de l'apparence réelle de la page. */}
+          <ThemeToggleButton className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border-none bg-transparent cursor-pointer flex items-center justify-center" />
           <div className="text-right border-l pl-6 border-gray-200 dark:border-slate-700 hidden md:block">
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Identifiant</div>
             <div className="text-sm font-bold text-emerald-600 capitalize">{adminName}</div>

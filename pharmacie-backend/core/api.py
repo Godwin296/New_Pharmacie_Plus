@@ -308,18 +308,30 @@ def api_client_whoami(request):
       "mes commandes THIS pharmacie", pas encore une vue globale multi-tenant.
     - PATCH : mise à jour libre-service de nom/telephone (jamais l'email, qui est
       l'identifiant de connexion -- le changer nécessiterait une revérification, hors
-      scope ici).
+      scope ici) + langue_preferee ('fr', 'en', ou '' pour revenir au mode "Système" =
+      détection automatique via l'en-tête Accept-Language du navigateur, cf.
+      core/authentication.py::_activer_langue_client).
     """
     client = request.user
 
     if request.method == 'PATCH':
         nom = request.data.get('nom', '').strip()
         telephone = request.data.get('telephone', '').strip()
+        champs_modifies = []
         if nom:
             client.nom = nom
+            champs_modifies.append('nom')
         if telephone:
             client.telephone = telephone
-        client.save(update_fields=['nom', 'telephone'] if nom and telephone else (['nom'] if nom else ['telephone']))
+            champs_modifies.append('telephone')
+        if 'langue_preferee' in request.data:
+            langue = (request.data.get('langue_preferee') or '').strip()
+            if langue and langue not in dict(CompteClient.LANGUES):
+                return Response({"error": "Langue non supportée. Valeurs acceptées : fr, en, ou vide (Système)."}, status=400)
+            client.langue_preferee = langue or None
+            champs_modifies.append('langue_preferee')
+        if champs_modifies:
+            client.save(update_fields=champs_modifies)
 
     stats = Commande.objects.filter(compte_client=client, payee=True).aggregate(
         nb_commandes=Count('id', distinct=True),
@@ -332,6 +344,7 @@ def api_client_whoami(request):
         "nom": client.nom,
         "telephone": client.telephone,
         "identifiant": client.identifiant,
+        "langue_preferee": client.langue_preferee,  # None = "Système"
         "nb_commandes": stats['nb_commandes'] or 0,
         "montant_total_depense": stats['montant_total'] or 0,
     })
@@ -1879,6 +1892,7 @@ def api_admin_reset_password_client(request, client_id):
     return Response({
         "message": f"Nouveau mot de passe généré et envoyé à {client_obj.email}. ✅"
     })
+
 
 
 

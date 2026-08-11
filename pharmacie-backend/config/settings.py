@@ -116,6 +116,16 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    # 🌍 INTERNATIONALISATION (01/08) : DOIT être ici précisément -- après SessionMiddleware
+    # (dont elle peut dépendre pour une préférence de langue en session) et avant
+    # CommonMiddleware (qui s'appuie sur la langue déjà résolue), comme l'exige la doc Django.
+    # Détecte automatiquement la langue depuis l'en-tête Accept-Language du navigateur --
+    # c'est le comportement "Système" pour un visiteur anonyme ou un client sans préférence
+    # explicite enregistrée (voir CompteClient.langue_preferee). Un client authentifié avec
+    # une préférence explicite écrase ensuite ce choix (voir
+    # core/authentication.py::_activer_langue_client), plus tard dans le traitement de la
+    # requête, une fois le jeton JWT résolu.
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -332,6 +342,21 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = 'fr-fr'
+
+# 🌍 (01/08) : restreint la détection automatique (LocaleMiddleware, en-tête
+# Accept-Language) aux 2 langues réellement supportées par CompteClient.LANGUES --
+# sans ce réglage, Django accepterait n'importe quelle langue présente dans son propre
+# catalogue interne (des dizaines), dont on n'a traduit AUCUN contenu applicatif.
+LANGUAGES = [
+    ('fr', 'Français'),
+    ('en', 'English'),
+]
+
+# 🌍 (01/08) : chemin où vivront les fichiers de traduction (.po/.mo) une fois les chaînes
+# du code marquées avec gettext -- créé au fur et à mesure, pas encore peuplé aujourd'hui
+# (fondation posée : middleware + préférence par client, PAS la traduction du contenu
+# lui-même, qui reste un chantier à part -- voir PROMPT_REPRISE.md).
+LOCALE_PATHS = [BASE_DIR / 'locale']
 
 TIME_ZONE = 'Africa/Douala'
 
