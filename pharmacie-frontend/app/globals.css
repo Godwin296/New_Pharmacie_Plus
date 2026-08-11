@@ -87,6 +87,24 @@ body {
   }
 }
 
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* Logo pharmacie — suppression des bords blancs */
+.pharmacie-logo {
+  object-fit: contain;
+  background: transparent !important;
+}
+
+/* Si le logo a un fond blanc intégré à l'image, on le masque */
+.pharmacie-logo-white-fix {
+  mix-blend-mode: multiply;
+  filter: contrast(1.05);
+}
+
 /* Masque la scrollbar sur les carrousels horizontaux (catégories, favoris, populaires...)
    tout en gardant le défilement fonctionnel -- utilisé par plusieurs pages, jamais défini. */
 .scrollbar-none {

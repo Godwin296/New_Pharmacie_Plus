@@ -1,409 +1,475 @@
 "use client";
-import React, { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+
+import { useEffect, useState, useCallback } from "react";
+import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
 import {
-  LogIn, UserPlus, Pill, MapPin, Phone, PackageCheck, Loader2, ArrowRight,
-  Search, Mic, ScanLine, Heart, ChevronRight, FileText, Truck, Sparkles,
-} from 'lucide-react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import apiClient from '../lib/apiClient';
-import { useConfigPharmacie } from '../lib/context/ConfigPharmacieContext';
-import Prix from '../lib/components/Prix';
-import { useToast, ToastContainer } from '../lib/hooks/useToast';
-import { iconePourCategorie, CATEGORIES_ACCUEIL } from '../lib/categorieIcons';
+  Search, ShoppingCart, Pill, Zap, Sun, Tablets, HeartPulse,
+  Droplets, ScanFace, Eye, Wind, Leaf, ChevronRight, Clock,
+  Package, Plus, User, LogIn, ArrowRight, TrendingUp,
+} from "lucide-react";
+import { useConfigPharmacie } from "@/lib/context/ConfigPharmacieContext";
+import apiClient from "@/lib/apiClient";
+import Prix from "@/lib/components/Prix";
+import PageSkeleton from "@/lib/components/PageSkeleton";
 
-// 🎨 REFONTE (30/07, v5) : v4 gardait les conventions déjà en place dans le reste de l'app
-// (cartes blanches sobres, icônes toutes de la même teinte) plutôt que de vraiment reprendre
-// la STRUCTURE VISUELLE de la référence fournie (bannière illustrée avec CTA, grille de
-// catégories colorée façon icônes pastel, cartes produit à grande image + cœur superposé).
-// v5 colle beaucoup plus fidèlement à cette structure, avec la palette de la marque à la
-// place du turquoise du modèle -- et corrige deux régressions signalées : la transcription
-// vocale ne s'affichait pas en direct dans la barre, et les liens "Voir tout" n'amenaient
-// nulle part de spécifique (catalogue générique, sans même ouvrir les filtres).
-
-const STATUT_INFO: Record<string, { label: string; couleur: string }> = {
-  en_cours: { label: 'Panier en cours', couleur: 'text-blue-600 dark:text-blue-400' },
-  attente_validation: { label: 'Ordonnance en vérification', couleur: 'text-amber-600 dark:text-amber-400' },
-  paiement_a_verifier: { label: 'Paiement en cours de vérification', couleur: 'text-amber-600 dark:text-amber-400' },
-  payee_a_retirer: { label: 'Prête à retirer au guichet', couleur: 'text-emerald-600 dark:text-emerald-400' },
-  retiree: { label: 'Retirée', couleur: 'text-slate-500' },
-  payee: { label: 'Payée', couleur: 'text-emerald-600 dark:text-emerald-400' },
-  annulee: { label: 'Annulée', couleur: 'text-red-500' },
-};
-
-interface DerniereCommande {
-  id: number;
-  statut: string;
-  total_general: number;
-  items: { id: number }[];
-}
-
-interface ProduitLeger {
+/* ─── Types ─── */
+interface Produit {
   id: number;
   nom: string;
+  laboratoire: string;
   prix: number;
+  prix_vente?: number;
   image?: string;
-  categorie: string;
+  en_stock: boolean;
+  ordonnance: boolean;
 }
 
-export default function HomePage() {
-  const router = useRouter();
-  const { config } = useConfigPharmacie();
-  const { toasts, showToast } = useToast();
-  const [statutSession, setStatutSession] = useState<'verification' | 'visiteur' | 'client'>('verification');
-  const [prenomClient, setPrenomClient] = useState<string | null>(null);
-  const [derniereCommande, setDerniereCommande] = useState<DerniereCommande | null>(null);
-  const [chargementCommande, setChargementCommande] = useState(false);
+interface Commande {
+  id: number;
+  numero: string;
+  statut: "recue" | "preparation" | "prete" | "retiree";
+  date: string;
+  total: number;
+  nb_produits: number;
+}
 
-  const [recherche, setRecherche] = useState('');
-  const [ecouteVocale, setEcouteVocale] = useState(false);
-  const [vocalSupporte, setVocalSupporte] = useState(false);
-  const recognitionRef = useRef<any>(null);
+interface Client {
+  id: number;
+  nom: string;
+  prenom: string;
+}
 
-  const [populaires, setPopulaires] = useState<ProduitLeger[]>([]);
-  const [favorisIds, setFavorisIds] = useState<Set<number>>(new Set());
-  const [favorisProduits, setFavorisProduits] = useState<ProduitLeger[]>([]);
-  const [chargementProduits, setChargementProduits] = useState(true);
+/* ─── Design tokens ─── */
+const EASE_OUT_EXPO = [0.22, 1, 0.36, 1] as const;
 
-  useEffect(() => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    setVocalSupporte(!!SR);
-  }, []);
+const CATEGORIES = [
+  { id: "antibiotiques", nom: "Antibiotiques", icone: Pill, bg: "bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400" },
+  { id: "antalgiques", nom: "Antalgiques", icone: Zap, bg: "bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400" },
+  { id: "vitamines", nom: "Vitamines", icone: Sun, bg: "bg-yellow-50 text-yellow-600 dark:bg-yellow-950/30 dark:text-yellow-400" },
+  { id: "digestion", nom: "Digestion", icone: Tablets, bg: "bg-orange-50 text-orange-600 dark:bg-orange-950/30 dark:text-orange-400" },
+  { id: "cardio", nom: "Cardio & Tension", icone: HeartPulse, bg: "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400" },
+  { id: "diabete", nom: "Diabète", icone: Droplets, bg: "bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400" },
+  { id: "dermato", nom: "Dermatologie", icone: ScanFace, bg: "bg-pink-50 text-pink-600 dark:bg-pink-950/30 dark:text-pink-400" },
+  { id: "ophtalmo", nom: "Ophtalmologie", icone: Eye, bg: "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400" },
+  { id: "orl", nom: "ORL & Toux", icone: Wind, bg: "bg-cyan-50 text-cyan-600 dark:bg-cyan-950/30 dark:text-cyan-400" },
+  { id: "homeopathie", nom: "Homéopathie", icone: Leaf, bg: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400" },
+];
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    const role = localStorage.getItem('user_role');
-    if (!token || !role) { setStatutSession('visiteur'); return; }
-    if (role === 'admin') { router.replace('/admin/dashboard'); return; }
-    if (role === 'caissiere' || role === 'caissière') { router.replace('/caisse/pos'); return; }
+/* ─── Helpers ─── */
+function getEtapesCommande(statut: string) {
+  const etapes = [
+    { key: "recue", label: "Reçue" },
+    { key: "preparation", label: "Préparation" },
+    { key: "prete", label: "Prête" },
+    { key: "retiree", label: "Retirée" },
+  ];
+  const idx = etapes.findIndex((e) => e.key === statut);
+  return etapes.map((e, i) => ({ ...e, done: i <= idx }));
+}
 
-    setStatutSession('client');
-    apiClient.get('/api/v1/client/me/')
-      .then((res) => setPrenomClient(res.data?.nom?.split(' ')[0] || null))
-      .catch(() => {});
-
-    setChargementCommande(true);
-    apiClient.get('/api/commandes/')
-      .then((res) => {
-        const liste: DerniereCommande[] = res.data || [];
-        setDerniereCommande(liste.find((c) => c.items && c.items.length > 0) || null);
-      })
-      .catch(() => {})
-      .finally(() => setChargementCommande(false));
-
-    apiClient.get('/api/favoris/')
-      .then((res) => {
-        const liste = res.data || [];
-        setFavorisIds(new Set(liste.map((f: any) => f.produit.id)));
-        setFavorisProduits(liste.slice(0, 6).map((f: any) => f.produit));
-      })
-      .catch(() => {});
-  }, [router]);
-
-  useEffect(() => {
-    apiClient.get('/api/catalogue/?page_size=6')
-      .then((res) => setPopulaires(res.data?.produits || []))
-      .catch(() => {})
-      .finally(() => setChargementProduits(false));
-  }, []);
-
-  // 🎙️ (30/07, corrigé) interimResults=true + mise à jour de `recherche` sur CHAQUE
-  // résultat (intermédiaire ou final) -- avant, seul le résultat final déclenchait une
-  // redirection immédiate, donc rien ne s'affichait dans la barre pendant que la personne
-  // parlait. Désormais le texte se construit en direct sous les yeux, comme sur un vrai
-  // clavier vocal, et la redirection n'a lieu qu'une fois la reconnaissance terminée
-  // (silence détecté -> onend).
-  const lancerRechercheVocale = () => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-    const recognition = new SR();
-    recognition.lang = 'fr-FR';
-    recognition.interimResults = true;
-    recognition.continuous = true;
-    recognition.onstart = () => { setEcouteVocale(true); setRecherche(''); };
-    recognition.onresult = (e: any) => {
-      let texte = '';
-      for (let i = 0; i < e.results.length; i++) texte += e.results[i][0].transcript;
-      setRecherche(texte);
-    };
-    recognition.onerror = () => { setEcouteVocale(false); showToast("Recherche vocale interrompue, réessayez", "error"); };
-    recognition.onend = () => {
-      setEcouteVocale(false);
-      setRecherche((texteFinal) => {
-        if (texteFinal.trim()) router.push(`/catalogue?q=${encodeURIComponent(texteFinal.trim())}`);
-        return texteFinal;
-      });
-    };
-    recognitionRef.current = recognition;
-    recognition.start();
-  };
-
-  const arreterRechercheVocale = () => recognitionRef.current?.stop();
-
-  const soumettreRecherche = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (recherche.trim()) router.push(`/catalogue?q=${encodeURIComponent(recherche.trim())}`);
-  };
-
-  const basculerFavori = async (produit: ProduitLeger) => {
-    const etaitFavori = favorisIds.has(produit.id);
-    setFavorisIds((prev) => {
-      const next = new Set(prev);
-      etaitFavori ? next.delete(produit.id) : next.add(produit.id);
-      return next;
-    });
-    try {
-      await apiClient.post(`/api/favoris/${produit.id}/`);
-    } catch {
-      setFavorisIds((prev) => {
-        const next = new Set(prev);
-        etaitFavori ? next.add(produit.id) : next.delete(produit.id);
-        return next;
-      });
-      showToast("Impossible de mettre à jour vos favoris", "error");
-    }
-  };
-
-  if (statutSession === 'verification') {
-    return <div className="min-h-screen bg-slate-50 dark:bg-[#050e0c]" />;
-  }
-
-  const estClient = statutSession === 'client';
-  const statutInfo = derniereCommande ? STATUT_INFO[derniereCommande.statut] : null;
-
+/* ─── Section Title ─── */
+function SectionTitle({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
   return (
-    <div className="min-h-screen w-full bg-slate-50 dark:bg-[#050e0c] flex flex-col">
-      <div className="flex-grow flex flex-col items-center px-5 sm:px-6 pt-5 pb-12">
-        <div className="w-full max-w-md">
-
-          {/* 📍 Pastille de localisation -- compacte, en haut, comme la référence (au lieu
-              d'une grande carte). Le téléphone reste une action directe (tel:) à côté. */}
-          {(config?.adresse || config?.telephone) && (
-            <motion.div
-              initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
-              className="flex items-center justify-between gap-3 mb-4"
-            >
-              {config?.adresse && (
-                <span className="inline-flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] font-semibold px-3 py-1.5 rounded-full truncate">
-                  <MapPin size={12} className="shrink-0" /> <span className="truncate">{config.adresse}</span>
-                </span>
-              )}
-              {config?.telephone && (
-                <a href={`tel:${config.telephone}`} className="shrink-0 h-8 w-8 rounded-full bg-white dark:bg-white/[0.06] border border-slate-100 dark:border-white/10 flex items-center justify-center text-emerald-500 no-underline">
-                  <Phone size={13} />
-                </a>
-              )}
-            </motion.div>
-          )}
-
-          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.02 }} className="mb-4">
-            <h1 className="font-display text-2xl font-bold text-slate-800 dark:text-white tracking-tight">
-              {estClient
-                ? (prenomClient ? <>Bon retour, {prenomClient} 👋</> : 'Bon retour parmi nous 👋')
-                : 'Bienvenue'}
-            </h1>
-          </motion.div>
-
-          {/* 🔎 Recherche + 🎙️ vocale (transcription en direct) + 📷 scan */}
-          <motion.form
-            onSubmit={soumettreRecherche}
-            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}
-            className="flex gap-2 mb-5"
-          >
-            <div className="relative flex-grow">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input
-                value={recherche}
-                onChange={(e) => setRecherche(e.target.value)}
-                type="text"
-                placeholder={ecouteVocale ? "Je vous écoute…" : "Rechercher un médicament…"}
-                className="w-full pl-11 pr-4 py-3.5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-800 dark:text-white text-sm font-medium focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 outline-none transition-all"
-              />
-            </div>
-            {vocalSupporte && (
-              <button
-                type="button"
-                onClick={ecouteVocale ? arreterRechercheVocale : lancerRechercheVocale}
-                aria-label="Recherche vocale"
-                className={`shrink-0 h-[52px] w-[52px] rounded-2xl flex items-center justify-center border-none cursor-pointer transition-colors ${
-                  ecouteVocale ? "bg-red-500 text-white animate-pulse" : "bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-500"
-                }`}
-              >
-                <Mic size={18} />
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => showToast("Scan de code-barres bientôt disponible", "info")}
-              aria-label="Scanner un code-barres (bientôt disponible)"
-              className="shrink-0 h-[52px] w-[52px] rounded-2xl flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 text-white border-none cursor-pointer transition-colors"
-            >
-              <ScanLine size={18} />
-            </button>
-          </motion.form>
-
-          {/* 🧾 Statut RÉEL de la dernière commande -- reste prioritaire s'il y en a une */}
-          {estClient && chargementCommande && (
-            <div className="flex justify-center py-6"><Loader2 size={20} className="animate-spin text-emerald-500" /></div>
-          )}
-          {estClient && !chargementCommande && derniereCommande && statutInfo && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}>
-              <Link
-                href={derniereCommande.statut === 'en_cours' ? '/panier' : '/commandes'}
-                className="flex items-center gap-3.5 bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-[24px] p-4 mb-5 no-underline transition-colors active:scale-[0.99]"
-              >
-                <div className="h-11 w-11 shrink-0 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
-                  <PackageCheck size={20} className="text-emerald-500" />
-                </div>
-                <div className="min-w-0 flex-grow">
-                  <p className={`text-[12px] font-semibold ${statutInfo.couleur}`}>{statutInfo.label}</p>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">
-                    Commande #{derniereCommande.id} · <Prix montant={derniereCommande.total_general} />
-                  </p>
-                </div>
-                <ArrowRight size={16} className="text-slate-300 shrink-0" />
-              </Link>
-            </motion.div>
-          )}
-
-          {/* 🎁 BANNIÈRE -- même rôle structurel que 'Order Medicine' de la référence
-              (illustration + accroche + CTA), mais avec une vraie fonctionnalité du produit
-              (l'upload d'ordonnance) plutôt qu'une promesse de réduction inventée. */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
-            className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-emerald-500 to-emerald-700 p-5 mb-6"
-          >
-            <div className="absolute -right-6 -bottom-8 h-32 w-32 rounded-full bg-white/10" />
-            <div className="absolute right-8 top-4 h-16 w-16 rounded-2xl bg-white/10 flex items-center justify-center rotate-12">
-              <Truck size={28} className="text-white/70" />
-            </div>
-            <div className="relative max-w-[70%]">
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-100 mb-2">
-                <Sparkles size={11} /> Sans vous déplacer
-              </span>
-              <h3 className="font-display text-lg font-bold text-white leading-snug mb-1.5">
-                Envoyez votre ordonnance
-              </h3>
-              <p className="text-emerald-50/80 text-[12px] leading-snug mb-3">
-                Dites-nous ce qu&apos;il vous faut, on prépare votre commande.
-              </p>
-              <Link
-                href="/catalogue"
-                className="inline-flex items-center gap-1.5 bg-white text-emerald-700 text-[12px] font-bold px-4 py-2.5 rounded-xl no-underline"
-              >
-                <FileText size={13} /> Commander
-              </Link>
-            </div>
-          </motion.div>
-
-          {/* 🏷️ Catégories -- grille colorée (une teinte par catégorie), fidèle à la
-              référence. 'Voir tout' ouvre directement les filtres du catalogue au lieu
-              d'atterrir sur une vue générique qu'il faut re-filtrer soi-même. */}
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-display text-sm font-bold text-slate-800 dark:text-white">Catégories</h2>
-              <Link href="/catalogue?filtres=1" className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 no-underline flex items-center gap-0.5">
-                Voir tout <ChevronRight size={13} />
-              </Link>
-            </div>
-            <div className="grid grid-cols-4 gap-2.5">
-              {CATEGORIES_ACCUEIL.map((cat) => {
-                const Icon = iconePourCategorie(cat.code);
-                return (
-                  <Link key={cat.code} href={`/catalogue?cat=${cat.code}`} className="flex flex-col items-center gap-2 no-underline group">
-                    <div className={`h-14 w-14 rounded-2xl ${cat.bg} flex items-center justify-center ${cat.fg} group-active:scale-90 transition-transform`}>
-                      <Icon size={22} />
-                    </div>
-                    <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 text-center leading-tight">{cat.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </motion.div>
-
-          {/* ❤️ Favoris */}
-          {estClient && favorisProduits.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13 }} className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-display text-sm font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
-                  <Heart size={14} className="fill-red-500 text-red-500" /> Vos favoris
-                </h2>
-              </div>
-              <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
-                {favorisProduits.map((p) => (
-                  <ProduitCarte key={p.id} produit={p} favori onBascule={basculerFavori} />
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {/* 🛍️ Produits populaires -- 'Voir tout' mène au catalogue complet (déjà la vue
-              'tous les produits' triés), pas de destination plus spécifique à construire ici. */}
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }} className="mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-display text-sm font-bold text-slate-800 dark:text-white">Produits populaires</h2>
-              <Link href="/catalogue" className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 no-underline flex items-center gap-0.5">
-                Voir tout <ChevronRight size={13} />
-              </Link>
-            </div>
-            {chargementProduits ? (
-              <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-emerald-500" /></div>
-            ) : (
-              <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
-                {populaires.map((p) => (
-                  <ProduitCarte
-                    key={p.id}
-                    produit={p}
-                    favori={favorisIds.has(p.id)}
-                    onBascule={estClient ? basculerFavori : () => router.push('/login')}
-                  />
-                ))}
-              </div>
-            )}
-          </motion.div>
-
-          {!estClient && (
-            <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="grid grid-cols-2 gap-3">
-              <Link href="/login" className="w-full bg-white dark:bg-white/[0.04] hover:bg-slate-50 text-slate-700 dark:text-slate-200 border border-slate-100 dark:border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
-                <LogIn size={17} /> Connexion
-              </Link>
-              <Link href="/register" className="w-full bg-white dark:bg-white/[0.04] hover:bg-slate-50 text-slate-700 dark:text-slate-200 border border-slate-100 dark:border-white/10 font-semibold text-sm py-4 rounded-2xl no-underline flex items-center justify-center gap-2 transition-colors active:scale-[0.98]">
-                <UserPlus size={17} /> Créer un compte
-              </Link>
-            </motion.div>
-          )}
-        </div>
-      </div>
-      <ToastContainer toasts={toasts} />
+    <div className="flex items-center justify-between mb-3 px-1">
+      <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100" style={{ fontFamily: "Poppins, sans-serif" }}>
+        {title}
+      </h2>
+      {action && (
+        <button onClick={onAction} className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 active:opacity-60 transition-opacity">
+          {action}
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      )}
     </div>
   );
 }
 
-function ProduitCarte({ produit, favori, onBascule }: { produit: ProduitLeger; favori: boolean; onBascule: (p: ProduitLeger) => void }) {
+/* ─── Product Card ─── */
+function ProductCard({ produit, index, badge }: { produit: Produit; index: number; badge?: string }) {
+  const router = useRouter();
+  const [adding, setAdding] = useState(false);
+
+  const handleAdd = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setAdding(true);
+      try {
+        await apiClient.post("/api/panier/ajouter/", { produit_id: produit.id, quantite: 1 });
+      } catch { /* offline queue prend le relais */ }
+      finally { setTimeout(() => setAdding(false), 400); }
+    },
+    [produit.id]
+  );
+
   return (
-    <Link
-      href={`/produit/${produit.id}`}
-      className="shrink-0 w-36 bg-white dark:bg-white/[0.04] border border-slate-100 dark:border-white/10 rounded-2xl p-2.5 no-underline relative"
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: EASE_OUT_EXPO, delay: index * 0.06 }}
+      className="w-[156px] flex-shrink-0 snap-start"
     >
-      <button
-        onClick={(e) => { e.preventDefault(); onBascule(produit); }}
-        aria-label={favori ? "Retirer des favoris" : "Ajouter aux favoris"}
-        className="absolute top-4 right-4 z-10 h-7 w-7 rounded-full bg-white/90 dark:bg-slate-900/90 shadow flex items-center justify-center border-none cursor-pointer"
+      <Link href={`/produit/${produit.id}`} className="block group">
+        <div className="relative aspect-square rounded-[20px] overflow-hidden bg-gray-100 dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 shadow-sm">
+          {produit.image ? (
+            <Image
+              src={produit.image}
+              alt={produit.nom}
+              fill
+              className="object-cover transition-transform duration-500 group-active:scale-105"
+              sizes="156px"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-300 dark:text-gray-600">
+              <Package className="w-10 h-10" />
+            </div>
+          )}
+
+          {badge && (
+            <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-bold uppercase tracking-wide shadow-sm flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" />
+              {badge}
+            </span>
+          )}
+
+          {produit.ordonnance && !badge && (
+            <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-bold uppercase tracking-wide shadow-sm">
+              Ordonnance
+            </span>
+          )}
+
+          <span
+            className={`absolute top-2 right-2 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-gray-900 shadow-sm ${
+              produit.en_stock ? "bg-emerald-500" : "bg-red-500"
+            }`}
+          />
+        </div>
+
+        <div className="mt-2.5 px-0.5">
+          <h3 className="font-semibold text-[13px] leading-snug line-clamp-2 text-gray-900 dark:text-gray-100">
+            {produit.nom}
+          </h3>
+          <p className="text-[11px] text-gray-500 mt-0.5 truncate">{produit.laboratoire}</p>
+
+          <div className="flex items-center justify-between mt-2">
+            <Prix valeur={produit.prix_vente ?? produit.prix} className="font-bold text-sm text-gray-900 dark:text-gray-100" />
+            <motion.button
+              whileTap={{ scale: 0.78 }}
+              onClick={handleAdd}
+              disabled={adding || !produit.en_stock}
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                produit.en_stock
+                  ? "bg-emerald-600 text-white active:bg-emerald-700 shadow-sm shadow-emerald-900/20"
+                  : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
+              }`}
+            >
+              <Plus className="w-4 h-4" />
+            </motion.button>
+          </div>
+        </div>
+      </Link>
+    </motion.div>
+  );
+}
+
+/* ─── Page principale ─── */
+export default function HomePage() {
+  const router = useRouter();
+  const { config } = useConfigPharmacie();
+
+  const [phase, setPhase] = useState<"splash" | "skeleton" | "content">("splash");
+  const [client, setClient] = useState<Client | null>(null);
+  const [favoris, setFavoris] = useState<Produit[]>([]);
+  const [populaires, setPopulaires] = useState<Produit[]>([]);
+  const [commandeActive, setCommandeActive] = useState<Commande | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  /* Séquence : splash → skeleton → contenu */
+  useEffect(() => {
+    const t1 = setTimeout(() => setPhase("skeleton"), 1500);
+    return () => clearTimeout(t1);
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "skeleton") return;
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const [meRes, popRes] = await Promise.allSettled([
+          apiClient.get<Client>("/api/client/me/"),
+          apiClient.get<{ results?: Produit[] }>("/api/produits/?page=1&page_size=10"),
+        ]);
+
+        if (cancelled) return;
+
+        if (meRes.status === "fulfilled") {
+          setClient(meRes.value.data);
+          const [favRes, cmdRes] = await Promise.allSettled([
+            apiClient.get<Produit[]>("/api/client/favoris/"),
+            apiClient.get<Commande[]>("/api/commandes/dernieres/"),
+          ]);
+          if (!cancelled) {
+            if (favRes.status === "fulfilled") setFavoris(favRes.value.data);
+            if (cmdRes.status === "fulfilled" && cmdRes.value.data.length > 0) {
+              setCommandeActive(cmdRes.value.data[0]);
+            }
+          }
+        }
+
+        if (popRes.status === "fulfilled" && !cancelled) {
+          setPopulaires(popRes.value.data.results ?? []);
+        }
+      } catch { /* silencieux */ }
+      finally {
+        // ⭐ Minimum 600ms de skeleton même si tout est en cache
+        setTimeout(() => {
+          if (!cancelled) setPhase("content");
+        }, 600);
+      }
+    }
+
+    load();
+    return () => { cancelled = true; };
+  }, [phase]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/catalogue?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  if (phase === "splash") return null;
+  if (phase === "skeleton") return <PageSkeleton variant="home" />;
+
+  const etapes = commandeActive ? getEtapesCommande(commandeActive.statut) : [];
+
+  return (
+    <motion.main
+      key="home-content"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35 }}
+      className="pb-28 pt-2 px-4 max-w-md mx-auto"
+    >
+      {/* ═══ HERO ═══ */}
+      <motion.section
+        initial={{ opacity: 0, y: 28 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, ease: EASE_OUT_EXPO, delay: 0 }}
+        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-900 to-[#04241a] text-white p-6 shadow-lg shadow-emerald-900/20"
       >
-        <Heart size={13} className={favori ? "fill-red-500 text-red-500" : "text-slate-300"} />
-      </button>
-      {/* 🖼️ Grande zone image (proportion proche de la référence) -- repli icône Pill tant
-          qu'aucune photo n'est chargée pour ce produit. */}
-      <div className="h-24 w-full rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mb-2 overflow-hidden">
-        {produit.image ? (
-          <img src={produit.image} alt={produit.nom} loading="lazy" className="w-full h-full object-cover" />
-        ) : (
-          <Pill size={26} className="text-emerald-300 dark:text-emerald-700" />
-        )}
-      </div>
-      <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 truncate">{produit.nom}</p>
-      <Prix montant={produit.prix} className="text-[12px] font-bold text-emerald-600 dark:text-emerald-400" />
-    </Link>
+        <div className="relative z-10">
+          <p className="text-emerald-200 text-xs font-medium tracking-wide uppercase mb-1" style={{ fontFamily: "JetBrains Mono, monospace" }}>
+            {config?.nom ?? "Votre pharmacie"}
+          </p>
+          <h1 className="text-[26px] font-bold leading-tight mb-5" style={{ fontFamily: "Poppins, sans-serif" }}>
+            Commandez en ligne,
+            <br />
+            retirez au guichet
+          </h1>
+
+          <form onSubmit={handleSearch} className="relative mb-4">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-200/70" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher un médicament..."
+              className="w-full h-11 pl-10 pr-4 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-sm text-white placeholder:text-white/45 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 transition-all"
+            />
+          </form>
+
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            onClick={() => router.push("/catalogue")}
+            className="w-full h-12 rounded-2xl bg-white text-emerald-900 font-bold text-sm flex items-center justify-center gap-2 shadow-md active:bg-gray-100 transition-colors"
+          >
+            <ShoppingCart className="w-4 h-4" />
+            Parcourir le catalogue
+          </motion.button>
+        </div>
+
+        {/* Texture subtile */}
+        <div className="absolute -bottom-10 -right-10 w-48 h-48 rounded-full bg-emerald-500/8 blur-3xl pointer-events-none" />
+        <div className="absolute -top-10 -left-10 w-32 h-32 rounded-full bg-emerald-400/5 blur-2xl pointer-events-none" />
+      </motion.section>
+
+      {/* ═══ CATÉGORIES ═══ */}
+      <motion.section
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: EASE_OUT_EXPO, delay: 0.1 }}
+        className="mt-6"
+      >
+        <SectionTitle title="Catégories" />
+        <div className="flex gap-2.5 overflow-x-auto snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-2 -mx-4 px-4">
+          {CATEGORIES.map((cat) => (
+            <motion.button
+              key={cat.id}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => router.push(`/catalogue?categorie=${cat.id}`)}
+              className={`flex-shrink-0 snap-start flex items-center gap-2 px-4 py-3 rounded-2xl ${cat.bg} active:opacity-80 transition-opacity ring-1 ring-black/5 dark:ring-white/5`}
+            >
+              <cat.icone className="w-[18px] h-[18px]" strokeWidth={2.2} />
+              <span className="text-sm font-semibold whitespace-nowrap">
+                {cat.nom}
+              </span>
+            </motion.button>
+          ))}
+        </div>
+      </motion.section>
+
+      {/* ═══ COMMANDE EN COURS ═══ */}
+      {commandeActive && (
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: EASE_OUT_EXPO, delay: 0.18 }}
+          className="mt-6"
+        >
+          <SectionTitle
+            title="Commande en cours"
+            action="Détails"
+            onAction={() => router.push(`/commandes/${commandeActive.id}`)}
+          />
+          <div className="rounded-2xl bg-white dark:bg-gray-900 p-4 shadow-sm ring-1 ring-black/5 dark:ring-white/10">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                  N° {commandeActive.numero}
+                </p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">
+                  {commandeActive.nb_produits} produit{commandeActive.nb_produits > 1 ? "s" : ""}
+                </p>
+              </div>
+              <div className="text-right">
+                <Prix valeur={commandeActive.total} className="text-sm font-bold text-gray-900 dark:text-gray-100" />
+                <p className="text-[11px] text-gray-500 mt-0.5 flex items-center justify-end gap-1">
+                  <Clock className="w-3 h-3" />
+                  {new Date(commandeActive.date).toLocaleDateString("fr-FR")}
+                </p>
+              </div>
+            </div>
+
+            {/* Timeline animée */}
+            <div className="relative mt-3">
+              <div className="absolute top-[7px] left-0 right-0 h-0.5 bg-gray-100 dark:bg-gray-800 rounded-full" />
+              <motion.div
+                className="absolute top-[7px] left-0 h-0.5 bg-emerald-500 rounded-full"
+                initial={{ width: "0%" }}
+                animate={{ width: `${((etapes.filter((e) => e.done).length - 1) / (etapes.length - 1)) * 100}%` }}
+                transition={{ duration: 1.4, ease: EASE_OUT_EXPO, delay: 0.5 }}
+              />
+              <div className="relative flex justify-between">
+                {etapes.map((etape, i) => (
+                  <div key={etape.key} className="flex flex-col items-center gap-1.5">
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: 0.4 + i * 0.12, type: "spring", stiffness: 400, damping: 18 }}
+                      className={`w-3.5 h-3.5 rounded-full border-2 ${
+                        etape.done
+                          ? "bg-emerald-500 border-emerald-500"
+                          : "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
+                      }`}
+                    />
+                    <span className={`text-[10px] font-semibold ${etape.done ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400"}`}>
+                      {etape.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </motion.section>
+      )}
+
+      {/* ═══ FAVORIS ═══ */}
+      {client && favoris.length > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: EASE_OUT_EXPO, delay: 0.26 }}
+          className="mt-6"
+        >
+          <SectionTitle
+            title="Vos favoris"
+            action="Tout voir"
+            onAction={() => router.push("/profil?tab=favoris")}
+          />
+          <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-2 -mx-4 px-4">
+            {favoris.map((p, i) => (
+              <ProductCard key={p.id} produit={p} index={i} />
+            ))}
+          </div>
+        </motion.section>
+      )}
+
+      {/* ═══ POPULAIRES ═══ */}
+      <motion.section
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: EASE_OUT_EXPO, delay: 0.34 }}
+        className="mt-6"
+      >
+        <SectionTitle
+          title="Les plus demandés"
+          action="Catalogue"
+          onAction={() => router.push("/catalogue")}
+        />
+        <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-2 -mx-4 px-4">
+          {populaires.length > 0 ? (
+            populaires.map((p, i) => (
+              <ProductCard key={p.id} produit={p} index={i} badge={i === 0 ? "Top" : undefined} />
+            ))
+          ) : (
+            <div className="w-full py-8 text-center text-sm text-gray-400">Aucun produit populaire pour le moment</div>
+          )}
+        </div>
+      </motion.section>
+
+      {/* ═══ GUEST CTA ═══ */}
+      {!client && (
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: EASE_OUT_EXPO, delay: 0.42 }}
+          className="mt-6"
+        >
+          <div className="rounded-2xl bg-gray-50 dark:bg-gray-900/50 p-5 text-center ring-1 ring-black/5 dark:ring-white/5">
+            <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
+              <User className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">Connectez-vous pour commander</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Accédez à vos favoris et suivez vos commandes en temps réel.</p>
+            <div className="flex gap-3">
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => router.push("/login")}
+                className="flex-1 h-11 rounded-xl bg-emerald-600 text-white text-sm font-bold flex items-center justify-center gap-2 active:bg-emerald-700 transition-colors shadow-sm shadow-emerald-900/15"
+              >
+                <LogIn className="w-4 h-4" />
+                Se connecter
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => router.push("/catalogue")}
+                className="flex-1 h-11 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm font-bold flex items-center justify-center gap-2 ring-1 ring-black/8 dark:ring-white/10 active:bg-gray-50 dark:active:bg-gray-700 transition-colors"
+              >
+                Explorer
+                <ArrowRight className="w-4 h-4" />
+              </motion.button>
+            </div>
+          </div>
+        </motion.section>
+      )}
+
+      <div className="h-6" />
+    </motion.main>
   );
 }
