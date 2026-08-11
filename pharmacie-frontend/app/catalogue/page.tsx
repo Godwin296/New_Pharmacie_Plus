@@ -1,15 +1,19 @@
 "use client";
-import React, { useState, useEffect, Suspense } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Pill, ShoppingCart, Loader2, Filter, Plus, Minus, X, Check, Camera, WifiOff, ScanLine } from 'lucide-react';
+import React, { useState, useEffect, Suspense, useRef } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Search, Pill, ShoppingCart, Loader2, Filter, Plus, Minus, X, Check,
+  Camera, WifiOff, ScanLine,
+} from "lucide-react";
 
 // 🌟 CONFIGURATION : Utilisation de l'instance unifiée apiClient (Gère l'URL de base et le JWT)
-import apiClient from '../../lib/apiClient';
-import Prix from '../../lib/components/Prix';
-import { ajouterAuPanierHorsLigne } from '../../lib/offline/panierQueue';
-import { chargerCatalogueLocal, catalogueLocalDisponible } from '../../lib/offline/syncCatalogue';
-import { useToast, ToastContainer } from '../../lib/hooks/useToast';
-import { useRouter, useSearchParams } from 'next/navigation';
+import apiClient from "../../lib/apiClient";
+import Prix from "../../lib/components/Prix";
+import { ajouterAuPanierHorsLigne } from "../../lib/offline/panierQueue";
+import { chargerCatalogueLocal, catalogueLocalDisponible } from "../../lib/offline/syncCatalogue";
+import { useToast, ToastContainer } from "../../lib/hooks/useToast";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface Produit {
   id: number;
@@ -21,143 +25,84 @@ interface Produit {
   description: string;
   statut_stock_label: string;
   image?: string;
+  ordonnance?: boolean; // ← pour le badge jaune si le backend l'envoie
 }
 
-// 🆕 (30/07) useSearchParams() exige une frontière Suspense au moment du build (sinon
-// Next.js refuse de pré-rendre la page) -- le composant réel est renommé et enveloppé
-// ci-dessous plutôt que d'être exporté directement.
+const EASE = [0.22, 1, 0.36, 1] as const;
+
 function CataloguePageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toasts, showToast } = useToast();
   const [produits, setProduits] = useState<Produit[]>([]);
   const [categories, setCategories] = useState<Record<string, string>>({});
-  const [search, setSearch] = useState(() => searchParams.get('q') || "");
-  // 🆕 (30/07) Initialisé depuis ?cat=CODE si présent dans l'URL -- permet à l'accueil (et
-  // à tout autre écran) de lier directement vers une catégorie déjà filtrée, plutôt que
-  // d'atterrir sur "Tous les produits" et obliger l'utilisateur à re-sélectionner.
-  const [activeCat, setActiveCat] = useState(() => searchParams.get('cat') || "all");
-  // 🔐 (19/07) : l'overlay "changer la photo au survol" plus bas s'affichait pour TOUT
-  // visiteur du catalogue (client, caissière) alors que seul l'admin du tenant peut
-  // réellement réussir cette action -- api_modifier_photo_produit vérifie déjà
-  // `request.user.is_superuser` côté backend (la vraie barrière de sécurité), mais rien
-  // n'empêchait un client ou une caissière de VOIR le bouton et de se heurter à un 403.
-  // Purement déclaratif : ne remplace pas la vérification backend, l'améliore.
+  const [search, setSearch] = useState(() => searchParams.get("q") || "");
+  const [activeCat, setActiveCat] = useState(() => searchParams.get("cat") || "all");
   const [isAdmin, setIsAdmin] = useState(false);
   const [peutAcheter, setPeutAcheter] = useState(false);
-  // 🛒 (30/07) : bottom sheet de quantité -- avant, taper sur le panier ajoutait toujours 1
-  // unité sans possibilité de choisir (régression remontée par l'utilisateur). Plutôt qu'un
-  // stepper inline dans la ligne (trop étroit), on ouvre une feuille glissée depuis le bas
-  // -- même pattern que la modale catégories plus bas, cohérent avec la consigne "pas de
-  // popup centrée façon desktop sur mobile".
   const [produitPourQuantite, setProduitPourQuantite] = useState<Produit | null>(null);
-  // 🎠 Bannière promo en diaporama (mockup 25/07) -- contenu réel pour l'instant (pas de
-  // placeholder vide), mais l'emplacement est prévu pour accueillir de vraies visuels/
-  // promotions gérées par la pharmacie plus tard (hors scope aujourd'hui).
   const [bannerIndex, setBannerIndex] = useState(0);
   const banniere = [
-    { titre: "Produits authentiques", sous: "Stock en temps réel", texte: "Achetez en toute confiance" },
-    { titre: "Livraison rapide", sous: "Retrait en pharmacie", texte: "Votre commande prête en quelques minutes" },
-    { titre: "Paiement sécurisé", sous: "Mobile Money vérifié", texte: "Chaque paiement est contrôlé par la pharmacie" },
+    { titre: "Produits authentiques", sous: "Stock en temps réel" },
+    { titre: "Retrait en pharmacie", sous: "Commande prête en quelques minutes" },
+    { titre: "Paiement sécurisé", sous: "Mobile Money vérifié" },
   ];
   useEffect(() => {
     const timer = setInterval(() => setBannerIndex((i) => (i + 1) % banniere.length), 5000);
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
-    setIsAdmin(typeof window !== 'undefined' && localStorage.getItem('user_role') === 'admin');
-    // 🔐 (30/07) : "ajouter au panier" n'a de sens que pour un CLIENT. Vérifié dans
-    // core/api.py::api_panier -- `if request.user.is_staff and not facture_id: return 403`
-    // s'applique à TOUT le personnel (admin ET caissière), pas seulement l'admin : la
-    // caissière ne peut pas non plus avoir de panier client (son flux de vente passe par
-    // /caisse/pos, pas par ce catalogue). Masqué pour is_staff au sens large.
-    const role = typeof window !== 'undefined' ? localStorage.getItem('user_role') : null;
-    setPeutAcheter(role !== 'admin' && role !== 'caissiere' && role !== 'caissière');
-  }, []);
-  // 🔐 CORRECTIF (bug remonté en test) : le bouton "ajouter au panier" (et le sélecteur de
-  // quantité juste en dessous) s'affichait pour TOUT visiteur du catalogue, y compris le
-  // personnel (admin, caissière) qui n'a pas de panier client -- seul un CompteClient (ou un
-  // visiteur pas encore connecté, invité à se connecter au clic) peut réellement passer un
-  // achat via cette page. isStaff est volontairement séparé de isAdmin ci-dessus (qui ne
-  // contrôle QUE l'upload de photo produit, réservé à l'admin -- la caissière, elle, n'a pas
-  // ce droit mais n'a pas non plus de panier, d'où un état distinct).
-  const [isStaff, setIsStaff] = useState(false);
-  useEffect(() => {
-    const role = typeof window !== 'undefined' ? localStorage.getItem('user_role') : null;
-    setIsStaff(role === 'admin' || role === 'caissiere');
+    setIsAdmin(typeof window !== "undefined" && localStorage.getItem("user_role") === "admin");
+    const role = typeof window !== "undefined" ? localStorage.getItem("user_role") : null;
+    setPeutAcheter(role !== "admin" && role !== "caissiere" && role !== "caissière");
   }, []);
   const [loading, setLoading] = useState(true);
-  // 🔐 CORRECTIF (bug remonté en test, session 12/07) : `loading` était utilisé pour un
-  // early-return "plein écran" (voir plus bas) qui démontait TOUT le composant -- y compris
-  // le champ de recherche -- à CHAQUE nouvelle recherche, pas seulement au premier chargement.
-  // Résultat concret : l'utilisateur tapait une lettre, le debounce (400ms) déclenchait un
-  // fetch, `loading` passait à true, tout l'arbre (input inclus) disparaissait remplacé par
-  // le spinner plein écran, puis remontait en tant que NOUVEL élément DOM une fois les
-  // données arrivées -- le focus clavier posé sur l'ancien `<input>` (détruit entre-temps)
-  // ne pouvait pas suivre. Il fallait recliquer dans le champ à chaque lettre.
-  // `hasLoadedOnce` distingue maintenant le tout premier chargement (où rien n'est encore
-  // affiché, le plein écran a du sens) des rechargements suivants (recherche, page,
-  // catégorie), où le champ de recherche et la mise en page restent montés en permanence --
-  // seul le contenu de la grille affiche un indicateur "Recherche..." le temps du fetch,
-  // exactement comme /caisse/pos (voir son commentaire "searching").
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(() => searchParams.get('filtres') === '1');
-  const [quantites, setQuantites] = useState<Record<number, number>>({});
-  // 🚀 MODE OFFLINE (brique 4/4) : true quand les données affichées viennent de la copie
-  // locale IndexedDB (réseau indisponible) plutôt que du serveur -- pilote le bandeau
-  // d'avertissement ci-dessous. Ne concerne QUE l'affichage : le panier/paiement restent de
-  // toute façon impossibles à finaliser sans réseau (brique 3/4, file d'attente).
   const [modeHorsLigne, setModeHorsLigne] = useState(false);
-
-  // 📄 PAGINATION SERVEUR : avant, le catalogue entier était chargé une seule fois puis
-  // filtré côté client (useMemo). Sur un catalogue qui grossit (centaines de produits),
-  // ça devenait lourd sur 3G/4G. Désormais, page/recherche/catégorie sont envoyés au
-  // backend (qui applique CataloguePagination, voir core/pagination.py) et seule la
-  // page demandée (20 produits par défaut) est chargée à chaque fois.
+  const [isModalOpen, setIsModalOpen] = useState(() => searchParams.get("filtres") === "1");
+  const [quantites, setQuantites] = useState<Record<number, number>>({});
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [hasNext, setHasNext] = useState(false);
   const [hasPrevious, setHasPrevious] = useState(false);
   const PAGE_SIZE = 20;
 
-  // 🔎 DEBOUNCE DE LA RECHERCHE : on ne veut pas interroger le serveur à chaque frappe
-  // (ça spammerait l'API). On attend 400ms d'inactivité avant d'appliquer la recherche
-  // tapée par l'utilisateur. searchInput = ce que l'utilisateur tape en direct (instantané
-  // à l'écran), search = la valeur "validée" après le délai, qui déclenche le vrai appel API.
-  const [searchInput, setSearchInput] = useState(() => searchParams.get('q') || "");
+  const [searchInput, setSearchInput] = useState(() => searchParams.get("q") || "");
+    const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearch(searchInput);
-      setPage(1); // toute nouvelle recherche repart de la page 1
+      setPage(1);
     }, 400);
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // 1. RÉCUPÉRATION DU CATALOGUE SYNCHRONISÉ (re-déclenchée à chaque changement de
-  // page, de recherche validée, ou de catégorie active)
+  // 1. RÉCUPÉRATION DU CATALOGUE SYNCHRONISÉ
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const res = await apiClient.get('/api/catalogue/', {
+        const res = await apiClient.get("/api/catalogue/", {
           params: {
             page,
             page_size: PAGE_SIZE,
-            ...(activeCat !== 'all' ? { cat: activeCat } : {}),
+            ...(activeCat !== "all" ? { cat: activeCat } : {}),
             ...(search.trim() ? { q: search.trim() } : {}),
           },
         });
-        setProduits(res.data.results.produits);
+        // ✅ CORRIGÉ — accumulate les pages
+        setProduits((prev) =>
+          page === 1
+            ? res.data.results.produits
+            : [...prev, ...res.data.results.produits]
+      );
         setCategories(res.data.results.categories);
         setTotalCount(res.data.count);
         setHasNext(Boolean(res.data.next));
         setHasPrevious(Boolean(res.data.previous));
         setModeHorsLigne(false);
       } catch (err: any) {
-        // 🚀 MODE OFFLINE (brique 4/4) : `!err.response` = échec réseau réel (pas d'internet,
-        // ou serveur injoignable), PAS une erreur métier renvoyée par le serveur -- même
-        // distinction que syncPanier.ts. Dans ce cas seulement, on bascule sur la copie
-        // locale du catalogue plutôt que de simplement afficher une erreur.
         if (!err?.response && (await catalogueLocalDisponible())) {
           const local = await chargerCatalogueLocal({
             search,
@@ -165,7 +110,11 @@ function CataloguePageInner() {
             page,
             pageSize: PAGE_SIZE,
           });
-          setProduits(local.produits as any);
+          setProduits((prev) =>
+          page === 1
+            ? (local.produits as Produit[])
+            : [...prev, ...(local.produits as Produit[])]
+          );
           setCategories(local.categories);
           setTotalCount(local.count);
           setHasNext(local.hasNext);
@@ -182,8 +131,6 @@ function CataloguePageInner() {
     fetchData();
   }, [page, search, activeCat]);
 
-  // Changer de catégorie repart toujours de la page 1 (sinon on pourrait se retrouver
-  // sur une page 3 qui n'existe plus dans la nouvelle catégorie filtrée)
   const changerCategorie = (cat: string) => {
     setActiveCat(cat);
     setPage(1);
@@ -192,20 +139,17 @@ function CataloguePageInner() {
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
-  // 2. MODIFICATION DE LA PHOTO PAR L'ADMINISTRATEUR (Via le bon endpoint core/urls.py)
+  // 2. MODIFICATION DE LA PHOTO PAR L'ADMINISTRATEUR
   const handleUpdatePhoto = async (produitId: number, file: File) => {
     const formData = new FormData();
-    formData.append('image', file);
-
+    formData.append("image", file);
     try {
       const res = await apiClient.post(`/api/modifier-photo/${produitId}/`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { "Content-Type": "multipart/form-data" },
       });
-      
-      setProduits(prev => prev.map(p => 
-        p.id === produitId ? { ...p, image: res.data.image_url } : p
-      ));
-      
+      setProduits((prev) =>
+        prev.map((p) => (p.id === produitId ? { ...p, image: res.data.image_url } : p))
+      );
       showToast("Photo mise à jour", "success");
     } catch (err: any) {
       console.error("Erreur upload:", err);
@@ -213,35 +157,23 @@ function CataloguePageInner() {
     }
   };
 
-  // 3. AJOUT SÉCURISÉ AU PANIER CLIENT (Le token est injecté par apiClient)
-  // 🚀 MODE OFFLINE (session 12/07, brique 3/4) : si le serveur est injoignable (pas de
-  // réponse HTTP du tout -- `!err.response`, cf. apiClient.ts qui distingue déjà ce cas),
-  // ce n'est pas une erreur "à afficher et oublier" : on met l'ajout en file d'attente
-  // locale (IndexedDB) pour le rejouer automatiquement dès le retour du réseau, plutôt que
-  // de faire perdre le geste au client. Une vraie erreur MÉTIER (ex: 400 "Stock
-  // insuffisant") reste affichée immédiatement -- le serveur A répondu, il n'y a rien à
-  // mettre en attente, l'info est déjà à jour et définitive.
+  // 3. AJOUT SÉCURISÉ AU PANIER CLIENT
   const handleAddToCart = async (produitId: number) => {
     const qte = quantites[produitId] || 1;
     const produit = produits.find((p) => p.id === produitId);
 
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      // Hors-ligne détecté AVANT même de tenter la requête : inutile d'attendre un timeout.
       if (produit) await ajouterAuPanierHorsLigne(produitId, produit.nom, produit.prix, qte);
       showToast(`${qte} unité(s) mise(s) en attente — sera synchronisé au retour du réseau`, "info");
       return;
     }
 
     try {
-      await apiClient.post('/api/panier/', { 
-        produit_id: produitId, 
-        quantite: qte 
-      });
-      window.dispatchEvent(new Event('panier-maj')); // 🔔 rafraîchit le badge panier (header + nav du bas)
+      await apiClient.post("/api/panier/", { produit_id: produitId, quantite: qte });
+      window.dispatchEvent(new Event("panier-maj"));
       showToast(`${qte} unité(s) ajoutée(s) au panier`, "success");
     } catch (err: any) {
       if (!err.response) {
-        // Réseau injoignable au moment de la requête (timeout, coupure en cours de frappe...)
         if (produit) await ajouterAuPanierHorsLigne(produitId, produit.nom, produit.prix, qte);
         showToast(`Réseau injoignable — ${qte} unité(s) en attente de synchronisation`, "info");
         return;
@@ -256,352 +188,470 @@ function CataloguePageInner() {
     setQuantites({ ...quantites, [id]: next });
   };
 
-  const filteredProduits = produits; // le filtrage (recherche + catégorie) est désormais fait côté serveur
+  // ─── INFINITE SCROLL (visuel uniquement, garde la pagination existante) ───
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!loadMoreRef.current || !hasNext || loading) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) setPage((p) => p + 1);
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [hasNext, loading]);
 
   if (loading && !hasLoadedOnce) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-3">
-        <Loader2 className="animate-spin text-emerald-500" size={40} />
-        <p className="font-display text-sm font-medium text-slate-400">Chargement du catalogue…</p>
+      <div className="max-w-md mx-auto px-4 pt-4 pb-28 space-y-4">
+        <div className="h-11 rounded-2xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
+        <div className="flex gap-2 overflow-hidden">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-9 w-24 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse flex-shrink-0" />
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <div className="aspect-square rounded-[20px] bg-gray-200 dark:bg-gray-800 animate-pulse" />
+              <div className="h-3 w-full rounded bg-gray-200 dark:bg-gray-800 animate-pulse" />
+              <div className="h-3 w-2/3 rounded bg-gray-200 dark:bg-gray-800 animate-pulse" />
+              <div className="flex justify-between">
+                <div className="h-4 w-16 rounded bg-gray-200 dark:bg-gray-800 animate-pulse" />
+                <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-md md:max-w-2xl mx-auto px-4 py-5 min-h-screen">
-
-      {/* 🚀 MODE OFFLINE (brique 4/4) : bandeau discret, visible seulement quand les données
-          affichées viennent de la copie locale (réseau indisponible). Pas bloquant : on laisse
-          consulter le catalogue normalement, juste prévenir que les prix/stocks affichés
-          peuvent dater un peu (dernière synchro réussie). */}
-      {modeHorsLigne && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6 flex items-center gap-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 px-5 py-3 text-amber-700 dark:text-amber-400"
-        >
-          <WifiOff size={18} className="shrink-0" />
-          <p className="text-sm font-medium">
-            Mode hors-ligne — catalogue affiché depuis la dernière synchronisation. Le paiement nécessite une connexion.
-          </p>
-        </motion.div>
-      )}
-
-      {/* 🔎 RECHERCHE + SCAN */}
-      <div className="flex gap-3 mb-4">
-        <div className="relative flex-grow">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-          <input 
-            type="text" 
-            placeholder="Rechercher un produit, médicament..." 
-            className="w-full pl-12 pr-12 py-3.5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-800 dark:text-white text-sm font-medium focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 outline-none transition-all"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-          />
-          {/* Cible tactile de 44px min autour de l'icône (pas juste l'icône de 18px elle-même) --
-              le scan par code-barres n'est pas encore construit, on le dit plutôt que de
-              laisser une icône morte qui laisse croire à une fonctionnalité absente. */}
-          <button
-            type="button"
-            onClick={() => showToast("Scan de code-barres bientôt disponible", "info")}
-            aria-label="Scanner un code-barres (bientôt disponible)"
-            className="absolute right-1 top-1/2 -translate-y-1/2 h-11 w-11 flex items-center justify-center bg-transparent border-none cursor-pointer text-slate-300"
-          >
-            <ScanLine size={18} />
-          </button>
-        </div>
-      </div>
-
-      {/* 🏷️ CHIPS CATÉGORIES -- les 4 premières en accès direct, "Filtres" ouvre la liste
-          complète (dynamique, dépend du catalogue réel du tenant -- pas de noms figés). */}
-      <div className="flex gap-2 overflow-x-auto pb-1 mb-6 -mx-1 px-1 scrollbar-none">
-        <button
-          onClick={() => changerCategorie('all')}
-          className={`shrink-0 px-4 py-2.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${activeCat === 'all' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10'}`}
-        >
-          Tous
-        </button>
-        {Object.entries(categories).slice(0, 4).map(([code, nom]) => (
-          <button
-            key={code}
-            onClick={() => changerCategorie(code)}
-            className={`shrink-0 px-4 py-2.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${activeCat === code ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10'}`}
-          >
-            {nom}
-          </button>
-        ))}
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 cursor-pointer"
-        >
-          <Filter size={13} /> Filtres
-        </button>
-      </div>
-
-      {activeCat !== 'all' && (
-        <div className="mb-4 text-[11px] font-semibold uppercase text-emerald-600 dark:text-emerald-400 tracking-wide">
-          Filtre : {categories[activeCat]}
-          <button onClick={() => changerCategorie('all')} className="ml-2 underline cursor-pointer bg-transparent border-none text-slate-400">Réinitialiser</button>
-        </div>
-      )}
-
-      {/* 🎠 BANNIÈRE PROMO EN DIAPORAMA */}
-      <div className="relative rounded-[28px] bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-950/20 p-6 mb-6 overflow-hidden">
-        <AnimatePresence mode="wait">
-          <motion.div key={bannerIndex} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.3 }} className="flex items-center gap-4">
-            <div className="w-11 h-11 rounded-2xl bg-emerald-500 flex items-center justify-center shrink-0">
-              <ShoppingCart size={20} className="text-white" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{banniere[bannerIndex].titre}</p>
-              <p className="font-display text-base font-bold text-emerald-700 dark:text-emerald-400 truncate">{banniere[bannerIndex].sous}</p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">{banniere[bannerIndex].texte}</p>
-            </div>
-          </motion.div>
-        </AnimatePresence>
-        <div className="flex justify-center gap-1.5 mt-4">
-          {banniere.map((_, i) => (
-            <button key={i} onClick={() => setBannerIndex(i)} aria-label={`Voir la bannière ${i + 1}`}
-              className={`h-1.5 rounded-full border-none cursor-pointer transition-all ${i === bannerIndex ? 'w-5 bg-emerald-500' : 'w-1.5 bg-emerald-200 dark:bg-emerald-800'}`} />
-          ))}
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-display text-sm font-bold text-slate-800 dark:text-white">
-          {activeCat === 'all' ? 'Tous les produits' : categories[activeCat]}
-        </h2>
-        <span className="text-[11px] font-medium text-slate-400">{totalCount} produit{totalCount > 1 ? 's' : ''}</span>
-      </div>
-
-      {/* 🏗️ LISTE DES PRODUITS (lignes, fidèle à la maquette du 25/07) */}
-      <div className="space-y-3">
-        {/* Indicateur de chargement INLINE (recherche/pagination/catégorie) -- le formulaire
-            et le champ de recherche au-dessus restent montés, contrairement à l'ancien
-            early-return plein écran (cf. commentaire sur `hasLoadedOnce`). */}
-        {loading && (
-          <div className="flex items-center justify-center py-12 text-slate-400 text-xs font-semibold uppercase tracking-wide gap-3">
-            <Loader2 size={18} className="animate-spin text-emerald-500" /> Recherche…
-          </div>
-        )}
-        {!loading && filteredProduits.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-14 text-slate-400 gap-2">
-            <Pill size={28} className="opacity-30" />
-            <p className="text-xs font-semibold uppercase tracking-wide">Aucun produit trouvé</p>
-          </div>
-        )}
-        <AnimatePresence mode="popLayout">
-          {!loading && filteredProduits.map((p) => (
-            <motion.div
-              key={p.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              onClick={() => router.push(`/produit/${p.id}`)}
-              // 🆕 NAVIGATION VERS LA FICHE PRODUIT (refonte UI/UX, 30/07) : `active:scale-[0.99]`
-              // existait déjà ici sans jamais avoir de vrai onClick associé -- la carte
-              // avait donc l'AIR tapable sans jamais rien faire (violation directe de la
-              // règle "aucun bouton qui a l'air interactif mais ne fait rien"). Le bouton
-              // "Ajouter au panier" ci-dessous appelle `e.stopPropagation()` pour rester
-              // une action indépendante (ouvrir la feuille de quantité sans quitter le
-              // catalogue).
-              className="bg-white dark:bg-white/[0.04] rounded-[20px] p-3 border border-slate-100 dark:border-white/10 flex items-center gap-3 group active:scale-[0.99] transition-transform cursor-pointer"
-            >
-              {/* Vignette produit + zone d'upload (admin uniquement, cf. isAdmin). Le badge
-                  d'édition reste légèrement visible en permanence (pas seulement au survol
-                  group-hover) : sur mobile/tactile il n'existe pas de "survol", un admin sur
-                  téléphone ne découvrirait donc jamais cette fonctionnalité sinon. */}
-              <div className="relative w-16 h-16 shrink-0 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl overflow-hidden flex items-center justify-center">
-                {p.image ? (
-                  <img src={p.image} alt={p.nom} loading="lazy" className="w-full h-full object-cover" />
-                ) : (
-                  <Pill size={22} className="text-emerald-300 dark:text-emerald-700" />
-                )}
-                {isAdmin && (
-                  <label
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-end justify-end p-1 cursor-pointer transition-colors z-20"
-                  >
-                    <span className="h-6 w-6 rounded-full bg-white/90 dark:bg-slate-900/90 shadow flex items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity">
-                      <Camera className="text-slate-700 dark:text-white" size={12} />
-                    </span>
-                    <input
-                      type="file" className="hidden" accept="image/*"
-                      onChange={(e) => { if (e.target.files?.[0]) handleUpdatePhoto(p.id, e.target.files[0]); }}
-                    />
-                  </label>
-                )}
-              </div>
-
-              {/* Infos produit */}
-              <div className="min-w-0 flex-grow">
-                <h3 className="text-sm font-semibold text-slate-800 dark:text-white truncate">{p.nom}</h3>
-                <p className="text-[11px] text-slate-400 truncate">{p.laboratoire || categories[p.categorie] || "Général"}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full ${p.quantite > 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30' : 'bg-red-50 text-red-500 dark:bg-red-900/20'}`}>
-                    {p.quantite > 0 ? 'En stock' : 'Rupture'}
-                  </span>
-                  <Prix montant={p.prix} className="text-sm font-bold text-slate-800 dark:text-white" />
-                </div>
-              </div>
-
-              {/* Stock + bouton panier -- réservé au client (cf. peutAcheter) : ni l'admin
-                  ni la caissière n'ont de panier personnel utilisable depuis ce catalogue. */}
-              <div className="flex flex-col items-end gap-1.5 shrink-0">
-                <span className="text-[10px] text-slate-400 text-right leading-tight">Stock<br/><span className="font-semibold text-slate-600 dark:text-slate-300">{p.quantite} unités</span></span>
-                {peutAcheter && (
-                  <button
-                    disabled={p.quantite <= 0}
-                    onClick={(e) => { e.stopPropagation(); setProduitPourQuantite(p); }}
-                    title="Ajouter au panier"
-                    aria-label="Ajouter au panier"
-                    className="bg-emerald-500 hover:bg-emerald-600 text-white h-11 w-11 flex items-center justify-center rounded-2xl transition-all active:scale-90 border-none cursor-pointer disabled:opacity-20 disabled:grayscale"
-                  >
-                    <ShoppingCart size={18} strokeWidth={2.5} />
-                  </button>
-                )}
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-
-      {/* 🖼️ FENÊTRE DE SÉLECTION (MODALE) */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
-            <motion.div 
-              initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="relative bg-white dark:bg-[#0b1a16] w-full sm:max-w-md sm:mb-4 rounded-t-[28px] sm:rounded-[28px] shadow-2xl overflow-hidden border border-slate-100 dark:border-white/10 max-h-[85vh] flex flex-col"
-            >
-              {/* Poignée façon feuille mobile (bottom sheet), signal visuel de "glisser pour fermer" */}
-              <div className="sm:hidden flex justify-center pt-3">
-                <div className="h-1.5 w-10 rounded-full bg-slate-200 dark:bg-white/20" />
-              </div>
-              <div className="px-6 py-5 border-b border-slate-100 dark:border-white/10 flex justify-between items-center">
-                <h3 className="font-display text-lg font-bold text-slate-800 dark:text-white">Catégories</h3>
-                <button onClick={() => setIsModalOpen(false)} title="Fermer" aria-label="Fermer" className="h-9 w-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-500 border-none cursor-pointer"><X size={18} /></button>
-              </div>
-
-              <div className="p-4 overflow-y-auto space-y-2 custom-scrollbar" style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
-                <button 
-                  onClick={() => changerCategorie("all")}
-                  className={`w-full p-4 rounded-2xl text-left font-semibold text-sm transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === 'all' ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08]'}`}
-                >
-                  Toutes les catégories {activeCat === 'all' && <Check size={16}/>}
-                </button>
-                {Object.entries(categories).map(([code, nom]) => (
-                  <button 
-                    key={code}
-                    onClick={() => changerCategorie(code)}
-                    className={`w-full p-4 rounded-2xl text-left font-semibold text-sm transition-all border-none cursor-pointer flex justify-between items-center ${activeCat === code ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08]'}`}
-                  >
-                    {nom} {activeCat === code && <Check size={16}/>}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* 🛒 FEUILLE DE QUANTITÉ (bottom sheet) -- même pattern que la modale catégories
-          au-dessus : glisse depuis le bas sur mobile, carte centrée à partir de sm:. */}
-      <AnimatePresence>
-        {produitPourQuantite && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setProduitPourQuantite(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
-            <motion.div
-              initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="relative bg-white dark:bg-[#0b1a16] w-full sm:max-w-sm sm:mb-4 rounded-t-[28px] sm:rounded-[28px] shadow-2xl overflow-hidden border border-slate-100 dark:border-white/10"
-            >
-              <div className="sm:hidden flex justify-center pt-3">
-                <div className="h-1.5 w-10 rounded-full bg-slate-200 dark:bg-white/20" />
-              </div>
-              <div className="px-6 py-5 border-b border-slate-100 dark:border-white/10 flex justify-between items-center">
-                <h3 className="font-display text-lg font-bold text-slate-800 dark:text-white truncate pr-4">{produitPourQuantite.nom}</h3>
-                <button onClick={() => setProduitPourQuantite(null)} title="Fermer" aria-label="Fermer" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-500 border-none cursor-pointer"><X size={18} /></button>
-              </div>
-
-              <div className="p-6" style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom))" }}>
-                <div className="flex items-center justify-between mb-6">
-                  <Prix montant={produitPourQuantite.prix} className="text-xl font-bold text-slate-800 dark:text-white" />
-                  <span className="text-xs font-semibold text-slate-400">{produitPourQuantite.quantite} unités en stock</span>
-                </div>
-
-                <div className="flex items-center justify-center gap-5 mb-6">
-                  <button
-                    onClick={() => updateLocalQte(produitPourQuantite.id, -1, produitPourQuantite.quantite)}
-                    disabled={(quantites[produitPourQuantite.id] || 1) <= 1}
-                    title="Diminuer la quantité" aria-label="Diminuer la quantité"
-                    className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 flex items-center justify-center border-none cursor-pointer active:scale-90 transition-all disabled:opacity-30"
-                  >
-                    <Minus size={18} />
-                  </button>
-                  <span className="text-2xl font-bold text-slate-800 dark:text-white w-10 text-center tabular-nums">
-                    {quantites[produitPourQuantite.id] || 1}
-                  </span>
-                  <button
-                    onClick={() => updateLocalQte(produitPourQuantite.id, 1, produitPourQuantite.quantite)}
-                    disabled={(quantites[produitPourQuantite.id] || 1) >= produitPourQuantite.quantite}
-                    title="Augmenter la quantité" aria-label="Augmenter la quantité"
-                    className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 flex items-center justify-center border-none cursor-pointer active:scale-90 transition-all disabled:opacity-30"
-                  >
-                    <Plus size={18} />
-                  </button>
-                </div>
-
+    <main className="max-w-md mx-auto pb-28">
+      {/* ═══ HEADER STICKY : Search + Catégories ═══ */}
+      <div className="sticky top-0 z-30 bg-white/80 dark:bg-[#050e0c]/80 backdrop-blur-xl border-b border-black/5 dark:border-white/5">
+        <div className="px-4 pt-3 pb-2">
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Rechercher un médicament..."
+                className="w-full h-11 pl-10 pr-10 rounded-2xl bg-gray-100 dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+              />
+              {searchInput && (
                 <button
-                  onClick={() => { handleAddToCart(produitPourQuantite.id); setProduitPourQuantite(null); }}
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm py-4 rounded-2xl transition-all active:scale-[0.98] border-none cursor-pointer flex items-center justify-center gap-2"
+                  onClick={() => { setSearchInput(""); setSearch(""); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 border-none bg-transparent"
                 >
-                  <ShoppingCart size={17} /> Ajouter au panier
+                  <X className="w-4 h-4" />
                 </button>
-              </div>
-            </motion.div>
+              )}
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={() => showToast("Scan de code-barres bientôt disponible", "info")}
+              className="w-11 h-11 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center active:bg-gray-200 dark:active:bg-gray-700 transition-colors border-none"
+              aria-label="Scanner un code-barres"
+            >
+              <ScanLine className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            </motion.button>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
 
-      {/* 📄 NAVIGATION PAGINATION -- compacte et tactile : flèches rondes de 44px plutôt que
-          des boutons texte "← Précédent / Suivant →" qui, sur un écran de 360px de large,
-          serrent le texte central et rappellent une page web plutôt qu'une app. */}
-      {!loading && totalCount > 0 && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-5 mt-10 mb-8">
+        {/* Catégories horizontal scroll */}
+        <div className="flex gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-4 pb-3">
           <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={!hasPrevious}
-            aria-label="Page précédente"
-            className="h-11 w-11 flex items-center justify-center rounded-full border-none cursor-pointer bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all"
+            onClick={() => changerCategorie("all")}
+            className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all border-none ${
+              activeCat === "all"
+                ? "bg-emerald-600 text-white shadow-sm shadow-emerald-900/20"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 active:bg-gray-200 dark:active:bg-gray-700"
+            }`}
           >
-            ←
+            Tous
           </button>
-
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            {page} / {totalPages}
-          </span>
-
+          {Object.entries(categories).slice(0, 6).map(([code, nom]) => (
+            <button
+              key={code}
+              onClick={() => changerCategorie(code)}
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all border-none ${
+                activeCat === code
+                  ? "bg-emerald-600 text-white shadow-sm shadow-emerald-900/20"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 active:bg-gray-200 dark:active:bg-gray-700"
+              }`}
+            >
+              {nom}
+            </button>
+          ))}
           <button
-            onClick={() => setPage(p => p + 1)}
-            disabled={!hasNext}
-            aria-label="Page suivante"
-            className="h-11 w-11 flex items-center justify-center rounded-full border-none cursor-pointer bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all"
+            onClick={() => setIsModalOpen(true)}
+            className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 active:bg-gray-200 dark:active:bg-gray-700 border-none"
           >
-            →
+            <Filter className="w-3 h-3" /> Plus
           </button>
         </div>
-      )}
+      </div>
 
-      {/* 🍞 TOASTS -- composant partagé (lib/hooks/useToast.tsx), réutilisé aussi par
-          app/produit/[id]/page.tsx. Remplace les alert()/confirm() natifs. */}
+      <div className="px-4 pt-4">
+        {/* Bandeau offline */}
+        {modeHorsLigne && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 flex items-center gap-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 px-4 py-3 text-amber-700 dark:text-amber-400"
+          >
+            <WifiOff size={16} className="shrink-0" />
+            <p className="text-xs font-medium">
+              Mode hors-ligne — catalogue affiché depuis la dernière synchro.
+            </p>
+          </motion.div>
+        )}
+
+        {/* Bannière promo */}
+        <div className="relative rounded-3xl bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-950/20 p-5 mb-5 overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={bannerIndex}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                {banniere[bannerIndex].titre}
+              </p>
+              <p className="text-sm font-bold text-gray-900 dark:text-gray-100 mt-0.5">
+                {banniere[bannerIndex].sous}
+              </p>
+            </motion.div>
+          </AnimatePresence>
+          <div className="flex gap-1.5 mt-3">
+            {banniere.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setBannerIndex(i)}
+                className={`h-1 rounded-full transition-all border-none ${
+                  i === bannerIndex ? "w-5 bg-emerald-500" : "w-1.5 bg-emerald-200 dark:bg-emerald-800"
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Compteur résultats */}
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+            {activeCat === "all" ? "Tous les produits" : categories[activeCat]}
+          </h2>
+          <span className="text-[11px] font-medium text-gray-400">
+            {totalCount} produit{totalCount > 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {/* ═══ GRILLE 2 COLONNES ═══ */}
+        {produits.length === 0 && !loading ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="py-20 text-center"
+          >
+            <Pill className="w-12 h-12 text-gray-200 dark:text-gray-800 mx-auto mb-3" />
+            <p className="text-sm text-gray-400 font-medium">Aucun produit trouvé</p>
+            {activeCat !== "all" && (
+              <button
+                onClick={() => changerCategorie("all")}
+                className="mt-3 text-emerald-600 text-xs font-semibold border-none bg-transparent"
+              >
+                Voir tout le catalogue
+              </button>
+            )}
+          </motion.div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <AnimatePresence mode="popLayout">
+              {produits.map((p, i) => (
+                <motion.div
+                  key={p.id}
+                  layout
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(i * 0.04, 0.3), duration: 0.4, ease: EASE }}
+                >
+                  <div
+                    onClick={() => router.push(`/produit/${p.id}`)}
+                    className="bg-white dark:bg-gray-900 rounded-[20px] border border-black/5 dark:border-white/5 overflow-hidden shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
+                  >
+                    {/* Image */}
+                    <div className="relative aspect-square bg-gray-100 dark:bg-gray-800">
+                      {p.image ? (
+                        <img
+                          src={p.image}
+                          alt={p.nom}
+                          loading="lazy"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Pill className="w-10 h-10 text-gray-300 dark:text-gray-600" />
+                        </div>
+                      )}
+
+                      {/* Badge ordonnance */}
+                      {p.ordonnance && (
+                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-bold uppercase tracking-wide shadow-sm">
+                          Ordonnance
+                        </span>
+                      )}
+
+                      {/* Badge stock */}
+                      <span
+                        className={`absolute top-2 right-2 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-gray-900 shadow-sm ${
+                          p.quantite > 0 ? "bg-emerald-500" : "bg-red-500"
+                        }`}
+                      />
+
+                      {/* Upload photo admin */}
+                      {isAdmin && (
+                        <label
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute inset-0 bg-black/0 hover:bg-black/30 flex items-end justify-end p-2 cursor-pointer transition-colors z-10 opacity-0 hover:opacity-100"
+                        >
+                          <span className="h-7 w-7 rounded-full bg-white/90 dark:bg-gray-900/90 shadow flex items-center justify-center">
+                            <Camera className="text-gray-800 dark:text-white" size={12} />
+                          </span>
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/*"
+                            onChange={(e) => {
+                              if (e.target.files?.[0]) handleUpdatePhoto(p.id, e.target.files[0]);
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    {/* Contenu */}
+                    <div className="p-3">
+                      <h3 className="text-[13px] font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 leading-snug min-h-[2.4em]">
+                        {p.nom}
+                      </h3>
+                      <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                        {p.laboratoire || categories[p.categorie] || "Pharmacie"}
+                      </p>
+
+                      <div className="flex items-center justify-between mt-2">
+                        <Prix
+                          montant={p.prix}
+                          className="text-sm font-bold text-gray-900 dark:text-gray-100"
+                        />
+                        {peutAcheter && (
+                          <motion.button
+                            whileTap={{ scale: 0.78 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProduitPourQuantite(p);
+                            }}
+                            disabled={p.quantite <= 0}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors border-none ${
+                              p.quantite > 0
+                                ? "bg-emerald-600 text-white active:bg-emerald-700 shadow-sm"
+                                : "bg-gray-200 text-gray-400 dark:bg-gray-700 cursor-not-allowed"
+                            }`}
+                          >
+                            <Plus className="w-4 h-4" />
+                          </motion.button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* Infinite scroll trigger */}
+        {hasNext && (
+          <div ref={loadMoreRef} className="py-6 flex justify-center min-h-[60px]">
+            <Loader2
+              className={`animate-spin text-emerald-500 ${loading ? "opacity-100" : "opacity-0"}`}
+              size={24}
+            />
+          </div>
+        )}
+
+        {!hasNext && produits.length > 0 && (
+          <p className="text-center text-[11px] text-gray-400 py-6">
+            Vous avez tout vu
+          </p>
+        )}
+      </div>
+
+      {/* ═══ MODALE CATÉGORIES (bottom sheet) ═══ */}
+      {mounted &&
+        createPortal(
+          <AnimatePresence>
+            {isModalOpen && (
+              <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setIsModalOpen(false)}
+                  className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                />
+                <motion.div
+                  initial={{ y: "100%" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "100%" }}
+                  transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                  className="relative bg-white dark:bg-[#0b1a16] w-full sm:max-w-md rounded-t-[28px] sm:rounded-[28px] shadow-2xl overflow-hidden border border-black/5 dark:border-white/5 max-h-[85vh] flex flex-col"
+                >
+                  <div className="sm:hidden flex justify-center pt-3">
+                    <div className="h-1.5 w-10 rounded-full bg-gray-200 dark:bg-white/20" />
+                  </div>
+                  <div className="px-6 py-4 border-b border-black/5 dark:border-white/5 flex justify-between items-center">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Catégories</h3>
+                    <button
+                      onClick={() => setIsModalOpen(false)}
+                      className="h-9 w-9 flex items-center justify-center rounded-full bg-gray-100 dark:bg-white/5 text-gray-500 border-none"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <div className="p-4 overflow-y-auto space-y-1" style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
+                    <button
+                      onClick={() => changerCategorie("all")}
+                      className={`w-full p-4 rounded-2xl text-left font-semibold text-sm transition-all flex justify-between items-center border-none ${
+                        activeCat === "all"
+                          ? "bg-emerald-600 text-white"
+                          : "bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-gray-300 active:bg-gray-100 dark:active:bg-white/10"
+                      }`}
+                    >
+                      Toutes les catégories {activeCat === "all" && <Check size={16} />}
+                    </button>
+                    {Object.entries(categories).map(([code, nom]) => (
+                      <button
+                        key={code}
+                        onClick={() => changerCategorie(code)}
+                        className={`w-full p-4 rounded-2xl text-left font-semibold text-sm transition-all flex justify-between items-center border-none ${
+                          activeCat === code
+                            ? "bg-emerald-600 text-white"
+                            : "bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-gray-300 active:bg-gray-100 dark:active:bg-white/10"
+                        }`}
+                      >
+                        {nom} {activeCat === code && <Check size={16} />}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+            {/* ═══ BOTTOM SHEET QUANTITÉ ═══ */}
+      {mounted &&
+        createPortal(
+          <AnimatePresence>
+            {produitPourQuantite && (
+              <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setProduitPourQuantite(null)}
+                  className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                />
+                <motion.div
+                  initial={{ y: "100%" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "100%" }}
+                  transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                  className="relative bg-white dark:bg-[#0b1a16] w-full sm:max-w-sm rounded-t-[28px] sm:rounded-[28px] shadow-2xl overflow-hidden border border-black/5 dark:border-white/5"
+                >
+                  <div className="sm:hidden flex justify-center pt-3">
+                    <div className="h-1.5 w-10 rounded-full bg-gray-200 dark:bg-white/20" />
+                  </div>
+                  <div className="px-6 py-4 border-b border-black/5 dark:border-white/5 flex justify-between items-center">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate pr-4">
+                      {produitPourQuantite.nom}
+                    </h3>
+                    <button
+                      onClick={() => setProduitPourQuantite(null)}
+                      className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full bg-gray-100 dark:bg-white/5 text-gray-500 border-none"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="p-6" style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom))" }}>
+                    <div className="flex items-center justify-between mb-6">
+                      <Prix montant={produitPourQuantite.prix} className="text-xl font-bold text-gray-900 dark:text-white" />
+                      <span className="text-xs font-medium text-gray-400">
+                        {produitPourQuantite.quantite} unités en stock
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-5 mb-6">
+                      <button
+                        onClick={() => updateLocalQte(produitPourQuantite.id, -1, produitPourQuantite.quantite)}
+                        disabled={(quantites[produitPourQuantite.id] || 1) <= 1}
+                        className="h-12 w-12 rounded-2xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center justify-center border-none active:scale-90 transition-all disabled:opacity-30"
+                      >
+                        <Minus size={18} />
+                      </button>
+                      <span className="text-2xl font-bold text-gray-900 dark:text-white w-10 text-center tabular-nums">
+                        {quantites[produitPourQuantite.id] || 1}
+                      </span>
+                      <button
+                        onClick={() => updateLocalQte(produitPourQuantite.id, 1, produitPourQuantite.quantite)}
+                        disabled={(quantites[produitPourQuantite.id] || 1) >= produitPourQuantite.quantite}
+                        className="h-12 w-12 rounded-2xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center justify-center border-none active:scale-90 transition-all disabled:opacity-30"
+                      >
+                        <Plus size={18} />
+                      </button>
+                    </div>
+
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => {
+                        handleAddToCart(produitPourQuantite.id);
+                        setProduitPourQuantite(null);
+                      }}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm py-4 rounded-2xl transition-colors border-none flex items-center justify-center gap-2"
+                    >
+                      <ShoppingCart size={17} /> Ajouter au panier
+                    </motion.button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
       <ToastContainer toasts={toasts} />
-    </div>
+    </main>
   );
 }
 
 export default function CataloguePage() {
   return (
-    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-emerald-500" size={40} /></div>}>
+    <Suspense
+      fallback={
+        <div className="h-screen flex items-center justify-center">
+          <Loader2 className="animate-spin text-emerald-500" size={40} />
+        </div>
+      }
+    >
       <CataloguePageInner />
     </Suspense>
   );
