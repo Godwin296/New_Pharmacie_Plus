@@ -155,7 +155,7 @@ function ProductCard({ produit, index, badge }: { produit: Produit; index: numbe
           <p className="text-[11px] text-gray-500 mt-0.5 truncate">{produit.laboratoire}</p>
 
           <div className="flex items-center justify-between mt-2">
-            <Prix valeur={produit.prix_vente ?? produit.prix} className="font-bold text-sm text-gray-900 dark:text-gray-100" />
+            <Prix montant={produit.prix_vente ?? produit.prix} className="font-bold text-sm text-gray-900 dark:text-gray-100" />
             <motion.button
               whileTap={{ scale: 0.78 }}
               onClick={handleAdd}
@@ -348,7 +348,7 @@ export default function HomePage() {
                 </p>
               </div>
               <div className="text-right">
-                <Prix valeur={commandeActive.total} className="text-sm font-bold text-gray-900 dark:text-gray-100" />
+                <Prix montant={commandeActive.total} className="text-sm font-bold text-gray-900 dark:text-gray-100" />
                 <p className="text-[11px] text-gray-500 mt-0.5 flex items-center justify-end gap-1">
                   <Clock className="w-3 h-3" />
                   {new Date(commandeActive.date).toLocaleDateString("fr-FR")}

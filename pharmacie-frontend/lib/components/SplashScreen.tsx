@@ -6,15 +6,17 @@ import { useConfigPharmacie } from "@/lib/context/ConfigPharmacieContext";
 
 interface Props {
   onComplete: () => void;
+  /** Durée d'affichage du splash en millisecondes avant l'appel de onComplete. */
+  duration?: number;
 }
 
-export default function SplashScreen({ onComplete }: Props) {
+export default function SplashScreen({ onComplete, duration = 1500 }: Props) {
   const { config } = useConfigPharmacie();
 
   useEffect(() => {
-    const timer = setTimeout(onComplete, 1500);
+    const timer = setTimeout(onComplete, duration);
     return () => clearTimeout(timer);
-  }, [onComplete]);
+  }, [onComplete, duration]);
 
   return (
     <AnimatePresence>

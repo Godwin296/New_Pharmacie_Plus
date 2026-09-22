@@ -160,7 +160,7 @@ function MiniProduit({ p }: { p: Produit }) {
       <p className="mt-1.5 text-[11px] font-medium text-gray-900 dark:text-gray-100 line-clamp-2 leading-snug">
         {p.nom}
       </p>
-      <Prix valeur={p.prix_vente ?? p.prix} className="text-[11px] font-bold text-gray-900 dark:text-gray-100 mt-0.5" />
+      <Prix montant={p.prix_vente ?? p.prix} className="text-[11px] font-bold text-gray-900 dark:text-gray-100 mt-0.5" />
     </button>
   );
 }
@@ -487,7 +487,7 @@ export default function MonProfil() {
   /* ─── Stats dérivées ─── */
   const stats = [
     { label: "Commandes", value: String(data.nb_commandes), icon: ShoppingBag },
-    { label: "Dépensé", value: <Prix valeur={data.montant_total_depense} className="text-sm font-bold" />, icon: TrendingUp },
+    { label: "Dépensé", value: <Prix montant={data.montant_total_depense} className="text-sm font-bold" />, icon: TrendingUp },
     // TODO(backend): créer endpoint GET /api/client/points-fidelite/ et ajouter ici
     { label: "Points", value: "—", icon: Star, soon: true },
   ];
@@ -601,7 +601,7 @@ export default function MonProfil() {
                 </p>
               </div>
               <div className="text-right">
-                <Prix valeur={commandeActive.total} className="text-sm font-bold text-gray-900 dark:text-gray-100" />
+                <Prix montant={commandeActive.total} className="text-sm font-bold text-gray-900 dark:text-gray-100" />
               </div>
             </button>
           </SectionCard>
