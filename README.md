@@ -20,9 +20,9 @@
 <!-- DIAPORAMA CAPTURES D'ÉCRAN -->
 <table>
 <tr>
-<td align="center"><b>Accueil Client</b></td>
-<td align="center"><b>Catalogue</b></td>
-<td align="center"><b>Connexion</b></td>
+<td align="center"><b>🏠 Accueil Client</b></td>
+<td align="center"><b>📦 Catalogue</b></td>
+<td align="center"><b>🔐 Connexion</b></td>
 </tr>
 <tr>
 <td><img src="https://placehold.co/300x540/059669/ffffff?text=Accueil+Client" width="200"/></td>
@@ -30,9 +30,9 @@
 <td><img src="https://placehold.co/300x540/065f46/ffffff?text=Connexion" width="200"/></td>
 </tr>
 <tr>
-<td align="center"><b>Dashboard Admin</b></td>
-<td align="center"><b>Panier</b></td>
-<td align="center"><b>Détail Produit</b></td>
+<td align="center"><b>📊 Dashboard Admin</b></td>
+<td align="center"><b>🛒 Panier</b></td>
+<td align="center"><b>💊 Détail Produit</b></td>
 </tr>
 <tr>
 <td><img src="https://placehold.co/300x540/064e3b/ffffff?text=Dashboard" width="200"/></td>
@@ -41,70 +41,62 @@
 </tr>
 </table>
 
-> **Note :** captures provisoires — remplacées par les vraies dès la fin de la refonte UI/UX mobile-first en cours.
+> 📸 **Note :** Les captures d'écran seront ajoutées après la refonte UI/UX mobile-first (en cours de développement).
 
 </div>
 
 ---
 
-## À propos
+## 🌍 À propos
 
-**Pharmacie+** est une plateforme SaaS multi-tenant de gestion de pharmacie conçue pour les marchés d'Afrique Centrale (zone CEMAC). Chaque pharmacie abonnée gère son stock, ses ventes, ses ordonnances et ses clients depuis n'importe quel appareil Android — avec ou sans connexion internet stable, et sans dépendre d'un logiciel pensé ailleurs, pour d'autres réalités de terrain.
-
-Trois profils utilisent la plateforme au quotidien dans chaque pharmacie cliente : le client final, la caissière, et l'administrateur — chacun avec son interface dédiée, ses permissions propres, et son parcours pensé mobile-first plutôt qu'adapté après coup depuis un écran d'ordinateur.
+**Pharmacie+** est une plateforme SaaS multi-tenant de gestion de pharmacie conçue spécifiquement pour les marchés d'Afrique Centrale (zone CEMAC). Elle permet à chaque pharmacie abonnée de gérer son stock, ses ventes, ses ordonnances et ses clients depuis n'importe quel appareil Android, avec ou sans connexion internet stable.
 
 ### Pourquoi Pharmacie+ ?
 
 | Problème terrain | Solution Pharmacie+ |
 |---|---|
-| Gestion du stock sur papier ou Excel, ruptures découvertes trop tard | Suivi en temps réel par lots datés, décrémentation FEFO, alertes de rupture et de péremption |
-| Ordonnances perdues, illisibles ou non vérifiées | Upload sécurisé depuis le téléphone, validation par la caissière, chiffrement au repos |
-| Paiement mobile money sans traçabilité fiable | Référence de transaction vérifiée manuellement par la caisse, historique complet et auditable |
-| Logiciels de gestion officinale pensés pour un poste fixe occidental | PWA installable sur Android, conçue mobile-first, mode dégradé quand la connexion coupe |
-| Solutions cloud étrangères, facturées en devise étrangère | Devise FCFA native (jamais codée en dur), hébergeable en Afrique |
+| Gestion du stock sur papier ou Excel | Suivi en temps réel avec alertes de rupture |
+| Ordonnances perdues ou non vérifiées | Upload sécurisé + validation pharmacien |
+| Paiement mobile money sans traçabilité | Workflow vérification caissière avec audit |
+| Logiciels non adaptés au mobile | PWA installable, pensée mobile-first |
+| Solutions cloud étrangères coûteuses | Devise FCFA native, hébergeable en Afrique |
 
 ---
 
-## Fonctionnalités
+## ✨ Fonctionnalités
 
 ### Pour les clients
-- Catalogue de médicaments paginé, avec recherche et filtres
-- Application installable sur Android (PWA)
-- Suivi de commande en temps réel (WebSocket)
-- Upload d'ordonnance sécurisé depuis le téléphone
-- Paiement par Mobile Money (Orange Money / MTN MoMo)
-- Facture téléchargeable en PDF
-- Compte client global (`CompteClient`), valable chez plusieurs pharmacies abonnées
+- 🛒 Catalogue de médicaments paginé avec recherche et filtres
+- 📱 Application installable sur Android (PWA)
+- 📋 Suivi des commandes en temps réel (WebSocket)
+- 📄 Upload d'ordonnance sécurisé depuis le téléphone
+- 💰 Paiement par Mobile Money (Orange Money / MTN MoMo)
+- 🧾 Factures téléchargeables en PDF
 
 ### Pour la caisse
-- Vente au guichet ultra-rapide, poste dédié (POS)
-- Scanner code-barres — détection automatique d'une douchette scanner au clavier
-- Vérification des paiements mobile money en attente
-- Gestion des ordonnances (validation / rejet)
-- Notifications temps réel des nouvelles commandes
+- ⚡ Vente au guichet ultra-rapide (POS dédié)
+- ✅ Vérification des paiements mobile money
+- 📋 Gestion des ordonnances (validation / rejet)
+- 🔔 Notifications temps réel des nouvelles commandes
 
 ### Pour l'administrateur
-- Dashboard avec chiffre d'affaires ventilé (cash guichet / en ligne), ventes sur 7 jours glissants
-- Gestion du stock par lots datés, avec alertes de rupture et de péremption à 60 jours
-- Prédiction de réapprovisionnement (moyenne mobile, régression, lissage de Holt, détection d'anomalie) — des statistiques classiques, pas un LLM
-- Détection d'interactions médicamenteuses par table de règles sourcées, pas par IA
-- Rapports et exports PDF
-- Configuration complète par pharmacie (devise, numéros mobile money, logo)
-- Gestion des utilisateurs par rôle
+- 📊 Dashboard avec CA global ventilé (cash / en ligne)
+- 📦 Gestion du stock avec alertes de rupture
+- 📈 Rapports et exports PDF
+- ⚙️ Configuration complète (devise, numéros mobile money, logo)
+- 👥 Gestion des utilisateurs par rôle
 
 ### Architecture & Sécurité
-- **Multi-tenant par schéma PostgreSQL** — isolation totale entre pharmacies, pas de fuite possible par oubli d'un filtre `tenant_id`
-- Authentification JWT par rôle (Client / Caissière / Admin)
-- Validation des fichiers uploadés par magic bytes
-- Re-encodage anti-stéganographie (Pillow) + redimensionnement automatique (max 1600px)
-- Rate limiting API sur les endpoints sensibles (connexion, paiement)
-- Protection race-condition (`select_for_update()`) sur tout accès concurrent au stock
-- Chiffrement au repos des ordonnances (Fernet)
-- Endpoint `/healthz/` pour le monitoring, sauvegarde/restauration PostgreSQL intégrée
+- 🏢 **Multi-tenant par schéma PostgreSQL** — isolation totale entre pharmacies
+- 🔐 Authentification JWT par rôle (Client / Caissière / Admin)
+- 🛡️ Validation des fichiers par magic bytes
+- 🖼️ Re-encodage anti-stéganographie (Pillow) + resize automatique (max 1600px)
+- ⚡ Rate limiting API (anti-brute-force)
+- 🔒 Protection race-condition (`select_for_update()`)
 
 ---
 
-## Installation rapide
+## 🚀 Installation rapide
 
 ### Prérequis
 
@@ -140,17 +132,13 @@ echo "127.0.0.1 mapharmacietest.localhost" | sudo tee -a /etc/hosts
 # Ajouter : 127.0.0.1 mapharmacietest.localhost
 ```
 
-> Accède à `http://mapharmacietest.localhost:3000` — le sous-domaine identifie le tenant.
+> 💡 Accède à `http://mapharmacietest.localhost:3000` — le sous-domaine identifie le tenant.
 
 > ⚠️ Utilise toujours `daphne` et non `python manage.py runserver` — ce dernier ne supporte pas les WebSockets.
 
-### Docker
-
-Un `docker-compose.yml` complet existe à la racine (backend, frontend, PostgreSQL, Redis) — écrit et relu avec soin, mais pas encore validé par un lancement réel. Voir [docs/INFRASTRUCTURE_ROADMAP.md](docs/INFRASTRUCTURE_ROADMAP.md).
-
 ---
 
-## Architecture technique
+## 🏗️ Architecture technique
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -181,10 +169,8 @@ New_Pharmacie_Plus/
 │   ├── config/           # Settings, URLs (api/v1/), ASGI, health.py (/healthz/)
 │   ├── core/             # App principale
 │   │   ├── api.py        # Endpoints REST
-│   │   ├── models.py     # Produit, LotProduit, Commande, PharmacieConfig...
+│   │   ├── models.py     # Produit, Commande, PharmacieConfig...
 │   │   ├── validators.py # Upload sécurisé ordonnances
-│   │   ├── chiffrement.py # Chiffrement Fernet des ordonnances
-│   │   ├── services_prediction.py # Prédiction de stock (statistiques)
 │   │   ├── pagination.py # CataloguePagination DRF (20/page)
 │   │   ├── cache_utils.py # Cache Redis multi-tenant (préfixe par schéma)
 │   │   ├── throttles.py  # Rate limiting
@@ -192,13 +178,11 @@ New_Pharmacie_Plus/
 │   │   ├── management/commands/restore_db.py  # pg_restore
 │   │   └── consumers.py  # WebSocket consumers
 │   ├── clients_publics/  # CompteClient (schéma public, compte client global)
-│   ├── pharmacovigilance/ # Règles d'interactions médicamenteuses
 │   └── tenants/          # Pharmacie + Domain (django-tenants)
 └── pharmacie-frontend/
     ├── app/              # Pages Next.js App Router
     │   ├── catalogue/    # Catalogue paginé + recherche debounce
     │   ├── panier/       # Panier + paiement mobile money + file d'attente offline
-    │   ├── profil/       # Espace personnel du compte client
     │   ├── caisse/       # POS, paiements, ordonnances
     │   └── admin/        # Dashboard, stocks, historique, rapports
     └── lib/
@@ -212,7 +196,7 @@ New_Pharmacie_Plus/
 
 ---
 
-## Feuille de route
+## 📋 Feuille de route
 
 > Détail complet des tâches restantes, priorisées : voir [PROMPT_REPRISE.md](PROMPT_REPRISE.md). Stratégie de versionnement API : [docs/API_VERSIONING.md](docs/API_VERSIONING.md). Sauvegarde/restauration : [docs/BACKUP_POSTGRESQL.md](docs/BACKUP_POSTGRESQL.md). Guide fonctionnel de la refonte UI/UX (pages, gaps par rôle, méthodologie mobile-first) : [docs/UIUX_REFONTE_GUIDE.md](docs/UIUX_REFONTE_GUIDE.md), approfondi par la recherche externe [docs/RECHERCHE_FONCTIONNALITES_PHARMACIE.md](docs/RECHERCHE_FONCTIONNALITES_PHARMACIE.md) (dont un point réglementaire camerounais important sur l'ordonnance obligatoire). Sujets infra documentés mais différés (PostgreSQL, HTTPS, Docker, CDN) : [docs/INFRASTRUCTURE_ROADMAP.md](docs/INFRASTRUCTURE_ROADMAP.md).
 
@@ -237,36 +221,35 @@ New_Pharmacie_Plus/
 - [x] Chiffrement au repos des ordonnances (Fernet, clé dédiée optionnelle)
 - [x] Détection d'interactions médicamenteuses (règles statiques sourcées ANSM, pas d'IA)
 - [x] Docker + Docker Compose (écrit, prêt à tester — voir docs/INFRASTRUCTURE_ROADMAP.md)
-- [x] Page profil client (espace personnel du `CompteClient`)
-- [ ] Page marketplace (sélection de pharmacie par un client global multi-pharmacies)
+- [ ] Page marketplace (client global multi-pharmacies)
 - [ ] Dashboard analytics avancé (marge réelle, comparaison période/période)
 - [ ] Refonte UI/UX mobile-first (en cours)
 - [ ] Notifications SMS (Africa's Talking)
-- [ ] Internationalisation (next-intl) — infrastructure backend déjà posée
+- [ ] Internationalisation (next-intl)
 - [ ] Admin plateforme "Pharmacie Plus" (n'existe pas du tout aujourd'hui)
 
 ---
 
-## Contribuer
+## 🤝 Contribuer
 
 Consulte [CONTRIBUTING.md](CONTRIBUTING.md) pour les guidelines de contribution, les standards de qualité et la procédure de Pull Request.
 
 ---
 
-## Licence
+## 📄 Licence
 
 Ce projet est distribué sous [Business Source License 1.1](LICENSE).
 
-- Usage personnel et commercial autorisé
-- Modification et dérivés autorisés
-- Revente en tant que SaaS concurrent interdite
-- Conversion automatique en MIT le 2028-01-01
+- ✅ Usage personnel et commercial autorisé
+- ✅ Modification et dérivés autorisés
+- ❌ Revente en tant que SaaS concurrent interdite
+- 📅 Conversion automatique en MIT le 2028-01-01
 
 ---
 
-## Auteur
+## 👤 Auteur
 
-**SIGNING DONGMO Marc Godwin**
+**SIGNING DONGMO Marc Godwin**  
 Étudiant en Informatique — Université de Dschang, Cameroun
 
 [![GitHub](https://img.shields.io/badge/GitHub-Godwin296-181717?logo=github)](https://github.com/Godwin296)
@@ -274,5 +257,5 @@ Ce projet est distribué sous [Business Source License 1.1](LICENSE).
 ---
 
 <div align="center">
-  <sub>Fait avec soin au Cameroun, pour l'Afrique Centrale</sub>
+  <sub>Fait avec ❤️ au Cameroun 🇨🇲 pour l'Afrique Centrale</sub>
 </div>
