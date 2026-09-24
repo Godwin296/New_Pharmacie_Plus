@@ -1,0 +1,9 @@
+# .env à la racine : variables lues par Docker Compose pour l'interpolation de
+# docker-compose.yml (DB_NAME, DB_USER, DB_PASSWORD...). Contient de vrais secrets en
+# local -- ne doit jamais être commité. Voir .env.example pour le modèle.
+.env
+.env.local
+
+# Fichiers système
+.DS_Store
+Thumbs.db
