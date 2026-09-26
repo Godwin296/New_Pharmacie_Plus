@@ -30,6 +30,33 @@ class Pharmacie(TenantMixin):
     plan = models.CharField(max_length=20, choices=PLANS, default='essai')
     actif = models.BooleanField(default=True, verbose_name="Compte actif")
 
+    # 🛒 MARKETPLACE (page de découverte multi-pharmacies, schéma public).
+    #
+    # 🪞 MIROIR SYNCHRONISÉ (pas une deuxième saisie) : nom_public/logo_public/adresse_public/
+    # telephone_public sont une COPIE en lecture seule de core.PharmacieConfig (nom, logo,
+    # adresse, telephone), tenue à jour automatiquement par le signal post_save défini dans
+    # marketplace/signals.py. Le pharmacien ne modifie JAMAIS ces champs ici : il continue
+    # d'éditer sa fiche à un seul endroit (/admin/settings, comme aujourd'hui). Cette copie
+    # existe UNIQUEMENT parce que PharmacieConfig vit par-tenant (schéma isolé) et qu'une
+    # jointure cross-schéma est impossible avec django-tenants -- sans ce miroir, lister
+    # des pharmacies de plusieurs schémas obligerait à ouvrir chaque schéma un par un.
+    nom_public = models.CharField(max_length=150, blank=True)
+    logo_public = models.ImageField(upload_to='marketplace/logos/', null=True, blank=True)
+    adresse_public = models.TextField(blank=True)
+    telephone_public = models.CharField(max_length=20, blank=True)
+
+    # 📍 N'existe nulle part ailleurs (PharmacieConfig n'a pas de coordonnées) -- nécessaire
+    # pour trier/filtrer par proximité géographique sur la page de découverte.
+    # (Pas de champ "pays" : toutes les pharmacies sont au Cameroun aujourd'hui, un champ
+    # non utilisé n'a pas sa place ici -- à ajouter le jour où ça devient réellement utile.)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+
+    # 🕐 HORAIRES : soit H24 (raccourci, pas besoin de remplir 7 lignes), soit périodique
+    # -- dans ce cas le détail jour par jour vit dans marketplace.HoraireOuverture (FK vers
+    # cette Pharmacie), pas ici (une ligne par jour, pas 7 champs plats).
+    ouvert_24h = models.BooleanField(default=False, verbose_name="Ouvert 24h/24")
+
     # 🔐 Création automatique du schéma PostgreSQL dès la sauvegarde de l'objet
     auto_create_schema = True
     auto_drop_schema = False  # Sécurité : on ne supprime jamais un schéma automatiquement (perte de données)

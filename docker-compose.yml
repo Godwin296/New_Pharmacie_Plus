@@ -8,15 +8,31 @@
 # tester", pas encore "testé" -- premier lancement à faire toi-même, en local, où Docker
 # fonctionne. Voir docs/INFRASTRUCTURE_ROADMAP.md pour le contexte complet.
 #
-# Démarrage :
-#   cp pharmacie-backend/.env.example pharmacie-backend/.env   # puis remplir les vraies valeurs
+# Démarrage -- DEUX fichiers .env sont nécessaires, pour deux raisons différentes :
+#
+#   1. .env À LA RACINE (à côté de ce fichier) : Docker Compose le lit automatiquement
+#      pour interpoler les ${DB_NAME}/${DB_USER}/${DB_PASSWORD} utilisés ci-dessous par
+#      le service "db" -- AVANT même que le conteneur backend démarre. Sans lui,
+#      DB_PASSWORD reste vide et `docker compose up` échoue immédiatement avec l'erreur
+#      "La variable DB_PASSWORD doit être définie". Modèle : .env.example (racine).
+#
+#   2. pharmacie-backend/.env : lu par le conteneur backend lui-même (SECRET_KEY,
+#      ALLOWED_HOSTS, email, etc.) via env_file ci-dessous. Modèle :
+#      pharmacie-backend/.env.example.
+#
+#   Les valeurs DB_NAME/DB_USER/DB_PASSWORD doivent être IDENTIQUES dans les deux
+#   fichiers.
+#
+#   cp .env.example .env                                        # racine
+#   cp pharmacie-backend/.env.example pharmacie-backend/.env   # puis remplir les vraies valeurs dans les DEUX
 #   docker compose up --build
 #   docker compose exec backend python manage.py migrate_schemas --shared
 #   docker compose exec backend python seed.py   # si tu veux des données de démo
 #
 # Le backend attend DB_HOST=db et REDIS_HOST=redis (au lieu de 127.0.0.1/localhost en dev
 # local sans Docker) -- ces deux variables sont injectées ci-dessous et prioritaires sur
-# celles du fichier .env (qui, lui, garde ses valeurs pour un lancement SANS Docker).
+# celles du fichier pharmacie-backend/.env (qui, lui, garde ses valeurs pour un lancement
+# SANS Docker).
 
 services:
   db:
