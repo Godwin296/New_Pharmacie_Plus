@@ -17,11 +17,32 @@ tâche asynchrone (Celery) pour ne pas ralentir la requête de paiement le temps
 l'appel réseau SMTP.
 """
 import logging
+from contextlib import contextmanager
 
 from django.conf import settings
 from django.core.mail import send_mail
+from django.utils import translation
+from django.utils.translation import gettext as _
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _langue_destinataire(destinataire):
+    """
+    🌍 Un email transactionnel est presque toujours généré PENDANT la requête de
+    quelqu'un d'autre que son destinataire (ex: la caissière qui valide un paiement
+    déclenche l'email de confirmation envoyé au CLIENT) -- la langue active au moment de
+    l'appel (celle du personnel, via LocaleMiddleware) n'a donc aucune raison de
+    correspondre à la préférence du destinataire. On bascule explicitement sur
+    `langue_preferee` du destinataire le temps de composer CET email, puis on restaure
+    la langue précédente -- `ClientGuichet` n'a pas ce champ (pas de compte, pas de
+    préférence enregistrée), d'où le `getattr` défensif qui retombe sur le défaut
+    (`LANGUAGE_CODE`, voir settings.py) dans ce cas.
+    """
+    langue = getattr(destinataire, "langue_preferee", None) or settings.LANGUAGE_CODE
+    with translation.override(langue):
+        yield
 
 
 def envoyer_email_confirmation_commande(commande):
@@ -47,33 +68,44 @@ def envoyer_email_confirmation_commande(commande):
     devise = config.devise_preferee if config else "FCFA"
 
     items = commande.items.select_related('produit').all()
-    lignes = "\n".join(
-        f"  - {item.produit.nom} x{item.quantite} : {item.total():.0f} {devise}"
-        for item in items
-    )
-
-    est_guichet = commande.type_vente == 'guichet'
-    lieu_retrait = (
-        f"Merci pour votre achat chez {nom_pharmacie}."
-        if est_guichet
-        else f"Votre commande {commande.reference} a bien été payée et est prête à être "
-             f"récupérée au guichet de {nom_pharmacie}."
-    )
-
-    sujet = (
-        f"{nom_pharmacie} — Reçu de votre achat"
-        if est_guichet
-        else f"{nom_pharmacie} — Commande {commande.reference} prête au retrait"
-    )
-    corps = (
-        f"Bonjour {destinataire.nom},\n\n"
-        f"{lieu_retrait}\n\n"
-        f"Détail de la commande :\n{lignes}\n\n"
-        f"Total : {commande.total():.0f} {devise}\n\n"
-        f"{message_remerciement}\n"
-    )
 
     try:
+        with _langue_destinataire(destinataire):
+            lignes = "\n".join(
+                "  - {nom} x{qte} : {total:.0f} {devise}".format(
+                    nom=item.produit.nom, qte=item.quantite,
+                    total=item.total(), devise=devise,
+                )
+                for item in items
+            )
+
+            est_guichet = commande.type_vente == 'guichet'
+            lieu_retrait = (
+                _("Merci pour votre achat chez %(pharmacie)s.") % {"pharmacie": nom_pharmacie}
+                if est_guichet
+                else _("Votre commande %(reference)s a bien été payée et est prête à être "
+                       "récupérée au guichet de %(pharmacie)s.") % {
+                    "reference": commande.reference, "pharmacie": nom_pharmacie,
+                }
+            )
+
+            sujet = (
+                _("%(pharmacie)s — Reçu de votre achat") % {"pharmacie": nom_pharmacie}
+                if est_guichet
+                else _("%(pharmacie)s — Commande %(reference)s prête au retrait") % {
+                    "pharmacie": nom_pharmacie, "reference": commande.reference,
+                }
+            )
+            corps = (
+                _("Bonjour %(nom)s,") % {"nom": destinataire.nom} + "\n\n"
+                + lieu_retrait + "\n\n"
+                + _("Détail de la commande :") + "\n" + lignes + "\n\n"
+                + _("Total : %(total)s %(devise)s") % {
+                    "total": f"{commande.total():.0f}", "devise": devise,
+                } + "\n\n"
+                + message_remerciement + "\n"
+            )
+
         send_mail(
             subject=sujet,
             message=corps,
@@ -106,17 +138,20 @@ def envoyer_email_nouveau_mot_de_passe(client, nouveau_mot_de_passe):
     config = PharmacieConfig.objects.first()
     nom_pharmacie = config.nom if config else "Pharmacie Plus"
 
-    sujet = f"{nom_pharmacie} — Votre nouveau mot de passe"
-    corps = (
-        f"Bonjour {client.nom},\n\n"
-        f"Votre mot de passe a été réinitialisé par l'équipe de {nom_pharmacie}.\n\n"
-        f"Voici votre nouveau mot de passe temporaire :\n\n"
-        f"    {nouveau_mot_de_passe}\n\n"
-        f"Merci de vous connecter avec ce mot de passe, puis de le modifier dès que possible "
-        f"depuis votre profil.\n\n"
-        f"Si vous n'êtes pas à l'origine de cette demande, contactez immédiatement "
-        f"{nom_pharmacie}.\n"
-    )
+    with _langue_destinataire(client):
+        sujet = _("%(pharmacie)s — Votre nouveau mot de passe") % {"pharmacie": nom_pharmacie}
+        corps = (
+            _("Bonjour %(nom)s,") % {"nom": client.nom} + "\n\n"
+            + _("Votre mot de passe a été réinitialisé par l'équipe de %(pharmacie)s.") % {
+                "pharmacie": nom_pharmacie,
+            } + "\n\n"
+            + _("Voici votre nouveau mot de passe temporaire :") + "\n\n"
+            + f"    {nouveau_mot_de_passe}\n\n"
+            + _("Merci de vous connecter avec ce mot de passe, puis de le modifier dès que "
+                "possible depuis votre profil.") + "\n\n"
+            + _("Si vous n'êtes pas à l'origine de cette demande, contactez immédiatement "
+                "%(pharmacie)s.") % {"pharmacie": nom_pharmacie} + "\n"
+        )
 
     send_mail(
         subject=sujet,
@@ -143,20 +178,26 @@ def envoyer_email_bienvenue(client):
     config = PharmacieConfig.objects.first()
     nom_pharmacie = config.nom if config else "Pharmacie Plus"
 
-    sujet = f"Bienvenue chez {nom_pharmacie} 🎉"
-    # `identifiant` n'existe que sur l'ancien modèle Client (par-tenant) -- absent sur
-    # CompteClient (marketplace, global). On l'inclut seulement quand il est disponible.
-    identifiant = getattr(client, "identifiant", None)
-    ligne_identifiant = f" (identifiant : {identifiant})" if identifiant else ""
-    corps = (
-        f"Bonjour {client.nom},\n\n"
-        f"Ton compte {nom_pharmacie} a bien été créé{ligne_identifiant}.\n\n"
-        f"Tu peux dès maintenant parcourir le catalogue, passer commande en ligne et payer "
-        f"par Orange Money ou MTN MoMo, pour venir récupérer directement au guichet.\n\n"
-        f"À très vite !\n"
-    )
-
     try:
+        with _langue_destinataire(client):
+            sujet = _("Bienvenue chez %(pharmacie)s 🎉") % {"pharmacie": nom_pharmacie}
+            # `identifiant` n'existe que sur l'ancien modèle Client (par-tenant) -- absent sur
+            # CompteClient (marketplace, global). On l'inclut seulement quand il est disponible.
+            identifiant = getattr(client, "identifiant", None)
+            ligne_identifiant = (
+                _(" (identifiant : %(id)s)") % {"id": identifiant} if identifiant else ""
+            )
+            corps = (
+                _("Bonjour %(nom)s,") % {"nom": client.nom} + "\n\n"
+                + _("Ton compte %(pharmacie)s a bien été créé%(ligne_identifiant)s.") % {
+                    "pharmacie": nom_pharmacie, "ligne_identifiant": ligne_identifiant,
+                } + "\n\n"
+                + _("Tu peux dès maintenant parcourir le catalogue, passer commande en ligne "
+                    "et payer par Orange Money ou MTN MoMo, pour venir récupérer directement "
+                    "au guichet.") + "\n\n"
+                + _("À très vite !") + "\n"
+            )
+
         send_mail(
             subject=sujet,
             message=corps,
@@ -191,18 +232,26 @@ def envoyer_email_ordonnance_refusee(commande):
     config = PharmacieConfig.objects.first()
     nom_pharmacie = config.nom if config else "Pharmacie Plus"
 
-    sujet = f"{nom_pharmacie} — Ordonnance refusée pour la commande {commande.reference}"
-    corps = (
-        f"Bonjour {destinataire.nom},\n\n"
-        f"L'ordonnance envoyée pour ta commande {commande.reference} n'a malheureusement pas "
-        f"pu être validée par {nom_pharmacie}.\n\n"
-        f"Motif : {commande.motif_refus or 'Document invalide'}\n\n"
-        f"Tu peux te reconnecter à l'application pour envoyer un nouveau document et relancer "
-        f"ta commande.\n\n"
-        f"Si tu as des questions, contacte directement {nom_pharmacie}.\n"
-    )
-
     try:
+        with _langue_destinataire(destinataire):
+            sujet = _("%(pharmacie)s — Ordonnance refusée pour la commande %(reference)s") % {
+                "pharmacie": nom_pharmacie, "reference": commande.reference,
+            }
+            motif = commande.motif_refus or _("Document invalide")
+            corps = (
+                _("Bonjour %(nom)s,") % {"nom": destinataire.nom} + "\n\n"
+                + _("L'ordonnance envoyée pour ta commande %(reference)s n'a malheureusement "
+                    "pas pu être validée par %(pharmacie)s.") % {
+                    "reference": commande.reference, "pharmacie": nom_pharmacie,
+                } + "\n\n"
+                + _("Motif : %(motif)s") % {"motif": motif} + "\n\n"
+                + _("Tu peux te reconnecter à l'application pour envoyer un nouveau document "
+                    "et relancer ta commande.") + "\n\n"
+                + _("Si tu as des questions, contacte directement %(pharmacie)s.") % {
+                    "pharmacie": nom_pharmacie,
+                } + "\n"
+            )
+
         send_mail(
             subject=sujet,
             message=corps,

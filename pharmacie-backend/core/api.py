@@ -12,6 +12,10 @@ from django.db import transaction
 from django.db.utils import IntegrityError
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime, parse_date
+# 🌍 i18n : gettext (pas gettext_lazy) car ces messages sont construits au moment de la
+# requête, dans le corps des vues -- la langue est déjà activée par LocaleMiddleware /
+# _activer_langue_client (voir core/authentication.py) avant que ces fonctions ne s'exécutent.
+from django.utils.translation import gettext as _
 from django.utils.crypto import get_random_string
 from django.contrib.auth import authenticate
 from django.db.models import Q, Sum, F, Count
@@ -152,9 +156,9 @@ def api_update_config(request):
             logo_file = request.FILES['logo']
             extension = logo_file.name.split('.')[-1].lower()
             if extension not in ['jpg', 'jpeg', 'png', 'webp']:
-                return Response({"error": "Le format de l'image n'est pas autorisé (JPG, PNG, WEBP uniquement)."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": _("Le format de l'image n'est pas autorisé (JPG, PNG, WEBP uniquement).")}, status=status.HTTP_400_BAD_REQUEST)
             if logo_file.size > 2 * 1024 * 1024:
-                return Response({"error": "L'image ne doit pas dépasser 2 Mo."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": _("L'image ne doit pas dépasser 2 Mo.")}, status=status.HTTP_400_BAD_REQUEST)
             config.logo = logo_file
 
         # 3. Extraction et assignation des données textuelles
@@ -199,7 +203,7 @@ def api_infos_paiement(request):
     """
     config = PharmacieConfig.objects.first()
     if not config:
-        return Response({"error": "Configuration de paiement non disponible pour cette pharmacie."}, status=404)
+        return Response({"error": _("Configuration de paiement non disponible pour cette pharmacie.")}, status=404)
     return Response({
         "numero_orange_money": config.numero_orange_money,
         "nom_titulaire_orange_money": config.nom_titulaire_orange_money,
@@ -241,11 +245,11 @@ def api_client_register(request):
     telephone = (request.data.get('telephone') or '').strip()
 
     if not email or not password or not nom:
-        return Response({"error": "email, password et nom sont obligatoires"}, status=400)
+        return Response({"error": _("email, password et nom sont obligatoires")}, status=400)
     if len(password) < 8:
-        return Response({"error": "Le mot de passe doit contenir au moins 8 caractères"}, status=400)
+        return Response({"error": _("Le mot de passe doit contenir au moins 8 caractères")}, status=400)
     if CompteClient.objects.filter(email=email).exists():
-        return Response({"error": "Un compte existe déjà avec cet email"}, status=400)
+        return Response({"error": _("Un compte existe déjà avec cet email")}, status=400)
 
     client = CompteClient.objects.create_user(
         email=email, password=password, nom=nom, telephone=telephone or None
@@ -270,10 +274,10 @@ def api_client_login(request):
     try:
         client = CompteClient.objects.get(email=email, is_active=True)
     except CompteClient.DoesNotExist:
-        return Response({"error": "Identifiants invalides"}, status=401)
+        return Response({"error": _("Identifiants invalides")}, status=401)
 
     if not client.check_password(password):
-        return Response({"error": "Identifiants invalides"}, status=401)
+        return Response({"error": _("Identifiants invalides")}, status=401)
 
     # 🔴 PAS de RefreshToken.for_user() ici : ça crée un OutstandingToken lié par
     # FK stricte à auth.User (personnel) -- planterait avec un CompteClient.
@@ -327,7 +331,7 @@ def api_client_whoami(request):
         if 'langue_preferee' in request.data:
             langue = (request.data.get('langue_preferee') or '').strip()
             if langue and langue not in dict(CompteClient.LANGUES):
-                return Response({"error": "Langue non supportée. Valeurs acceptées : fr, en, ou vide (Système)."}, status=400)
+                return Response({"error": _("Langue non supportée. Valeurs acceptées : fr, en, ou vide (Système).")}, status=400)
             client.langue_preferee = langue or None
             champs_modifies.append('langue_preferee')
         if champs_modifies:
@@ -366,9 +370,9 @@ def api_client_changer_mot_de_passe(request):
     nouveau = request.data.get('nouveau_mot_de_passe', '')
 
     if not client.check_password(ancien):
-        return Response({"error": "Mot de passe actuel incorrect."}, status=400)
+        return Response({"error": _("Mot de passe actuel incorrect.")}, status=400)
     if len(nouveau) < 8:
-        return Response({"error": "Le nouveau mot de passe doit contenir au moins 8 caractères."}, status=400)
+        return Response({"error": _("Le nouveau mot de passe doit contenir au moins 8 caractères.")}, status=400)
 
     client.set_password(nouveau)
     client.save(update_fields=['password'])
@@ -388,7 +392,7 @@ def api_login(request):
     user = authenticate(username=u_name, password=p_word)
     if user:
         if not check_role(user, role_req):
-            return Response({"error": "Rôle non autorisé pour ce compte"}, status=403)
+            return Response({"error": _("Rôle non autorisé pour ce compte")}, status=403)
         
         # SÉCURITÉ JWT : On génère les jetons d'accès pour ton frontend Next.js
         refresh = RefreshToken.for_user(user)
@@ -415,7 +419,7 @@ def api_login(request):
             "role": role_req
         }, status=200)
         
-    return Response({"error": "Identifiants invalides"}, status=401)
+    return Response({"error": _("Identifiants invalides")}, status=401)
 
 # À ajouter à la fin de core/api.py
 @api_view(['GET'])
@@ -589,7 +593,7 @@ def api_produit_historique(request, produit_id):
         request.user and request.user.is_authenticated and getattr(request.user, 'is_superuser', False)
     )
     if not est_admin_tenant:
-        return Response({"error": "Réservé aux administrateurs"}, status=403)
+        return Response({"error": _("Réservé aux administrateurs")}, status=403)
 
     cache_key = f"produit_historique_{produit_id}"
     cached = cache_get(cache_key)
@@ -622,12 +626,12 @@ def api_scan_code_barre(request, code):
     """
     code = (code or "").strip()
     if not code:
-        return Response({"error": "Code vide"}, status=400)
+        return Response({"error": _("Code vide")}, status=400)
 
     produit = Produit.objects.filter(Q(code_barre__iexact=code) | Q(identifiant__iexact=code)).first()
     if not produit:
         return Response(
-            {"error": "Code non reconnu", "code_scanne": code, "peut_etre_rattache": True},
+            {"error": _("Code non reconnu"), "code_scanne": code, "peut_etre_rattache": True},
             status=404,
         )
 
@@ -656,11 +660,11 @@ def api_associer_code_barre(request, produit_id):
     # avant ce correctif, alors que le docstring ci-dessus annonçait déjà "réservé à
     # l'admin". Contrôle explicite ajouté, sur le même modèle que api_produit_historique.
     if not (request.user and request.user.is_authenticated and getattr(request.user, 'is_superuser', False)):
-        return Response({"error": "Réservé aux administrateurs"}, status=403)
+        return Response({"error": _("Réservé aux administrateurs")}, status=403)
 
     code_barre = (request.data.get('code_barre') or "").strip()
     if not code_barre:
-        return Response({"error": "code_barre requis"}, status=400)
+        return Response({"error": _("code_barre requis")}, status=400)
 
     # 🔐 DURCISSEMENT PRODUCTION : la vérification .exists() ci-dessous seule laisse une
     # fenêtre de course (TOCTOU) -- si deux admins rattachent LE MÊME code-barres à deux
@@ -673,7 +677,7 @@ def api_associer_code_barre(request, produit_id):
     # plusieurs postes de caisse le même jour de livraison -- pas un cas à ignorer.
     if Produit.objects.filter(code_barre__iexact=code_barre).exclude(id=produit_id).exists():
         return Response(
-            {"error": "Ce code-barres est déjà rattaché à un autre produit."},
+            {"error": _("Ce code-barres est déjà rattaché à un autre produit.")},
             status=409,
         )
 
@@ -684,7 +688,7 @@ def api_associer_code_barre(request, produit_id):
             produit.save(update_fields=['code_barre'])
     except IntegrityError:
         return Response(
-            {"error": "Ce code-barres vient d'être rattaché à un autre produit entre-temps. Rescannez pour vérifier."},
+            {"error": _("Ce code-barres vient d'être rattaché à un autre produit entre-temps. Rescannez pour vérifier.")},
             status=409,
         )
     return Response(ProduitSerializer(produit, context={'request': request}).data)
@@ -796,7 +800,7 @@ def api_catalogue_sync(request):
             since_id = None
     since = parse_datetime(since_str)
     if since is None:
-        return Response({"error": "Paramètre 'since' invalide, attendu au format ISO8601"}, status=400)
+        return Response({"error": _("Paramètre 'since' invalide, attendu au format ISO8601")}, status=400)
 
     # 🔐 Capturé AVANT la requête : si des écritures arrivent pendant qu'on répond, elles seront
     # simplement incluses au PROCHAIN sync (since >= server_time actuel) plutôt que perdues.
@@ -852,7 +856,7 @@ def api_panier(request):
     
     # 1. Protection du personnel de caisse
     if request.user.is_staff and not facture_id:
-        return Response({"error": "Le personnel ne peut pas avoir de panier client"}, status=403)
+        return Response({"error": _("Le personnel ne peut pas avoir de panier client")}, status=403)
         
     # 🎯 SÉCURITÉ CONTRÔLE D'ACCÈS (Anti-IDOR)
     client_instance, client_field = resoudre_identite_client(request.user)
@@ -895,12 +899,12 @@ def api_panier(request):
             qte = int(request.data.get('quantite', 1))
             if qte <= 0: raise ValueError()
         except (ValueError, TypeError):
-            return Response({"error": "Quantité invalide"}, status=400)
+            return Response({"error": _("Quantité invalide")}, status=400)
             
         produit = get_object_or_404(Produit, id=p_id)
         
         if qte > produit.quantite:
-            return Response({"error": "Stock insuffisant"}, status=400)
+            return Response({"error": _("Stock insuffisant")}, status=400)
             
         item, it_created = ItemCommande.objects.get_or_create(commande=commande, produit=produit)
         if it_created:
@@ -929,7 +933,7 @@ def api_panier_item(request, item_id):
     """
     client_instance, client_field = resoudre_identite_client(request.user)
     if client_instance is None:
-        return Response({"error": "Réservé aux comptes clients"}, status=403)
+        return Response({"error": _("Réservé aux comptes clients")}, status=403)
 
     STATUTS_PANIER_MODIFIABLE = ("en_cours", "attente_validation")
     item = get_object_or_404(
@@ -949,10 +953,10 @@ def api_panier_item(request, item_id):
         if qte <= 0:
             raise ValueError()
     except (ValueError, TypeError):
-        return Response({"error": "Quantité invalide"}, status=400)
+        return Response({"error": _("Quantité invalide")}, status=400)
 
     if qte > item.produit.quantite:
-        return Response({"error": "Stock insuffisant"}, status=400)
+        return Response({"error": _("Stock insuffisant")}, status=400)
 
     item.quantite = qte
     item.save()
@@ -976,25 +980,25 @@ def api_soumettre_paiement(request, commande_id):
     même d'atteindre le contrôle is_staff ci-dessous) + résolution via CompteClient.
     """
     if request.user.is_staff:
-        return Response({"error": "Action réservée aux clients"}, status=403)
+        return Response({"error": _("Action réservée aux clients")}, status=403)
 
     client_instance, client_field = resoudre_identite_client(request.user)
     commande = get_object_or_404(Commande, id=commande_id, **{client_field: client_instance})
 
     if commande.statut not in ("en_cours",):
-        return Response({"error": "Cette commande ne peut pas être soumise au paiement dans son état actuel."}, status=409)
+        return Response({"error": _("Cette commande ne peut pas être soumise au paiement dans son état actuel.")}, status=409)
 
     # Une ordonnance est exigée et n'a pas encore été validée -> on ne laisse pas passer au paiement
     if commande.items.filter(produit__ordonnance_obligatoire=True).exists() and not commande.ordonnance_valide:
-        return Response({"error": "Une ordonnance valide est requise avant de pouvoir payer cette commande."}, status=409)
+        return Response({"error": _("Une ordonnance valide est requise avant de pouvoir payer cette commande.")}, status=409)
 
     moyen = request.data.get('moyen_paiement')
     reference_client = request.data.get('reference_paiement', '').strip()
 
     if moyen not in dict(Commande.MOYENS_PAIEMENT):
-        return Response({"error": "Moyen de paiement invalide."}, status=400)
+        return Response({"error": _("Moyen de paiement invalide.")}, status=400)
     if not reference_client:
-        return Response({"error": "Merci de renseigner la référence de transaction reçue par SMS."}, status=400)
+        return Response({"error": _("Merci de renseigner la référence de transaction reçue par SMS.")}, status=400)
 
     commande.moyen_paiement = moyen
     commande.reference_paiement_client = reference_client
@@ -1026,13 +1030,13 @@ def api_confirmer_paiement(request, commande_id):
     anti-survente testées précédemment).
     """
     if not request.user.is_staff:
-        return Response({"error": "Action réservée au personnel de la pharmacie"}, status=403)
+        return Response({"error": _("Action réservée au personnel de la pharmacie")}, status=403)
 
     with transaction.atomic():
         commande = get_object_or_404(Commande.objects.select_for_update(), id=commande_id)
 
         if commande.statut != "paiement_a_verifier":
-            return Response({"error": "Cette commande n'est pas en attente de vérification de paiement."}, status=409)
+            return Response({"error": _("Cette commande n'est pas en attente de vérification de paiement.")}, status=409)
 
         try:
             commande.valider(user_operateur=request.user)
@@ -1059,7 +1063,7 @@ def api_paiements_a_verifier(request):
     qu'après confirmation), ce qui aurait laissé ces commandes invisibles pour la caisse.
     """
     if not request.user.is_staff:
-        return Response({"error": "Action réservée au personnel de la pharmacie"}, status=403)
+        return Response({"error": _("Action réservée au personnel de la pharmacie")}, status=403)
 
     commandes = Commande.objects.filter(statut="paiement_a_verifier").order_by('-date')
     return Response(CommandeSerializer(commandes, many=True, context={'request': request}).data)
@@ -1075,7 +1079,7 @@ def api_commandes_a_retirer(request):
     rapidement parmi toutes les commandes en attente.
     """
     if not request.user.is_staff:
-        return Response({"error": "Action réservée au personnel de la pharmacie"}, status=403)
+        return Response({"error": _("Action réservée au personnel de la pharmacie")}, status=403)
 
     commandes = Commande.objects.filter(statut="payee_a_retirer").order_by('-date')
 
@@ -1101,7 +1105,7 @@ def api_marquer_retiree(request, commande_id):
     expiration automatique (cf. Commande.marquer_retiree() et est_perimee).
     """
     if not request.user.is_staff:
-        return Response({"error": "Action réservée au personnel de la pharmacie"}, status=403)
+        return Response({"error": _("Action réservée au personnel de la pharmacie")}, status=403)
 
     with transaction.atomic():
         commande = get_object_or_404(Commande.objects.select_for_update(), id=commande_id)
@@ -1134,7 +1138,7 @@ def api_mes_commandes(request):
     """
     client_instance, client_field = resoudre_identite_client(request.user)
     if client_instance is None:
-        return Response({"error": "Action réservée aux clients"}, status=403)
+        return Response({"error": _("Action réservée aux clients")}, status=403)
 
     cache_key = f"historique_client:{client_field}:{client_instance.id}"
     cache = cache_get(cache_key)
@@ -1203,7 +1207,7 @@ def api_gestion_ordonnance(request, commande_id=None):
                 )
 
                 return Response({"message": "Ordonnance reçue. En attente de vérification. ⏳"})
-        return Response({"error": "Action non autorisée pour un client"}, status=403)
+        return Response({"error": _("Action non autorisée pour un client")}, status=403)
 
     # ÉTAPE 2 : Rôle Caisse/Admin -> Consultation et Validation
     if request.user.is_staff:
@@ -1227,7 +1231,7 @@ def api_gestion_ordonnance(request, commande_id=None):
 
                 if commande.statut != "attente_validation":
                     return Response(
-                        {"error": "Cette ordonnance a déjà été traitée par un autre agent."},
+                        {"error": _("Cette ordonnance a déjà été traitée par un autre agent.")},
                         status=409,  # 409 Conflict : un autre agent est arrivé en premier
                     )
 
@@ -1273,9 +1277,9 @@ def api_gestion_ordonnance(request, commande_id=None):
 
                     return Response({"message": "Rejetée ❌"})
 
-                return Response({"error": "Action invalide"}, status=400)
+                return Response({"error": _("Action invalide")}, status=400)
 
-    return Response({"error": "Requête invalide"}, status=400)
+    return Response({"error": _("Requête invalide")}, status=400)
 
 # --- 📈 DASHBOARD & RAPPORTS BOSS SÉCURISÉS ---
 @api_view(['GET'])
@@ -1284,7 +1288,7 @@ def api_gestion_ordonnance(request, commande_id=None):
 def api_boss_dashboard(request):
     """KPIs complets et exacts pour Next.js 🛰️"""
     if not request.user.is_superuser:
-        return Response({"error": "Accès refusé. Droits d'administration requis."}, status=403)    
+        return Response({"error": _("Accès refusé. Droits d'administration requis.")}, status=403)    
     try:
         aujourdhui = timezone.now().date()
         dans_60_jours = aujourdhui + timedelta(days=60)
@@ -1394,7 +1398,7 @@ def api_update_stock(request, produit_id):
         nouvelle_qte = int(request.data.get('quantite'))
         if nouvelle_qte < 0: raise ValueError()
     except (TypeError, ValueError):
-        return Response({"error": "La quantité doit être un entier positif"}, status=400)
+        return Response({"error": _("La quantité doit être un entier positif")}, status=400)
     try:
         with transaction.atomic():
             produit = Produit.objects.select_for_update().get(id=produit_id)
@@ -1429,7 +1433,7 @@ def api_lots_produit(request, produit_id):
         quantite = int(request.data.get('quantite'))
         if quantite <= 0: raise ValueError()
     except (TypeError, ValueError):
-        return Response({"error": "La quantité doit être un entier strictement positif"}, status=400)
+        return Response({"error": _("La quantité doit être un entier strictement positif")}, status=400)
 
     date_peremption_str = request.data.get('date_peremption') or None
     date_peremption = None
@@ -1439,7 +1443,7 @@ def api_lots_produit(request, produit_id):
         # sur un str). parse_date() la convertit proprement, ou renvoie None si mal formée.
         date_peremption = parse_date(date_peremption_str)
         if date_peremption is None:
-            return Response({"error": "Date de péremption invalide (format attendu : AAAA-MM-JJ)"}, status=400)
+            return Response({"error": _("Date de péremption invalide (format attendu : AAAA-MM-JJ)")}, status=400)
     numero_lot = request.data.get('numero_lot') or None
 
     try:
@@ -1467,7 +1471,7 @@ def api_fournisseurs(request):
     
     # Seul l'administrateur peut ajouter un fournisseur
     if not request.user.is_superuser:
-        return Response({"error": "Accès interdit : Droits administrateur requis"}, status=403)
+        return Response({"error": _("Accès interdit : Droits administrateur requis")}, status=403)
         
     if request.method == 'POST':
         serializer = FournisseurSerializer(data=request.data)
@@ -1481,7 +1485,7 @@ def api_fournisseurs(request):
 @permission_classes([IsAdminUser])
 def api_fournisseur_detail(request, pk):
     if not request.user.is_superuser:
-        return Response({"error": "Accès interdit : Droits administrateur requis"}, status=403)
+        return Response({"error": _("Accès interdit : Droits administrateur requis")}, status=403)
         
     fournisseur = get_object_or_404(Fournisseur, pk=pk)
 
@@ -1558,12 +1562,12 @@ def api_verifier_interactions(request):
     """
     produit_ids = request.data.get("produit_ids")
     if not isinstance(produit_ids, list) or not produit_ids:
-        return Response({"error": "produit_ids doit être une liste non vide d'identifiants produit."}, status=400)
+        return Response({"error": _("produit_ids doit être une liste non vide d'identifiants produit.")}, status=400)
 
     try:
         produit_ids = [int(pid) for pid in produit_ids]
     except (ValueError, TypeError):
-        return Response({"error": "produit_ids doit contenir uniquement des entiers."}, status=400)
+        return Response({"error": _("produit_ids doit contenir uniquement des entiers.")}, status=400)
 
     # Le queryset ne porte que sur les produits DU TENANT COURANT (django-tenants a déjà
     # positionné le bon schéma) -- aucun risque de vérifier des produits d'une autre pharmacie.
@@ -1592,16 +1596,16 @@ def api_predictions_stock(request):
     # (cf. seed.py). Les décisions de réapprovisionnement/commande fournisseur relèvent du
     # BOSS uniquement -- même restriction explicite que api_boss_dashboard.
     if not request.user.is_superuser:
-        return Response({"error": "Accès réservé à l'administrateur."}, status=403)
+        return Response({"error": _("Accès réservé à l'administrateur.")}, status=403)
 
     try:
         lookback_jours = int(request.query_params.get("lookback_jours", 90))
         lead_time_jours = int(request.query_params.get("lead_time_jours", 7))
     except ValueError:
-        return Response({"error": "lookback_jours et lead_time_jours doivent être des entiers"}, status=400)
+        return Response({"error": _("lookback_jours et lead_time_jours doivent être des entiers")}, status=400)
 
     if lookback_jours < 2 or lead_time_jours < 0:
-        return Response({"error": "Paramètres hors limites"}, status=400)
+        return Response({"error": _("Paramètres hors limites")}, status=400)
 
     alerte_uniquement = request.query_params.get("alerte_uniquement") in ("1", "true", "True")
 
@@ -1631,7 +1635,7 @@ def api_predictions_stock(request):
 def api_prediction_stock_produit(request, produit_id):
     """Prédiction détaillée d'un seul produit (utilisée sur sa fiche/page de détail)."""
     if not request.user.is_superuser:
-        return Response({"error": "Accès réservé à l'administrateur."}, status=403)
+        return Response({"error": _("Accès réservé à l'administrateur.")}, status=403)
 
     produit = get_object_or_404(Produit, id=produit_id)
 
@@ -1639,10 +1643,10 @@ def api_prediction_stock_produit(request, produit_id):
         lookback_jours = int(request.query_params.get("lookback_jours", 90))
         lead_time_jours = int(request.query_params.get("lead_time_jours", 7))
     except ValueError:
-        return Response({"error": "lookback_jours et lead_time_jours doivent être des entiers"}, status=400)
+        return Response({"error": _("lookback_jours et lead_time_jours doivent être des entiers")}, status=400)
 
     if lookback_jours < 2 or lead_time_jours < 0:
-        return Response({"error": "Paramètres hors limites"}, status=400)
+        return Response({"error": _("Paramètres hors limites")}, status=400)
 
     resultat = predire_pour_produit(produit, lookback_jours=lookback_jours, lead_time_jours=lead_time_jours)
     return Response(resultat, status=200)
@@ -1654,7 +1658,7 @@ def api_prediction_stock_produit(request, produit_id):
 @parser_classes([MultiPartParser, FormParser])
 def api_modifier_photo_produit(request, produit_id):
     if not request.user.is_superuser :
-        return Response({"error": "Action réservée à l'administrateur"}, status=403)
+        return Response({"error": _("Action réservée à l'administrateur")}, status=403)
         
     if 'image' in request.FILES:
         image_brute = request.FILES['image']
@@ -1677,7 +1681,7 @@ def api_modifier_photo_produit(request, produit_id):
             "image_url": image_url_complete
         }, status=200)
             
-    return Response({"error": "Fichier manquant"}, status=400)
+    return Response({"error": _("Fichier manquant")}, status=400)
   
 
 # --- 🛒 VENTE DIRECTE AU GUICHET SÉCURISÉE (Version avec Table Dédiée Guichet) ---
@@ -1685,7 +1689,7 @@ def api_modifier_photo_produit(request, produit_id):
 @permission_classes([IsAuthenticated])
 def api_vente_directe(request):
     if not request.user.is_staff:
-        return Response({"error": "Accès réservé au guichet"}, status=403)
+        return Response({"error": _("Accès réservé au guichet")}, status=403)
         
     data = request.data
     items_data = data.get('items', [])
@@ -1693,7 +1697,7 @@ def api_vente_directe(request):
     ordonnance_verifiee = bool(data.get('ordonnance_verifiee_visuellement', False))
     
     if not items_data:
-        return Response({"error": "Le panier est vide"}, status=400)
+        return Response({"error": _("Le panier est vide")}, status=400)
 
     try:
         with transaction.atomic():
@@ -1709,8 +1713,8 @@ def api_vente_directe(request):
             if produits_necessitant_ordonnance and not ordonnance_verifiee:
                 noms = ", ".join(produits_necessitant_ordonnance)
                 return Response({
-                    "error": f"Ordonnance requise pour : {noms}. "
-                             f"Merci de confirmer l'avoir vérifiée avant de valider la vente."
+                    "error": _("Ordonnance requise pour : %(noms)s. "
+                                "Merci de confirmer l'avoir vérifiée avant de valider la vente.") % {"noms": noms}
                 }, status=400)
 
             # 1. 🌟 Coordonnées client OPTIONNELLES : une vente rapide au comptoir n'a pas
@@ -1780,7 +1784,7 @@ def api_vente_directe(request):
         error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
         return Response({"error": error_message}, status=400)
     except Exception as e:
-        return Response({"error": f"Erreur technique : {str(e)}"}, status=500)
+        return Response({"error": _("Erreur technique : %(detail)s") % {"detail": str(e)}}, status=500)
 
 
 # --- 📋 ARCHIVES CAISSIÈRE SÉCURISÉES ---
@@ -1802,7 +1806,7 @@ def api_archives_caissiere(request):
     moment où le stock a réellement été décrémenté et l'argent réellement encaissé/vérifié.
     """
     if not request.user.is_staff: 
-        return Response({"error": "Réservé au personnel de la pharmacie"}, status=403)        
+        return Response({"error": _("Réservé au personnel de la pharmacie")}, status=403)        
     
     il_ya_90_jours = timezone.now() - timedelta(days=90)
     
@@ -1826,7 +1830,7 @@ def api_admin_liste_clients(request):
     caisse.
     """
     if not request.user.is_superuser:
-        return Response({"error": "Accès réservé à l'administrateur."}, status=403)
+        return Response({"error": _("Accès réservé à l'administrateur.")}, status=403)
 
     # 🌍 CompteClient est global (schéma public) : on ne peut pas filtrer par tenant via
     # une colonne, mais Commande.compte_client vit lui dans CE schéma tenant précis --
@@ -1859,13 +1863,13 @@ def api_admin_reset_password_client(request, client_id):
     -- le compte serait alors bloqué sans que personne ne s'en aperçoive.
     """
     if not request.user.is_superuser:
-        return Response({"error": "Accès réservé à l'administrateur."}, status=403)
+        return Response({"error": _("Accès réservé à l'administrateur.")}, status=403)
 
     client_obj = get_object_or_404(CompteClient, id=client_id)
     if not client_obj.email:
         return Response({
-            "error": "Ce client n'a pas d'adresse email enregistrée -- impossible de lui "
-                     "envoyer un nouveau mot de passe automatiquement."
+            "error": _("Ce client n'a pas d'adresse email enregistrée -- impossible de lui "
+                       "envoyer un nouveau mot de passe automatiquement.")
         }, status=400)
 
     # Mot de passe temporaire aléatoire (12 caractères, alphabet large -> passe sans
@@ -1879,9 +1883,9 @@ def api_admin_reset_password_client(request, client_id):
     except Exception:
         logger.exception("Échec de l'envoi de l'email de réinitialisation pour le client %s", client_obj.identifiant)
         return Response({
-            "error": "Le nouveau mot de passe n'a PAS pu être envoyé par email (problème de "
-                     "configuration Brevo/SMTP côté serveur) -- le mot de passe du client n'a "
-                     "donc PAS été modifié, pour éviter de le bloquer sans recours."
+            "error": _("Le nouveau mot de passe n'a PAS pu être envoyé par email (problème de "
+                       "configuration Brevo/SMTP côté serveur) -- le mot de passe du client n'a "
+                       "donc PAS été modifié, pour éviter de le bloquer sans recours.")
         }, status=502)
 
     # 🔐 On ne change réellement le mot de passe qu'APRÈS confirmation que l'email est parti.

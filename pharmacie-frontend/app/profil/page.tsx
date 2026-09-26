@@ -11,9 +11,12 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import apiClient from "../../lib/apiClient";
 import Prix from "../../lib/components/Prix";
 import PageSkeleton from "../../lib/components/PageSkeleton";
+import { Check } from "lucide-react";
+import { useLangue } from "../../lib/context/LangueContext";
 
 /* ═══════════════════════════════════════════════════════════════
    TYPES
@@ -405,11 +408,104 @@ function PasswordSheet({
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   PAGE PRINCIPALE
+   SÉLECTEUR DE LANGUE
    ═══════════════════════════════════════════════════════════════ */
+
+function LangueSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useTranslations("profil.langue");
+  const { preferenceExplicite, changerLangue } = useLangue();
+  const [enregistrement, setEnregistrement] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  const OPTIONS: { valeur: "fr" | "en" | null; label: string; description?: string }[] = [
+    { valeur: null, label: t("systeme"), description: t("descriptionSysteme") },
+    { valeur: "fr", label: t("francais") },
+    { valeur: "en", label: t("anglais") },
+  ];
+
+  const choisir = async (valeur: "fr" | "en" | null) => {
+    setEnregistrement(true);
+    setErreur(null);
+    try {
+      await changerLangue(valeur);
+      onClose();
+    } catch {
+      setErreur(t("erreur"));
+    } finally {
+      setEnregistrement(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            className="relative bg-white dark:bg-[#0b1a16] w-full sm:max-w-sm rounded-t-[28px] sm:rounded-[28px] shadow-2xl overflow-hidden border border-black/5 dark:border-white/5"
+          >
+            <div className="sm:hidden flex justify-center pt-3">
+              <div className="h-1.5 w-10 rounded-full bg-gray-200 dark:bg-white/20" />
+            </div>
+            <div className="px-6 py-4 border-b border-black/5 dark:border-white/5 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t("titreSelecteur")}</h3>
+              <button
+                onClick={onClose}
+                className="h-9 w-9 flex items-center justify-center rounded-full bg-gray-100 dark:bg-white/5 text-gray-500 border-none"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-4 space-y-1" style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
+              {OPTIONS.map((opt) => {
+                const selectionne = preferenceExplicite === opt.valeur;
+                return (
+                  <button
+                    key={opt.label}
+                    onClick={() => choisir(opt.valeur)}
+                    disabled={enregistrement}
+                    className="w-full flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left bg-transparent border-none hover:bg-gray-50 dark:hover:bg-white/5 disabled:opacity-50 transition-colors"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{opt.label}</p>
+                      {opt.description && (
+                        <p className="text-xs text-gray-400 mt-0.5">{opt.description}</p>
+                      )}
+                    </div>
+                    {selectionne && (
+                      enregistrement
+                        ? <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                        : <Check className="w-4 h-4 text-emerald-600" />
+                    )}
+                  </button>
+                );
+              })}
+              {erreur && (
+                <p className="text-xs font-semibold text-red-500 px-4 pt-2">{erreur}</p>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 
 export default function MonProfil() {
   const router = useRouter();
+  const t = useTranslations("profil");
+  const { preferenceExplicite } = useLangue();
 
   /* ─── États données ─── */
   const [data, setData] = useState<ProfilData | null>(null);
@@ -420,6 +516,7 @@ export default function MonProfil() {
   /* ─── États UI ─── */
   const [showEdit, setShowEdit] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showLangue, setShowLangue] = useState(false);
 
   /* ─── Fetch initial ─── */
   useEffect(() => {
@@ -703,11 +800,13 @@ export default function MonProfil() {
             icon={Globe}
             iconBg="bg-indigo-50 dark:bg-indigo-900/20"
             iconColor="text-indigo-600 dark:text-indigo-400"
-            label="Langue"
-            value="Français"
-            disabled
-            soon
-            // TODO(backend): i18n setup + table LanguagePreference ou localStorage suffisant?
+            label={t("langue.label")}
+            value={
+              preferenceExplicite === "en" ? t("langue.anglais")
+              : preferenceExplicite === "fr" ? t("langue.francais")
+              : t("langue.systeme")
+            }
+            onClick={() => setShowLangue(true)}
           />
         </SectionCard>
       </motion.section>
@@ -774,6 +873,10 @@ export default function MonProfil() {
         open={showPassword}
         onClose={() => setShowPassword(false)}
         onChange={handleChangePassword}
+      />
+      <LangueSheet
+        open={showLangue}
+        onClose={() => setShowLangue(false)}
       />
     </main>
   );

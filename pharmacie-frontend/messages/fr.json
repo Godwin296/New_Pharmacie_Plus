@@ -1,0 +1,40 @@
+{
+  "commun": {
+    "chargement": "Chargement...",
+    "enregistrer": "Enregistrer",
+    "annuler": "Annuler",
+    "fermer": "Fermer",
+    "confirmer": "Confirmer",
+    "modifier": "Modifier",
+    "supprimer": "Supprimer",
+    "erreurGenerique": "Une erreur est survenue. Merci de réessayer."
+  },
+  "nav": {
+    "accueil": "Accueil",
+    "catalogue": "Catalogue",
+    "panier": "Panier",
+    "commandes": "Mes commandes",
+    "profil": "Profil"
+  },
+  "profil": {
+    "titre": "Profil",
+    "sectionCompte": "Mon compte",
+    "sectionPreferences": "Préférences",
+    "sectionSupport": "Support",
+    "mesFactures": "Mes factures",
+    "mesAdresses": "Mes adresses",
+    "changerMotDePasse": "Changer le mot de passe",
+    "notifications": "Notifications",
+    "langue": {
+      "label": "Langue",
+      "titreSelecteur": "Choisir la langue",
+      "systeme": "Système (auto)",
+      "francais": "Français",
+      "anglais": "English",
+      "descriptionSysteme": "Utilise la langue de votre navigateur",
+      "confirmation": "Langue mise à jour",
+      "erreur": "Impossible de mettre à jour la langue pour le moment"
+    },
+    "deconnexion": "Se déconnecter"
+  }
+}

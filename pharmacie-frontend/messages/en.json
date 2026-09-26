@@ -1,0 +1,40 @@
+{
+  "commun": {
+    "chargement": "Loading...",
+    "enregistrer": "Save",
+    "annuler": "Cancel",
+    "fermer": "Close",
+    "confirmer": "Confirm",
+    "modifier": "Edit",
+    "supprimer": "Delete",
+    "erreurGenerique": "Something went wrong. Please try again."
+  },
+  "nav": {
+    "accueil": "Home",
+    "catalogue": "Catalog",
+    "panier": "Cart",
+    "commandes": "My orders",
+    "profil": "Profile"
+  },
+  "profil": {
+    "titre": "Profile",
+    "sectionCompte": "My account",
+    "sectionPreferences": "Preferences",
+    "sectionSupport": "Support",
+    "mesFactures": "My invoices",
+    "mesAdresses": "My addresses",
+    "changerMotDePasse": "Change password",
+    "notifications": "Notifications",
+    "langue": {
+      "label": "Language",
+      "titreSelecteur": "Choose language",
+      "systeme": "System (auto)",
+      "francais": "Français",
+      "anglais": "English",
+      "descriptionSysteme": "Uses your browser's language",
+      "confirmation": "Language updated",
+      "erreur": "Could not update the language right now"
+    },
+    "deconnexion": "Log out"
+  }
+}
