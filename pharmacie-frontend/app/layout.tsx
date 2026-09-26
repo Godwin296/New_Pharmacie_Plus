@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { SerwistProvider } from '@serwist/turbopack/react';
 import { ConfigPharmacieProvider } from '../lib/context/ConfigPharmacieContext';
+import { LangueProvider } from '../lib/context/LangueContext';
 import { ThemeProvider } from '../lib/context/ThemeProvider';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { PharmacyBrandName } from '../components/PharmacyBrandName';
@@ -166,6 +167,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             propre JSX ; il doit être un DESCENDANT de ce Provider. D'où le déplacement
             de l'ouverture de <ConfigPharmacieProvider> ici, avant le splash. */}
         <ConfigPharmacieProvider>
+        <LangueProvider>
         {/* SPLASH SCREEN -- refonte radicale (composant SplashScreen dédié) : fond uni,
             logo centré, 1.5s max, sans dégradé/particules/tracé ECG copiés du site
             marketing. Cf. lib/components/SplashScreen.tsx pour le détail de la philosophie
@@ -369,6 +371,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </nav>
         )}
+        </LangueProvider>
         </ConfigPharmacieProvider>
         </SerwistProvider>
         </AppShell>

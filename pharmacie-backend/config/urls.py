@@ -38,6 +38,9 @@ urlpatterns = [
     # continue de servir l'ancien comportement sans y toucher. On ne casse jamais v1 en place.
     path("api/v1/", include("core.urls", namespace="core_v1")),
     path("api/", include("core.urls", namespace="core_legacy")),
+    # 🛒 Marketplace (découverte multi-pharmacies) : nouveau code, uniquement sous v1 --
+    # voir docs/API_VERSIONING.md ("nouveau code -> api/v1/ seul, pas besoin de /api/ legacy").
+    path("api/v1/marketplace/", include("marketplace.urls", namespace="marketplace_v1")),
 
     path("accounts/", include("django.contrib.auth.urls")), 
    
