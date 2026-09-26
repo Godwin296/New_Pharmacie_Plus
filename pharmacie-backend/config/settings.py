@@ -82,6 +82,7 @@ SHARED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'clients_publics',
+    'marketplace',           # 🛒 Découverte multi-pharmacies (miroir public + horaires)
     # 💊 Interactions médicamenteuses : fait médical universel, PAS propre à une pharmacie
     # (voir docstring de pharmacovigilance/models.py) -- une seule copie pour toute la
     # plateforme, jamais dupliquée par tenant.

@@ -22,6 +22,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from .models import Produit, Commande, ItemCommande, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog, LotProduit, Favori
+from marketplace.models import HoraireOuverture
 from .serializers import (
     ProduitSerializer, CommandeSerializer, CommandeClientSerializer,
     PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer,
@@ -179,6 +180,65 @@ def api_update_config(request):
         return Response({"message": "Paramètres mis à jour avec succès !"}, status=200)
     except Exception as e:
         # Parfait pour le développement : vous voyez exactement pourquoi ça plante
+        return Response({"error": str(e)}, status=500)
+
+
+@api_view(['GET', 'POST', 'PUT', 'PATCH'])
+@permission_classes([IsAdminUser])
+def api_infos_marketplace(request):
+    """
+    🛒 Réglages "marketplace" de CETTE pharmacie (sa propre fiche de découverte) : position
+    GPS + horaires d'ouverture. Même pattern que api_update_config juste au-dessus (réservé
+    à l'admin, écrit sur SA PROPRE pharmacie), mais touche tenants.Pharmacie (schéma public,
+    miroir marketplace) plutôt que core.PharmacieConfig -- voir les commentaires dans
+    tenants/models.py pour le pourquoi de ce miroir.
+
+    `request.tenant` est fourni par django-tenants (TenantMainMiddleware) : c'est déjà
+    l'objet Pharmacie correspondant au sous-domaine de la requête courante -- pas besoin de
+    le rechercher, jamais besoin de vérifier "est-ce bien SA pharmacie" (structurellement
+    impossible d'en toucher une autre depuis ce sous-domaine).
+
+    Pas de géocodage tiers : latitude/longitude sont envoyées TELLES QUELLES par le
+    frontend, obtenues via l'API Geolocation native du navigateur (bouton "Utiliser ma
+    position actuelle", le pharmacien étant physiquement dans sa pharmacie au moment du
+    réglage) -- aucune dépendance externe, aucun coût, aucune clé API à gérer.
+    """
+    pharmacie = request.tenant
+
+    if request.method == 'GET':
+        horaires = list(
+            pharmacie.horaires.values('jour_semaine', 'ferme', 'heure_ouverture', 'heure_fermeture')
+        )
+        return Response({
+            "latitude": pharmacie.latitude,
+            "longitude": pharmacie.longitude,
+            "ouvert_24h": pharmacie.ouvert_24h,
+            "horaires": horaires,
+        })
+
+    try:
+        if 'latitude' in request.data:
+            pharmacie.latitude = request.data.get('latitude') or None
+        if 'longitude' in request.data:
+            pharmacie.longitude = request.data.get('longitude') or None
+        if 'ouvert_24h' in request.data:
+            pharmacie.ouvert_24h = bool(request.data.get('ouvert_24h'))
+        pharmacie.save(update_fields=['latitude', 'longitude', 'ouvert_24h'])
+
+        # `horaires` (optionnel) : liste de {jour_semaine, ferme, heure_ouverture, heure_fermeture}
+        # -- on ne met à jour QUE les jours transmis, pas besoin d'envoyer les 7 à chaque fois.
+        for jour in request.data.get('horaires', []):
+            HoraireOuverture.objects.update_or_create(
+                pharmacie=pharmacie,
+                jour_semaine=jour['jour_semaine'],
+                defaults={
+                    'ferme': jour.get('ferme', False),
+                    'heure_ouverture': jour.get('heure_ouverture') or None,
+                    'heure_fermeture': jour.get('heure_fermeture') or None,
+                },
+            )
+        return Response({"message": "Réglages marketplace mis à jour avec succès !"}, status=200)
+    except Exception as e:
         return Response({"error": str(e)}, status=500)
 
 

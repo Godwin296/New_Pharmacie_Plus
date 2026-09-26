@@ -8,6 +8,7 @@ urlpatterns = [
     path("login/", api.api_login, name="api_login"),
     path("infos-pharmacie/", api.infos_pharmacie, name="api_infos_pharmacie"),
     path("update-config/", api.api_update_config, name="api_update_config"),
+    path("infos-marketplace/", api.api_infos_marketplace, name="api_infos_marketplace"),
     path("current-user/", api.api_get_current_user, name="api_get_current_user"),
     path("client/register/", api.api_client_register, name="api_client_register"),
     path("client/login/", api.api_client_login, name="api_client_login"),
