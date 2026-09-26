@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { withSerwist } from "@serwist/turbopack";
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 const nextConfig: NextConfig = {
   turbopack: {},
@@ -40,4 +41,21 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSerwist(nextConfig);
+export default withSentryConfig(withSerwist(nextConfig), {
+  // Ces deux valeurs identifient le projet Sentry (visibles dans l'URL du dashboard :
+  // https://<org>.sentry.io/projects/<project>/). Nécessaires pour l'upload des
+  // source maps -- sinon les stack traces en production pointent vers du code minifié
+  // illisible plutôt que vers le vrai fichier .tsx source.
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+
+  // SENTRY_AUTH_TOKEN (Settings -> Auth Tokens sur sentry.io, scope "project:releases")
+  // requis UNIQUEMENT pour l'upload de source maps -- absent en dev, à fournir en prod
+  // (Vercel : variable d'environnement, PAS commitée). Sans lui, le build réussit quand
+  // même : l'upload est simplement sauté avec un avertissement.
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+
+  // Silencieux si org/project/token absents (dev local sans config source maps) --
+  // évite un échec de build bruyant pour une fonctionnalité optionnelle.
+  silent: !process.env.SENTRY_AUTH_TOKEN,
+});
