@@ -41,6 +41,13 @@ def _langue_destinataire(destinataire):
     (`LANGUAGE_CODE`, voir settings.py) dans ce cas.
     """
     langue = getattr(destinataire, "langue_preferee", None) or settings.LANGUAGE_CODE
+    # 🔧 CORRECTIF (détecté par core/tests_i18n.py) : LANGUAGE_CODE vaut 'fr-fr' (avec
+    # région) dans settings.py, alors que le reste de l'app -- LANGUAGES, la validation de
+    # langue_preferee dans api_client_update_me() -- ne connaît que des codes courts
+    # ('fr'/'en'). Django gère 'fr-fr' sans planter (repli silencieux sur les chaînes
+    # source non traduites), mais autant rester cohérent avec le seul jeu de codes utilisé
+    # partout ailleurs dans l'app plutôt que d'introduire une deuxième convention ici.
+    langue = langue.split('-')[0]
     with translation.override(langue):
         yield
 
