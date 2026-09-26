@@ -1,4 +1,5 @@
 from django.utils import translation
+from django.utils.translation import gettext as _
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import AuthenticationFailed, InvalidToken
 
@@ -40,7 +41,7 @@ class StaffJWTAuthentication(JWTAuthentication):
     def get_user(self, validated_token):
         if validated_token.get("type") == "client":
             raise AuthenticationFailed(
-                "Ce jeton client ne peut pas être utilisé sur les routes du personnel.",
+                _("Ce jeton client ne peut pas être utilisé sur les routes du personnel."),
                 code="token_not_staff",
             )
         return super().get_user(validated_token)
@@ -56,18 +57,18 @@ class ClientJWTAuthentication(JWTAuthentication):
     def get_user(self, validated_token):
         if validated_token.get("type") != "client":
             raise AuthenticationFailed(
-                "Ce jeton n'est pas un jeton client valide.",
+                _("Ce jeton n'est pas un jeton client valide."),
                 code="token_not_client",
             )
         try:
             user_id = validated_token["user_id"]
         except KeyError:
-            raise InvalidToken("Le jeton ne contient pas d'identifiant utilisateur.")
+            raise InvalidToken(_("Le jeton ne contient pas d'identifiant utilisateur."))
         try:
             client = CompteClient.objects.get(pk=user_id, is_active=True)
         except CompteClient.DoesNotExist:
             raise AuthenticationFailed(
-                "Compte client introuvable ou désactivé.",
+                _("Compte client introuvable ou désactivé."),
                 code="client_not_found",
             )
         _activer_langue_client(client)
@@ -95,12 +96,12 @@ class ClientOrStaffJWTAuthentication(JWTAuthentication):
             try:
                 user_id = validated_token["user_id"]
             except KeyError:
-                raise InvalidToken("Le jeton ne contient pas d'identifiant utilisateur.")
+                raise InvalidToken(_("Le jeton ne contient pas d'identifiant utilisateur."))
             try:
                 client = CompteClient.objects.get(pk=user_id, is_active=True)
             except CompteClient.DoesNotExist:
                 raise AuthenticationFailed(
-                    "Compte client introuvable ou désactivé.",
+                    _("Compte client introuvable ou désactivé."),
                     code="client_not_found",
                 )
             _activer_langue_client(client)
