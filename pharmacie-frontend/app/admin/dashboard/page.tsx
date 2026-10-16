@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 // 🌟 CONFIGURATION : Importation de l'apiClient unifié (qui gère l'URL et le Token à votre place !)
 import apiClient from '../../../lib/apiClient';
 import Prix from '../../../lib/components/Prix';
+import AnalyticsSection from './AnalyticsSection';
 
 // --- INTERFACES ---
 interface DashboardData {
@@ -235,6 +236,9 @@ export default function DashboardBoss() {
           </div>
         </div>
       </div>
+
+      {/* 📈 ANALYSES AVANCÉES (marge, panier moyen, comparaison de période...) */}
+      <AnalyticsSection />
 
       {/* 🧾 TABLEAU DES VENTES RÉCENTES */}
       <div className="bg-white dark:bg-slate-800 p-8 rounded-4xl shadow-sm border border-gray-100 dark:border-slate-700">

@@ -1435,6 +1435,55 @@ def api_boss_dashboard(request):
         return Response({"error": str(e)}, status=500)
 
 
+def _json_ready(obj):
+    """Decimal -> float, date -> ISO, récursivement (graphiques côté frontend)."""
+    from decimal import Decimal
+    from datetime import date
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, date):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: _json_ready(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_ready(v) for v in obj]
+    return obj
+
+
+# --- 📈 ANALYTICS AVANCÉ (marge, panier moyen, comparaison de période...) ---
+@api_view(['GET'])
+@authentication_classes([StaffJWTAuthentication])
+@permission_classes([IsAdminUser])
+def api_boss_analytics(request):
+    """
+    GET /api/v1/boss/analytics/?debut=AAAA-MM-JJ&fin=AAAA-MM-JJ
+
+    Par défaut : les 30 derniers jours (aujourd'hui inclus). Chaque indicateur est comparé
+    à la période de même durée qui précède. Détail du calcul : core/analytics.py.
+    """
+    from . import analytics
+
+    if not request.user.is_superuser:
+        return Response({"error": _("Accès refusé. Droits d'administration requis.")}, status=403)
+
+    aujourdhui = timezone.localdate()
+    brut_debut = request.query_params.get('debut')
+    brut_fin = request.query_params.get('fin')
+    try:
+        fin = parse_date(brut_fin) if brut_fin else aujourdhui
+        debut = parse_date(brut_debut) if brut_debut else fin - timedelta(days=29)
+    except ValueError:
+        fin = debut = None
+    if debut is None or fin is None:
+        return Response({"error": _("Dates invalides (format attendu : AAAA-MM-JJ)")}, status=400)
+    if debut > fin:
+        return Response({"error": _("La date de début doit précéder la date de fin")}, status=400)
+    if (fin - debut).days + 1 > analytics.DUREE_MAX_JOURS:
+        return Response({"error": _("Période trop longue (366 jours maximum)")}, status=400)
+
+    return Response(_json_ready(analytics.analytics_complets(debut, fin)))
+
+
 # --- 🎯 POINT DE VENTE (POS) & STOCK SÉCURISÉ ---
 @api_view(['POST'])
 @permission_classes([IsAdminUser])

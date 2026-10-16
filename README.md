@@ -222,7 +222,7 @@ New_Pharmacie_Plus/
 - [x] Détection d'interactions médicamenteuses (règles statiques sourcées ANSM, pas d'IA)
 - [x] Docker + Docker Compose (écrit, prêt à tester — voir docs/INFRASTRUCTURE_ROADMAP.md)
 - [ ] Page marketplace (client global multi-pharmacies)
-- [ ] Dashboard analytics avancé (marge réelle, comparaison période/période)
+- [x] Dashboard analytics avancé (marge réelle, comparaison période/période, panier moyen, moyens de paiement, heures de pointe, stock dormant)
 - [ ] Refonte UI/UX mobile-first (en cours)
 - [ ] Notifications SMS (Africa's Talking)
 - [ ] Internationalisation (next-intl)
