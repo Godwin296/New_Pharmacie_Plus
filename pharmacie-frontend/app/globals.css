@@ -188,3 +188,60 @@ body {
   z-index: 9999;
   touch-action: pan-y;
 }
+/* ============================================
+   🚀 SPLASH SCREEN (voir lib/components/SplashScreen.tsx)
+   ============================================ */
+
+/* Déjà vu dans cette session : masqué AVANT le premier rendu (l'attribut est posé sur <html>
+   par le script inline de app/layout.tsx), donc aucun clignotement au rechargement. */
+html[data-splash="vu"] [data-splash-root] {
+  display: none !important;
+}
+
+/* Fond visible autour du cadre quand l'écran n'a pas exactement le ratio 9:16
+   (couleurs échantillonnées sur l'image officielle). */
+.splash-backdrop {
+  background: linear-gradient(170deg, #0a33ad 0%, #0a5590 50%, #06603f 100%);
+}
+
+/* Cadre 1152x2048 centré. Portrait (téléphone) : il COUVRE l'écran. Paysage : il est CONTENU
+   dans l'écran (sinon le logo serait rogné), le fond ci-dessus remplit les côtés. Les cqw du
+   titre se calculent par rapport à la largeur de ce cadre. */
+.splash-frame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  aspect-ratio: 1152 / 2048;
+  width: max(100vw, calc(100dvh * 1152 / 2048));
+  container-type: inline-size;
+}
+@media (orientation: landscape) {
+  .splash-frame {
+    width: min(100vw, calc(100dvh * 1152 / 2048));
+  }
+}
+
+/* Position/taille du nom, en % du cadre : centré sur la bande où était "PHARMA" sur l'image
+   (y = 1158→1263 sur 2048, soit 59,1 %). */
+.splash-title {
+  top: 59.1%;
+  transform: translateY(-50%);
+  font-weight: 500;
+  font-size: 8.6cqw;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/* ============================================
+   ⬇️ PULL-TO-REFRESH (voir lib/hooks/usePullToRefresh.ts)
+   ============================================ */
+
+/* Empêche le navigateur mobile de déclencher SON propre "tirer pour recharger la page"
+   (qui referait un rechargement complet) : seul notre geste, qui rafraîchit les données
+   sans recharger la page, doit s'appliquer. */
+html,
+body {
+  overscroll-behavior-y: contain;
+}

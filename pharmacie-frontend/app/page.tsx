@@ -14,6 +14,7 @@ import { useConfigPharmacie } from "@/lib/context/ConfigPharmacieContext";
 import apiClient from "@/lib/apiClient";
 import Prix from "@/lib/components/Prix";
 import PageSkeleton from "@/lib/components/PageSkeleton";
+import { useSplashDejaVu } from "@/lib/splashSession";
 
 /* ─── Types ─── */
 interface Produit {
@@ -180,18 +181,24 @@ export default function HomePage() {
   const router = useRouter();
   const { config } = useConfigPharmacie();
 
-  const [phase, setPhase] = useState<"splash" | "skeleton" | "content">("splash");
+  const dejaVu = useSplashDejaVu();
+  const [phaseSaisie, setPhase] = useState<"splash" | "skeleton" | "content">("splash");
+  // Splash déjà vu dans cette session : on saute la phase "splash" (écran vide de 1,5 s).
+  const phase = phaseSaisie === "splash" && dejaVu ? "skeleton" : phaseSaisie;
   const [client, setClient] = useState<Client | null>(null);
   const [favoris, setFavoris] = useState<Produit[]>([]);
   const [populaires, setPopulaires] = useState<Produit[]>([]);
   const [commandeActive, setCommandeActive] = useState<Commande | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  /* Séquence : splash → skeleton → contenu */
+  /* Séquence : splash → skeleton → contenu.
+     Le splash n'existe qu'à l'ENTRÉE dans l'app (lib/splashSession.ts). Déjà vu dans cette
+     session (rafraîchissement, pull-to-refresh, retour sur l'accueil) : DIRECTEMENT le squelette. */
   useEffect(() => {
+    if (dejaVu) return;
     const t1 = setTimeout(() => setPhase("skeleton"), 1500);
     return () => clearTimeout(t1);
-  }, []);
+  }, [dejaVu]);
 
   useEffect(() => {
     if (phase !== "skeleton") return;

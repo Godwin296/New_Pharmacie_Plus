@@ -18,6 +18,7 @@ import {
   Power, ShoppingCart, LogIn, Pill, History, LayoutDashboard, User, ClipboardList
 } from 'lucide-react';
 import Link from 'next/link';
+import Script from 'next/script';
 import { useRouter, usePathname } from 'next/navigation';
 import { SerwistProvider } from '@serwist/turbopack/react';
 import { ConfigPharmacieProvider } from '../lib/context/ConfigPharmacieContext';
@@ -27,7 +28,9 @@ import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { PharmacyBrandName } from '../components/PharmacyBrandName';
 import { PharmacyIcon } from '../components/PharmacyIcon';
 import SplashScreen from '@/lib/components/SplashScreen';
-import SkeletonHome from './_components/SkeletonHome';
+import PullToRefreshIndicator from '@/lib/components/PullToRefreshIndicator';
+import { usePullToRefresh } from '@/lib/hooks/usePullToRefresh';
+import { useSplashDejaVu, marquerSplashVu, SPLASH_SESSION_KEY } from '@/lib/splashSession';
 import { useOfflinePanier } from '../lib/hooks/useOfflinePanier';
 import apiClient from '../lib/apiClient';
 import { useOfflineCatalogue } from '../lib/hooks/useOfflineCatalogue';
@@ -54,8 +57,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const isSpecialRoute = pathname.startsWith('/admin') || pathname.startsWith('/caisse') || pathname.startsWith('/produit') || pathname === '/login' || pathname === '/register';
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
-  const [splashComplete, setSplashComplete] = useState(false);
+  // 🚀 Le splash ne s'affiche qu'à l'ENTRÉE dans l'app (voir lib/splashSession.ts) : visible
+  // tant qu'il n'a pas fini ET qu'il n'a pas déjà été vu dans cette session. Côté serveur et
+  // pendant l'hydratation `dejaVu` vaut false (pas de mismatch) ; au rechargement, le CSS
+  // (html[data-splash=\"vu\"]) l'a déjà masqué avant le 1er rendu -- rien ne clignote.
+  const dejaVu = useSplashDejaVu();
+  const [splashFini, setSplashFini] = useState(false);
+  const showSplash = !splashFini && !dejaVu;
+  // ⬇️ Pull-to-refresh : incrémenter cette clé REMONTE la page courante (<main key=...>) --
+  // ses squelettes réapparaissent et tous ses fetchs repartent, sans rechargement navigateur
+  // ni splash.
+  const [refreshKey, setRefreshKey] = useState(0);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   
   const [user, setUser] = useState({ 
@@ -84,6 +96,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     } catch { setCartCount(0); }
   };
   useEffect(() => { fetchCartCount(); }, [user.loggedIn, user.role]);
+  const { pull, refreshing } = usePullToRefresh({
+    onRefresh: () => { setRefreshKey((k) => k + 1); return fetchCartCount(); },
+    enabled: !showSplash && !isMenuOpen && !showLogoutConfirm,
+  });
   useEffect(() => {
     const rafraichir = () => fetchCartCount();
     window.addEventListener('panier-maj', rafraichir);
@@ -149,6 +165,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Pharmacie +" />
         <meta name="mobile-web-app-capable" content="yes" />
+        {/* 🚀 Splash déjà vu dans cette session ? On le sait AVANT le premier rendu (le script
+            s'exécute avant l'hydratation) : on pose data-splash="vu" sur <html>, et la règle
+            CSS de globals.css masque le splash -- zéro clignotement au rechargement.
+            Même clé que lib/splashSession.ts. */}
+        <Script id="splash-session-flag" strategy="beforeInteractive">
+          {`try{if(sessionStorage.getItem('${SPLASH_SESSION_KEY}')==='1')document.documentElement.setAttribute('data-splash','vu')}catch(e){}`}
+        </Script>
       </head>
       <body className="bg-slate-50 dark:bg-[#050e0c] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300">
         <ThemeProvider>
@@ -176,16 +199,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {showSplash && (
             <SplashScreen
               key="splash"
-              onComplete={() => { setShowSplash(false); setSplashComplete(true); }}
+              onComplete={() => { marquerSplashVu(); setSplashFini(true); }}
               duration={1500}
             />
           )}
         </AnimatePresence>
 
-        {/* 🦴 SKELETON -- affiché entre le splash et le vrai contenu, le temps que les
-            données (config, catalogue, commandes...) arrivent. Uniquement sur l'accueil :
-            les autres pages ont déjà leurs propres indicateurs de chargement locaux. */}
-        {!showSplash && !splashComplete && pathname === '/' && <SkeletonHome />}
+        <PullToRefreshIndicator pull={pull} refreshing={refreshing} />
 
         {!isSpecialRoute && (
           <>
@@ -330,7 +350,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           )}
         </AnimatePresence>
 
-        <main className={`flex-grow ${!isSpecialRoute && estClient ? 'pb-24' : ''}`}>{children}</main>
+        <main key={refreshKey} className={`flex-grow ${!isSpecialRoute && estClient ? 'pb-24' : ''}`}>{children}</main>
 
         {/* 📱 NAV DU BAS — réservée à l'expérience client (adaptée à son usage : parcourir,
             acheter, suivre ses commandes), fidèle à la maquette fournie le 25/07. */}
