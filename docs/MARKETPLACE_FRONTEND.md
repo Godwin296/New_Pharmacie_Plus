@@ -136,7 +136,7 @@ stocke jamais la position du client.
 
 - Le miroir `logo_public` est synchronisé automatiquement quand la pharmacie change son logo dans ses paramètres.
 - Côté frontend : le **splash screen** utilise toujours l'asset Pharmacie+ (ne plus lire le logo tenant ni le contexte) ; `PharmacyIcon.tsx` reste utilisé pour le logo de la pharmacie sur son sous-domaine.
-- ⚠️ Asset exact « P blanc avec feuille bleue » à confirmer (candidats dans `public/icons/icon-512x512.png`, `public/branding/`). Prévoir `public/branding/pharmacie-plus-logo.png`.
+- Asset officiel Pharmacie+ (splash screen, identité de la plateforme) : `pharmacie-frontend/public/branding/logo-card-green.png`.
 
 ---
 
