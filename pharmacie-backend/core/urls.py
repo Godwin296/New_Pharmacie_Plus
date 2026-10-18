@@ -44,6 +44,7 @@ urlpatterns = [
     
     # --- 📉 GESTION ET ADMINISTRATION STRICTE (NEXT.JS) ---
     path("boss-dashboard/", api.api_boss_dashboard, name="api_boss_dashboard"),
+    path("boss/analytics/", api.api_boss_analytics, name="api_boss_analytics"),
     path("boss/update-stock/<int:produit_id>/", api.api_update_stock, name="api_update_stock"),
     path("produits/<int:produit_id>/lots/", api.api_lots_produit, name="api_lots_produit"),
     path("fournisseurs/", api.api_fournisseurs, name="api_fournisseurs"),
