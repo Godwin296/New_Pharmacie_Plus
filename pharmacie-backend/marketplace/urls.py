@@ -5,5 +5,6 @@ app_name = 'marketplace'
 
 urlpatterns = [
     path("pharmacies/", api.api_liste_pharmacies, name="api_liste_pharmacies"),
+    path("pharmacies/carte/", api.api_carte_pharmacies, name="api_carte_pharmacies"),
     path("pharmacies/<int:pharmacie_id>/", api.api_detail_pharmacie, name="api_detail_pharmacie"),
 ]

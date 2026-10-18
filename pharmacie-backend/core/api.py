@@ -27,6 +27,8 @@ from django.utils import timezone
 
 from .models import Produit, Commande, ItemCommande, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog, LotProduit, Favori
 from marketplace.models import HoraireOuverture
+from marketplace.utils import ParametreInvalide, valider_coordonnee, valider_services
+from tenants.models import SERVICES_MARKETPLACE
 from .serializers import (
     ProduitSerializer, CommandeSerializer, CommandeClientSerializer,
     PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer,
@@ -218,16 +220,30 @@ def api_infos_marketplace(request):
             "longitude": pharmacie.longitude,
             "ouvert_24h": pharmacie.ouvert_24h,
             "horaires": horaires,
+            "services": pharmacie.services,
+            # Vocabulaire complet, pour construire le sélecteur de services côté frontend
+            # sans dupliquer la liste des codes en dur.
+            "services_disponibles": [
+                {"code": code, "libelle": libelle} for code, libelle in SERVICES_MARKETPLACE
+            ],
         })
 
+    # Validation AVANT toute écriture : une valeur invalide renvoie un 400 explicite au lieu
+    # d'une exception SQL (500) qui exposerait le message brut de la base.
     try:
         if 'latitude' in request.data:
-            pharmacie.latitude = request.data.get('latitude') or None
+            pharmacie.latitude = valider_coordonnee(request.data.get('latitude'), 'latitude', 90)
         if 'longitude' in request.data:
-            pharmacie.longitude = request.data.get('longitude') or None
+            pharmacie.longitude = valider_coordonnee(request.data.get('longitude'), 'longitude', 180)
+        if 'services' in request.data:
+            pharmacie.services = valider_services(request.data.get('services'))
+    except ParametreInvalide as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
         if 'ouvert_24h' in request.data:
             pharmacie.ouvert_24h = bool(request.data.get('ouvert_24h'))
-        pharmacie.save(update_fields=['latitude', 'longitude', 'ouvert_24h'])
+        pharmacie.save(update_fields=['latitude', 'longitude', 'ouvert_24h', 'services'])
 
         # `horaires` (optionnel) : liste de {jour_semaine, ferme, heure_ouverture, heure_fermeture}
         # -- on ne met à jour QUE les jours transmis, pas besoin d'envoyer les 7 à chaque fois.
@@ -1433,6 +1449,55 @@ def api_boss_dashboard(request):
         })
     except Exception as e:
         return Response({"error": str(e)}, status=500)
+
+
+def _json_ready(obj):
+    """Decimal -> float, date -> ISO, récursivement (graphiques côté frontend)."""
+    from decimal import Decimal
+    from datetime import date
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, date):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: _json_ready(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_ready(v) for v in obj]
+    return obj
+
+
+# --- 📈 ANALYTICS AVANCÉ (marge, panier moyen, comparaison de période...) ---
+@api_view(['GET'])
+@authentication_classes([StaffJWTAuthentication])
+@permission_classes([IsAdminUser])
+def api_boss_analytics(request):
+    """
+    GET /api/v1/boss/analytics/?debut=AAAA-MM-JJ&fin=AAAA-MM-JJ
+
+    Par défaut : les 30 derniers jours (aujourd'hui inclus). Chaque indicateur est comparé
+    à la période de même durée qui précède. Détail du calcul : core/analytics.py.
+    """
+    from . import analytics
+
+    if not request.user.is_superuser:
+        return Response({"error": _("Accès refusé. Droits d'administration requis.")}, status=403)
+
+    aujourdhui = timezone.localdate()
+    brut_debut = request.query_params.get('debut')
+    brut_fin = request.query_params.get('fin')
+    try:
+        fin = parse_date(brut_fin) if brut_fin else aujourdhui
+        debut = parse_date(brut_debut) if brut_debut else fin - timedelta(days=29)
+    except ValueError:
+        fin = debut = None
+    if debut is None or fin is None:
+        return Response({"error": _("Dates invalides (format attendu : AAAA-MM-JJ)")}, status=400)
+    if debut > fin:
+        return Response({"error": _("La date de début doit précéder la date de fin")}, status=400)
+    if (fin - debut).days + 1 > analytics.DUREE_MAX_JOURS:
+        return Response({"error": _("Période trop longue (366 jours maximum)")}, status=400)
+
+    return Response(_json_ready(analytics.analytics_complets(debut, fin)))
 
 
 # --- 🎯 POINT DE VENTE (POS) & STOCK SÉCURISÉ ---

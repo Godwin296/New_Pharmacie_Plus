@@ -631,10 +631,19 @@ class ItemCommande(models.Model):
     # 🔐 SÉCURITÉ COMPTABILITÉ : Enregistre le prix exact lors de la transaction
     prix_facture = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
 
+    # 💰 ANALYTICS (marge réelle) : même logique que prix_facture ci-dessus -- on FIGE le coût
+    # d'achat au moment de la vente. Sans ça, la marge d'une vente passée changerait
+    # rétroactivement dès que l'admin met à jour Produit.prix_achat (nouveau lot plus cher,
+    # etc.), faussant tout l'historique. Nullable : coût inconnu au moment de la vente (produit
+    # sans prix_achat renseigné, ou ligne antérieure à ce champ) -> exclue du calcul de marge,
+    # jamais comptée comme "coût = 0" (voir core/analytics.py).
+    prix_achat_facture = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+
     def save(self, *args, **kwargs):
         # Si c'est un nouvel article, on copie le prix actuel du catalogue du produit
         if not self.id and self.produit:
             self.prix_facture = self.produit.prix
+            self.prix_achat_facture = self.produit.prix_achat
         super().save(*args, **kwargs)
 
     def total(self): 
