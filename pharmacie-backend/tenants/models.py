@@ -1,6 +1,23 @@
 from django.db import models
 from django_tenants.models import TenantMixin, DomainMixin
 
+# 🏷️ Vocabulaire CONTRÔLÉ des services affichés en étiquettes sur les cartes de la
+# marketplace (maquette : "Vaccins, Conseils", "Parapharmacie"). On stocke les CODES (clés
+# stables, traduisibles côté frontend), jamais du texte libre : sinon "Vaccin", "vaccins" et
+# "Vaccination" deviendraient trois services différents impossibles à filtrer ou à traduire.
+# Ajouter un service = ajouter une ligne ici, sans migration (le champ est un JSONField).
+SERVICES_MARKETPLACE = [
+    ("vaccins", "Vaccins"),
+    ("conseils", "Conseils pharmaceutiques"),
+    ("parapharmacie", "Parapharmacie"),
+    ("garde", "Pharmacie de garde"),
+    ("livraison", "Livraison"),
+    ("depistage", "Dépistage et tests rapides"),
+    ("orthopedie", "Orthopédie"),
+    ("materiel_medical", "Matériel médical"),
+]
+CODES_SERVICES_MARKETPLACE = [code for code, _ in SERVICES_MARKETPLACE]
+
 
 class Pharmacie(TenantMixin):
     """
@@ -56,6 +73,16 @@ class Pharmacie(TenantMixin):
     # -- dans ce cas le détail jour par jour vit dans marketplace.HoraireOuverture (FK vers
     # cette Pharmacie), pas ici (une ligne par jour, pas 7 champs plats).
     ouvert_24h = models.BooleanField(default=False, verbose_name="Ouvert 24h/24")
+
+    # 🏷️ Services proposés (liste de codes de SERVICES_MARKETPLACE ci-dessus). Saisis par le
+    # pharmacien via api_infos_marketplace (validés contre le vocabulaire) ; modifiables aussi
+    # ici dans l'admin Django, mais SANS validation à cet endroit -- un code inconnu y serait
+    # simplement ignoré à l'affichage par le frontend, jamais bloquant.
+    services = models.JSONField(
+        default=list, blank=True, verbose_name="Services proposés",
+        help_text="Liste de codes, ex. [\"vaccins\", \"conseils\"]. Codes valides : "
+                  + ", ".join(code for code, _ in SERVICES_MARKETPLACE),
+    )
 
     # 🔐 Création automatique du schéma PostgreSQL dès la sauvegarde de l'objet
     auto_create_schema = True

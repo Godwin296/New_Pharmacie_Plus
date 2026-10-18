@@ -27,6 +27,8 @@ from django.utils import timezone
 
 from .models import Produit, Commande, ItemCommande, ClientGuichet, Fournisseur, PharmacieConfig, Mouvement_stock, ProduitSupprimeLog, LotProduit, Favori
 from marketplace.models import HoraireOuverture
+from marketplace.utils import ParametreInvalide, valider_coordonnee, valider_services
+from tenants.models import SERVICES_MARKETPLACE
 from .serializers import (
     ProduitSerializer, CommandeSerializer, CommandeClientSerializer,
     PharmacieConfigSerializer, FournisseurSerializer, LotProduitSerializer,
@@ -218,16 +220,30 @@ def api_infos_marketplace(request):
             "longitude": pharmacie.longitude,
             "ouvert_24h": pharmacie.ouvert_24h,
             "horaires": horaires,
+            "services": pharmacie.services,
+            # Vocabulaire complet, pour construire le sélecteur de services côté frontend
+            # sans dupliquer la liste des codes en dur.
+            "services_disponibles": [
+                {"code": code, "libelle": libelle} for code, libelle in SERVICES_MARKETPLACE
+            ],
         })
 
+    # Validation AVANT toute écriture : une valeur invalide renvoie un 400 explicite au lieu
+    # d'une exception SQL (500) qui exposerait le message brut de la base.
     try:
         if 'latitude' in request.data:
-            pharmacie.latitude = request.data.get('latitude') or None
+            pharmacie.latitude = valider_coordonnee(request.data.get('latitude'), 'latitude', 90)
         if 'longitude' in request.data:
-            pharmacie.longitude = request.data.get('longitude') or None
+            pharmacie.longitude = valider_coordonnee(request.data.get('longitude'), 'longitude', 180)
+        if 'services' in request.data:
+            pharmacie.services = valider_services(request.data.get('services'))
+    except ParametreInvalide as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
         if 'ouvert_24h' in request.data:
             pharmacie.ouvert_24h = bool(request.data.get('ouvert_24h'))
-        pharmacie.save(update_fields=['latitude', 'longitude', 'ouvert_24h'])
+        pharmacie.save(update_fields=['latitude', 'longitude', 'ouvert_24h', 'services'])
 
         # `horaires` (optionnel) : liste de {jour_semaine, ferme, heure_ouverture, heure_fermeture}
         # -- on ne met à jour QUE les jours transmis, pas besoin d'envoyer les 7 à chaque fois.

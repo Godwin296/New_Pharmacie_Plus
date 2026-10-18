@@ -19,6 +19,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from marketplace.api import api_contexte
 from .health import healthz
 
 urlpatterns = [
@@ -41,6 +42,8 @@ urlpatterns = [
     # 🛒 Marketplace (découverte multi-pharmacies) : nouveau code, uniquement sous v1 --
     # voir docs/API_VERSIONING.md ("nouveau code -> api/v1/ seul, pas besoin de /api/ legacy").
     path("api/v1/marketplace/", include("marketplace.urls", namespace="marketplace_v1")),
+    # 📍 Contexte (plateforme ou pharmacie ?) : même adresse dans config/urls_public.py.
+    path("api/v1/contexte/", api_contexte, name="contexte"),
 
     path("accounts/", include("django.contrib.auth.urls")), 
    
