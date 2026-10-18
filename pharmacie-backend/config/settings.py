@@ -50,6 +50,10 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
+# Domaines de la PLATEFORME (hors pharmacies) acceptés comme destination de la passerelle de
+# connexion unique (clients_publics/sso.py). Ex. : localhost,pharmacieplus.com
+PLATEFORME_DOMAINES = config('PLATEFORME_DOMAINES', default='localhost', cast=Csv())
+
 
 # Application definition
 #

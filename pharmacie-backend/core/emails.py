@@ -180,9 +180,16 @@ def envoyer_email_bienvenue(client):
     if not client.email:
         return
 
+    from django.db import connection
+    from django_tenants.utils import get_public_schema_name
     from .models import PharmacieConfig  # import local : évite l'import circulaire avec models.py
 
-    config = PharmacieConfig.objects.first()
+    # Inscription sur la PLATEFORME (schéma public) : pas de PharmacieConfig -- la table n'existe
+    # que dans les schémas de pharmacies. Le compte étant global, on accueille sous la marque.
+    if connection.schema_name == get_public_schema_name():
+        config = None
+    else:
+        config = PharmacieConfig.objects.first()
     nom_pharmacie = config.nom if config else "Pharmacie Plus"
 
     try:

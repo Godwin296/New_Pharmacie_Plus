@@ -34,6 +34,8 @@ ET sur les sous-domaines** (mêmes vues).
 | GET | `/api/v1/marketplace/pharmacies/` | Liste paginée (cartes) |
 | GET | `/api/v1/marketplace/pharmacies/carte/` | Marqueurs pour la carte (sans pagination) |
 | GET | `/api/v1/marketplace/pharmacies/<id>/` | Fiche complète + horaires jour par jour |
+| POST | `/api/v1/auth/passerelle/`, `/api/v1/auth/echange/` | Connexion unique entre origines (voir §4 bis) |
+| POST/GET | `/api/v1/client/register/`, `login/`, `identite/` | Compte client global, aussi sur la plateforme |
 
 Paramètres communs à la liste et à la carte (le détail accepte seulement `lat`/`lng`) :
 
@@ -62,6 +64,7 @@ une seule coordonnée, rayon sans position).
   "results": [{
     "id": 3,
     "nom": "Pharmacie Dupont",
+    "logo": "http://plateforme:8000/media/config/logo.png",
     "adresse": "12 Rue de la Paix, Douala",
     "telephone": "+237...",
     "latitude": 4.05, "longitude": 9.70,
@@ -91,7 +94,7 @@ Règles d'affichage :
 
 ```json
 { "count": 9, "results": [
-  { "id": 3, "nom": "Pharmacie Dupont", "latitude": 4.05, "longitude": 9.70,
+  { "id": 3, "nom": "Pharmacie Dupont", "logo": "http://…/logo.png", "latitude": 4.05, "longitude": 9.70,
     "ouvert_maintenant": true, "distance_km": 1.2, "sous_domaine": "dupont.localhost" } ] }
 ```
 Uniquement les pharmacies avec coordonnées, plafonnées (les plus proches d'abord avec position).
@@ -122,12 +125,49 @@ stocke jamais la position du client.
 
 ---
 
-## 4. Règle de marque (logo)
+## 4. Logos : qui affiche quoi
 
-- **Domaine plateforme / marketplace** : toujours le logo **Pharmacie+** (P blanc + feuille bleue). Le backend n'expose **aucun** logo de pharmacie sur les routes marketplace (ni `logo`, ni `logo_public`).
-- **Sous-domaine d'une pharmacie** : logo de la pharmacie, via `GET /api/v1/infos-pharmacie/` (route existante, sous-domaine uniquement).
-- Décision côté frontend : `contexte == "plateforme"` → asset Pharmacie+ ; `contexte == "pharmacie"` → logo de `infos-pharmacie`. À appliquer dans `components/PharmacyIcon.tsx` (aujourd'hui il lit le logo tenant puis `/branding/icon-mark.png`).
-- ⚠️ Asset exact « P blanc avec feuille bleue » à confirmer (candidats dans `public/icons/icon-512x512.png`, `public/branding/`). Prévoir un fichier unique `public/branding/pharmacie-plus-logo.png`.
+| Endroit | Logo |
+|---|---|
+| **Splash screen** (et identité de l'application : titre d'onglet, icône PWA) | **Pharmacie+** (P blanc, feuille bleue), jamais celui d'une pharmacie |
+| **Carte d'une pharmacie** dans la marketplace | **Son vrai logo** : champ `logo` (URL absolue, `null` si elle n'en a pas → afficher un repli neutre) |
+| **Fiche / carte (pin)** | Idem, champ `logo` |
+| **Sous-domaine d'une pharmacie** | Son logo choisi dans ses paramètres : `GET /api/v1/infos-pharmacie/` (champ `logo`) |
+
+- Le miroir `logo_public` est synchronisé automatiquement quand la pharmacie change son logo dans ses paramètres.
+- Côté frontend : le **splash screen** utilise toujours l'asset Pharmacie+ (ne plus lire le logo tenant ni le contexte) ; `PharmacyIcon.tsx` reste utilisé pour le logo de la pharmacie sur son sous-domaine.
+- ⚠️ Asset exact « P blanc avec feuille bleue » à confirmer (candidats dans `public/icons/icon-512x512.png`, `public/branding/`). Prévoir `public/branding/pharmacie-plus-logo.png`.
+
+---
+
+## 4 bis. Un seul compte pour toutes les pharmacies (connexion unique)
+
+Le compte client (`CompteClient`) est **global** : un client s'inscrit **une fois** et son jeton est
+valide sur toutes les pharmacies. Seul obstacle : le navigateur stocke le jeton **par origine**
+(plateforme, `dupont.localhost`, `martin.localhost` ne partagent rien). Le backend fournit donc une
+**passerelle** : un code à usage unique (60 s) qui transporte la session d'une origine à l'autre
+sans jamais mettre un jeton dans l'URL.
+
+### Routes (toutes disponibles sur la plateforme ET sur les sous-domaines)
+
+| Méthode | Route | Auth | Rôle |
+|---|---|---|---|
+| POST | `/api/v1/client/register/` | non | Inscription (aussi sur la plateforme, plus besoin d'une pharmacie) |
+| POST | `/api/v1/client/login/` | non | Connexion → `{access, refresh, email, nom}` |
+| GET | `/api/v1/client/identite/` | JWT client | `{id, email, nom, telephone, identifiant, langue_preferee}` (marche sur la plateforme) |
+| POST | `/api/v1/auth/passerelle/` | JWT client | Body `{"cible": "dupont.localhost"}` → `{code, expire_dans}`. 400 si la cible n'est pas un domaine connu |
+| POST | `/api/v1/auth/echange/` | non | Body `{"code": "..."}` **appelé sur la cible** → `{access, refresh, email, nom}`. 400 si code invalide/expiré/déjà utilisé/autre domaine |
+
+### Parcours frontend
+
+1. **Inscription/connexion sur la plateforme** (page marketplace) → stocker les jetons.
+2. **« Choisir cette pharmacie »** : si connecté, `POST /auth/passerelle/` avec `cible = sous_domaine` → redirection vers
+   `http://<sous_domaine>:3000/auth/relais?code=<code>` (créer la page `app/auth/relais/page.tsx`, à ajouter à `isSpecialRoute`).
+3. **Page `/auth/relais`** (sur la pharmacie) : `POST /auth/echange/` avec le code → stocker `access`/`refresh` → effacer le code de l'URL (`router.replace`) → aller au catalogue. Le client est connecté **sans retaper ses identifiants**.
+4. **Si le client arrive directement sur une pharmacie sans session** : l'écran de connexion propose « Continuer avec mon compte Pharmacie+ » (redirection vers la plateforme, puis retour avec passerelle) en plus du formulaire. Il n'a jamais à recréer de compte : son email/mot de passe fonctionnent partout.
+5. **Changer de pharmacie** depuis une pharmacie : même mécanique dans l'autre sens (`cible` = domaine plateforme, qui doit figurer dans `PLATEFORME_DOMAINES`).
+
+Réglage backend : `PLATEFORME_DOMAINES` (.env, défaut `localhost`) = domaines de la plateforme acceptés comme cible.
 
 ---
 
@@ -165,7 +205,7 @@ Toutes sous `/api/v1/` **sur le sous-domaine de la pharmacie choisie**. JWT dans
 
 ## 7. Points d'attention
 
-1. **Authentification inter-origines** : le JWT est stocké par origine ; une connexion sur le domaine plateforme n'est pas partagée avec `dupont.localhost`. Le flux prévu : choisir la pharmacie (marketplace, sans compte) → redirection → connexion sur le sous-domaine. Login/inscription client n'existent **que** sur sous-domaine pour l'instant.
+1. **Authentification inter-origines** : résolue par la passerelle (§4 bis). Le jeton reste stocké par origine ; la passerelle le recrée sur la pharmacie choisie.
 2. **CORS / ALLOWED_HOSTS** : l'origine du domaine plateforme doit figurer dans `ALLOWED_HOSTS` et `CORS_ALLOWED_ORIGINS` du `.env` backend.
 3. **apiClient** déduit l'hôte API depuis `window.location.hostname` + port 8000 : sur le domaine plateforme, il appellera donc le backend plateforme (schéma public), c'est voulu.
 4. **Fuseau** : « ouvert maintenant » est calculé à l'heure serveur (`Africa/Douala`). Plages passant minuit non gérées → utiliser `ouvert_24h`.

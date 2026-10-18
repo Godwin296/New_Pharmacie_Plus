@@ -11,8 +11,13 @@ Tout le reste (catalogue, ventes, stock, factures...) vit dans core.urls,
 servi sur le sous-domaine propre à chaque pharmacie (cf. config/urls.py).
 """
 from django.contrib import admin
+from django.conf import settings
+from django.conf.urls.static import static
 from django.urls import path, include
+from clients_publics import sso
+from core import api as core_api
 from marketplace.api import api_contexte
+from rest_framework_simplejwt.views import TokenRefreshView
 from .health import healthz
 
 urlpatterns = [
@@ -30,6 +35,21 @@ urlpatterns = [
     # le backend répond selon le domaine appelé. Voir marketplace/api.py.
     path("api/v1/contexte/", api_contexte, name="contexte_public"),
 
+    # 👤 Compte client GLOBAL sur la plateforme : inscription / connexion SANS passer par une
+    # pharmacie (CompteClient vit dans le schéma public). Mêmes vues que sur les sous-domaines.
+    path("api/v1/client/register/", core_api.api_client_register, name="client_register_public"),
+    path("api/v1/client/login/", core_api.api_client_login, name="client_login_public"),
+    path("api/v1/client/identite/", sso.api_client_identite, name="client_identite_public"),
+    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh_public"),
+
+    # 🔑 Passerelle de connexion unique (voir clients_publics/sso.py)
+    path("api/v1/auth/passerelle/", sso.api_passerelle_creer, name="sso_passerelle_public"),
+    path("api/v1/auth/echange/", sso.api_passerelle_echanger, name="sso_echange_public"),
+
     # TODO (prochaine étape) : endpoint public d'inscription d'une nouvelle pharmacie
     # path("api/signup-pharmacie/", tenants_api.api_signup_pharmacie, name="api_signup_pharmacie"),
 ]
+
+if settings.DEBUG:
+    # Les logos des pharmacies (cartes de la marketplace) sont servis depuis MEDIA_ROOT.
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

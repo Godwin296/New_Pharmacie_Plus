@@ -233,17 +233,18 @@ class TestAPIPlateforme(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()['count'], 1)
 
-    def test_aucun_logo_de_pharmacie_expose(self):
-        """Règle de marque : la marketplace n'affiche que Pharmacie+, jamais le logo d'un tenant."""
+    def test_chaque_carte_expose_son_propre_logo(self):
+        """Chaque pharmacie renvoie SON logo (liste, carte, détail) ; null si elle n'en a pas."""
         creer_pharmacie('alpha', 'Alpha', latitude=4.05, longitude=9.7, logo_public='marketplace/logos/alpha.png')
+        creer_pharmacie('beta', 'Beta', latitude=4.06, longitude=9.71)
         for url in (URL_LISTE, URL_CARTE):
-            corps = self.client.get(url).json()['results'][0]
-            self.assertNotIn('logo', corps)
-            self.assertNotIn('logo_public', corps)
+            par_nom = {p['nom']: p for p in self.client.get(url).json()['results']}
+            self.assertTrue(par_nom['Alpha']['logo'].endswith('marketplace/logos/alpha.png'))
+            self.assertTrue(par_nom['Alpha']['logo'].startswith('http'))
+            self.assertIsNone(par_nom['Beta']['logo'])
         pharmacie = Pharmacie.objects.get(schema_name='alpha')
         detail = self.client.get(f"{URL_LISTE}{pharmacie.id}/").json()
-        self.assertNotIn('logo', detail)
-        self.assertNotIn('logo_public', detail)
+        self.assertTrue(detail['logo'].endswith('alpha.png'))
 
     def test_exclut_inactive_sans_domaine_et_tenant_public(self):
         creer_pharmacie('alpha', 'Alpha')
@@ -319,7 +320,7 @@ class TestAPIPlateforme(TestCase):
         creer_pharmacie('alpha', 'Alpha', 4.0, 9.7)
         carte = self.client.get(URL_LISTE).json()['results'][0]
         self.assertEqual(set(carte), {
-            'id', 'nom', 'adresse', 'telephone', 'latitude', 'longitude', 'services',
+            'id', 'nom', 'logo', 'adresse', 'telephone', 'latitude', 'longitude', 'services',
             'ouvert_24h', 'ouvert_maintenant', 'prochain_changement', 'horaires_resume',
             'distance_km', 'sous_domaine',
         })
@@ -353,7 +354,7 @@ class TestAPIPlateforme(TestCase):
         self.assertEqual(r['count'], 1)
         self.assertEqual([p['nom'] for p in r['results']], ['Avec'])
         self.assertEqual(set(r['results'][0]), {
-            'id', 'nom', 'latitude', 'longitude', 'ouvert_maintenant', 'distance_km', 'sous_domaine',
+            'id', 'nom', 'logo', 'latitude', 'longitude', 'ouvert_maintenant', 'distance_km', 'sous_domaine',
         })
 
     def test_carte_respecte_position_et_rayon(self):
@@ -480,3 +481,68 @@ class TestAPISousDomaine(TenantTestCase):
     def test_reglages_reserves_aux_admins(self):
         anonyme = APIClient(HTTP_HOST=self.domaine)
         self.assertIn(anonyme.get('/api/v1/infos-marketplace/').status_code, (401, 403))
+
+
+# ───────────────────── 4. Compte client unique : passerelle de connexion ─────────────────────
+
+class TestPasserelleSSO(TestCase):
+    URL_CREER = "/api/v1/auth/passerelle/"
+    URL_ECHANGE = "/api/v1/auth/echange/"
+
+    def setUp(self):
+        from clients_publics.models import CompteClient
+        from django.core.cache import cache
+        from django.db import connection
+        connection.set_schema_to_public()  # une requête tenant précédente laisse la connexion sur son schéma
+        self.addCleanup(connection.set_schema_to_public)
+        cache.clear()
+        self.client_api = Client()
+        creer_pharmacie('alpha', 'Alpha')
+        self.compte = CompteClient.objects.create_user(email='c@test.local', password='motdepasse1', nom='Client')
+        r = self.client_api.post("/api/v1/client/login/", {'email': 'c@test.local', 'password': 'motdepasse1'},
+                                 content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.entete = {'HTTP_AUTHORIZATION': f"Bearer {r.json()['access']}"}
+
+    def creer_code(self, cible='alpha.test.local'):
+        return self.client_api.post(self.URL_CREER, {'cible': cible}, content_type='application/json', **self.entete)
+
+    def echanger(self, code, hote):
+        return Client(HTTP_HOST=hote).post(self.URL_ECHANGE, {'code': code}, content_type='application/json')
+
+    def test_inscription_et_identite_sur_la_plateforme(self):
+        r = self.client_api.post("/api/v1/client/register/",
+                                 {'email': 'n@test.local', 'password': 'motdepasse1', 'nom': 'Nouveau'},
+                                 content_type='application/json')
+        self.assertEqual(r.status_code, 201)
+        r = self.client_api.get("/api/v1/client/identite/", **self.entete)
+        self.assertEqual(r.json()['email'], 'c@test.local')
+
+    def test_creation_exige_un_client_connecte(self):
+        r = self.client_api.post(self.URL_CREER, {'cible': 'alpha.test.local'}, content_type='application/json')
+        self.assertEqual(r.status_code, 401)
+
+    def test_cible_inconnue_refusee(self):
+        self.assertEqual(self.creer_code('evil.example.com').status_code, 400)
+
+    def test_echange_donne_des_jetons_valides_sur_la_cible(self):
+        code = self.creer_code().json()['code']
+        r = self.echanger(code, 'alpha.test.local')
+        self.assertEqual(r.status_code, 200)
+        corps = r.json()
+        self.assertEqual(corps['email'], 'c@test.local')
+        # le jeton obtenu authentifie bien le client
+        r2 = self.client_api.get("/api/v1/client/identite/", HTTP_AUTHORIZATION=f"Bearer {corps['access']}")
+        self.assertEqual(r2.status_code, 200)
+
+    def test_code_a_usage_unique(self):
+        code = self.creer_code().json()['code']
+        self.assertEqual(self.echanger(code, 'alpha.test.local').status_code, 200)
+        self.assertEqual(self.echanger(code, 'alpha.test.local').status_code, 400)
+
+    def test_code_inutilisable_sur_un_autre_domaine(self):
+        code = self.creer_code().json()['code']
+        self.assertEqual(self.echanger(code, 'testserver').status_code, 400)
+
+    def test_code_inconnu(self):
+        self.assertEqual(self.echanger('nimporte', 'alpha.test.local').status_code, 400)

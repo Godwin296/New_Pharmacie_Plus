@@ -19,16 +19,16 @@ class PharmacieMarketplaceSerializer(serializers.ModelSerializer):
     du client fournie), statut ouvert/fermé + prochain changement, horaires résumés, services,
     sous-domaine pour la redirection au clic sur "Choisir cette pharmacie".
 
-    🎨 RÈGLE DE MARQUE : AUCUN logo de pharmacie n'est exposé ici. La marketplace est un espace
-    PLATEFORME : elle n'affiche que la marque Pharmacie+. Le logo d'une pharmacie n'est visible
-    que sur son propre sous-domaine (via /api/v1/infos-pharmacie/, qui n'existe que dans le
-    contexte de cette pharmacie). Le miroir `Pharmacie.logo_public` reste synchronisé mais n'est
-    volontairement servi par aucune route publique.
+    🎨 LOGO : chaque carte porte le VRAI logo de sa pharmacie (`logo`, URL absolue ou null).
+    Il vient du miroir `Pharmacie.logo_public`, synchronisé depuis le logo choisi par la pharmacie
+    dans ses paramètres. Seuls le splash screen et l'identité de la plateforme (bandeau hors
+    cartes) utilisent le logo Pharmacie+ ; c'est une décision d'affichage côté frontend.
 
     ⚡ Les vues préchargent `domains` et `horaires` : tout ce qui est calculé ici lit ces
     caches (`.all()`), jamais de requête SQL par carte.
     """
     nom = serializers.SerializerMethodField()
+    logo = serializers.SerializerMethodField()
     adresse = serializers.ReadOnlyField(source='adresse_public')
     telephone = serializers.ReadOnlyField(source='telephone_public')
     ouvert_maintenant = serializers.SerializerMethodField()
@@ -40,7 +40,7 @@ class PharmacieMarketplaceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pharmacie
         fields = [
-            'id', 'nom', 'adresse', 'telephone',
+            'id', 'nom', 'logo', 'adresse', 'telephone',
             'latitude', 'longitude', 'services',
             'ouvert_24h', 'ouvert_maintenant', 'prochain_changement', 'horaires_resume',
             'distance_km', 'sous_domaine',
@@ -51,6 +51,13 @@ class PharmacieMarketplaceSerializer(serializers.ModelSerializer):
         # une pharmacie fraîchement créée n'en a pas encore -> repli sur le nom du tenant
         # plutôt qu'une carte au titre vide.
         return obj.nom_public or obj.nom
+
+    def get_logo(self, obj):
+        if not obj.logo_public:
+            return None
+        url = obj.logo_public.url
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
 
     def get_ouvert_maintenant(self, obj):
         return est_ouvert_maintenant(obj)
@@ -81,7 +88,7 @@ class PharmacieCarteSerializer(PharmacieMarketplaceSerializer):
 
     class Meta(PharmacieMarketplaceSerializer.Meta):
         fields = [
-            'id', 'nom', 'latitude', 'longitude',
+            'id', 'nom', 'logo', 'latitude', 'longitude',
             'ouvert_maintenant', 'distance_km', 'sous_domaine',
         ]
 

@@ -164,7 +164,7 @@ def api_contexte(request):
     """
     Dit au frontend OÙ il est : sur le domaine de la plateforme, ou sur le sous-domaine d'une
     pharmacie. C'est ce qui décide (1) quelle page d'accueil afficher (marketplace ou
-    catalogue) et (2) quel logo montrer (Pharmacie+ ou celui de la pharmacie).
+    catalogue) et (2) quel en-tête afficher (plateforme ou pharmacie).
 
     Monté dans les DEUX urlconfs (config/urls.py et config/urls_public.py) à la même adresse,
     /api/v1/contexte/ : le backend répond selon le domaine réellement appelé. Plus fiable que
@@ -173,7 +173,7 @@ def api_contexte(request):
     On teste `connection.schema_name` plutôt que `request.tenant` : quand aucun domaine ne
     correspond (SHOW_PUBLIC_IF_NO_TENANT_FOUND), django-tenants ne définit pas request.tenant.
 
-    Volontairement SANS logo : le logo d'une pharmacie se lit via /api/v1/infos-pharmacie/.
+    Le logo d'une pharmacie se lit via /api/v1/infos-pharmacie/ (sur son sous-domaine).
     """
     if connection.schema_name == get_public_schema_name():
         return Response({"contexte": "plateforme"})

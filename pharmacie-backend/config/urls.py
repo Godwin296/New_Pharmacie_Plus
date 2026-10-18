@@ -20,6 +20,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from marketplace.api import api_contexte
+from clients_publics import sso
 from .health import healthz
 
 urlpatterns = [
@@ -44,6 +45,10 @@ urlpatterns = [
     path("api/v1/marketplace/", include("marketplace.urls", namespace="marketplace_v1")),
     # 📍 Contexte (plateforme ou pharmacie ?) : même adresse dans config/urls_public.py.
     path("api/v1/contexte/", api_contexte, name="contexte"),
+    # 🔑 Compte client unique : passerelle de connexion entre origines (voir clients_publics/sso.py)
+    path("api/v1/auth/passerelle/", sso.api_passerelle_creer, name="sso_passerelle"),
+    path("api/v1/auth/echange/", sso.api_passerelle_echanger, name="sso_echange"),
+    path("api/v1/client/identite/", sso.api_client_identite, name="client_identite"),
 
     path("accounts/", include("django.contrib.auth.urls")), 
    
