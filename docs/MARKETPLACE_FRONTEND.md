@@ -212,3 +212,20 @@ Toutes sous `/api/v1/` **sur le sous-domaine de la pharmacie choisie**. JWT dans
 4. **Fuseau** : « ouvert maintenant » est calculé à l'heure serveur (`Africa/Douala`). Plages passant minuit non gérées → utiliser `ouvert_24h`.
 5. **Visibilité** : n'apparaissent que les pharmacies actives avec un domaine primaire ; la ligne `public` n'est jamais listée.
 6. **Données source** : nom/adresse/téléphone/coordonnées sont synchronisés depuis la config de chaque pharmacie ; une pharmacie sans coordonnées apparaît dans la liste mais pas sur la carte.
+
+---
+
+## 8. Tâches frontend (checklist pour la session qui code la page)
+
+Le backend est terminé et testé : ne pas le modifier pour ces tâches, sauf bug avéré.
+
+- [ ] `lib/hooks/useGeolocalisation.ts` : `navigator.geolocation.getCurrentPosition`, états `idle | chargement | ok | refuse | indisponible`, timeout 10 s, repli propre si refus.
+- [ ] `app/marketplace/page.tsx` + `_components/` : barre de recherche (debounce 300 ms), bouton « Utiliser ma position », bandeau carte, cartes pharmacie (logo `logo`, statut, distance, services, horaires résumés), bouton « Choisir cette pharmacie ». Mapping exact : §3.
+- [ ] Onglet Carte : pins depuis `/marketplace/pharmacies/carte/`.
+- [ ] `app/page.tsx` : appeler `/api/v1/contexte/` ; `plateforme` → `/marketplace`, `pharmacie` → catalogue actuel.
+- [ ] `app/layout.tsx` : ajouter `/marketplace` et `/auth/relais` à `isSpecialRoute` ; ne charger `infos-pharmacie` que si contexte `pharmacie`.
+- [ ] Connexion/inscription sur la plateforme (`/api/v1/client/login|register/`), puis « Choisir cette pharmacie » → `POST /api/v1/auth/passerelle/` → `/auth/relais?code=…`.
+- [ ] `app/auth/relais/page.tsx` : échange du code, stockage des jetons, `router.replace` pour effacer le code de l'URL.
+- [ ] Écran de connexion d'une pharmacie : bouton « Continuer avec mon compte Pharmacie+ ».
+- [ ] Splash screen : toujours `public/static/SplashScreen.png` (jamais le logo tenant).
+- [ ] Variables `.env` backend : `PLATEFORME_DOMAINES`, origine plateforme dans `ALLOWED_HOSTS` et `CORS_ALLOWED_ORIGINS`.
